@@ -1,0 +1,12 @@
+# Python dependencies for the database gates (npm run verify).
+#
+#   pglast           real PostgreSQL parser — db/validate.py (fast, no server)
+#   pgserver         bundled PostgreSQL — scripts/run_schema.py executes the
+#                    schema for real (no Docker needed)
+#   psycopg[binary]  driver used by scripts/run_schema.py for the object and
+#                    behavioural assertions
+#
+#   pip install -r requirements-dev.txt
+pglast
+pgserver
+psycopg[binary]

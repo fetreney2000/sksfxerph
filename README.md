@@ -10,27 +10,46 @@ A working implementation of the electronic Daily Lesson Plan (Rancangan Pengajar
 
 ```bash
 npm install
-npm run dev          # http://localhost:3000
-```
-
-Then sign in with the local-mode demo account — **`cikgu` / `cikgu123`**.
-
-No configuration required. With no Supabase env vars the app runs in **local mode**: everything persists to IndexedDB, sessions still go through the real cookie/scrypt path (just against a bundled demo account), and the whole product works offline. See `.env.example` to enable syncing.
-
-**Authentication is deliberately not Supabase Auth.** Accounts are rows in `erph.user` (username + scrypt hash), verified by `/api/auth/login`, and the session is an httpOnly HMAC cookie. See [Authentication](#authentication) below.
-
-```bash
-npm run verify       # typecheck → lint → unit tests → build → e2e
+pip install -r requirements-dev.txt   # Python gates: parser + local PostgreSQL
+npm run verify       # typecheck → lint → SQL static → SQL execution → API contract → tests → build → e2e
 ```
 
 | Check | Command | Status |
 |---|---|---|
 | TypeScript | `npm run typecheck` | clean, `strict` + `noUncheckedIndexedAccess` |
 | Lint/format | `npm run lint` | Biome, 0 errors (4 documented warnings) |
-| Unit + component tests | `npm test` | 52 passing (incl. password + session-token) |
+| SQL — static | `npm run check:sql` | 124 statements parse, 16 function bodies balanced, RLS/grants/schema-leak checks |
+| **SQL — executed** | `npm run check:sql:exec` | runs against a real PostgreSQL: 17 tables, 26 policies, enum values, inserts, guard triggers, NULL-actor refusal |
+| API contract | `npm run check:api` | every column/embed/RPC param the routes use exists; every route guarded |
+| Unit + component | `npm test` | 52 passing (incl. password + session-token) |
 | Production build | `npm run build` | 14 routes |
 | E2E | `npm run test:e2e` | 13 passing (incl. login, logout, session gate) |
-| SQL schema | `python db/validate.py` | 125 statements, all RLS/grant checks pass |
+
+> **Why two SQL gates.** Static parsing proved the schema *parses*; a schema
+> Supabase rejected at runtime (`type "member_role" does not exist`) proved
+> parsing is not enough — that statement was syntactically valid and resolved
+> only against `search_path`. `check:sql:exec` starts a throwaway PostgreSQL
+> (`pgserver`, no Docker), applies the schema statement by statement, then
+> asserts on the objects *and* the behaviour: enum values, the review-state
+> guard, and that `submit_rph` refuses a NULL actor.
+
+## Running it
+
+```bash
+npm run dev          # http://localhost:3000
+```
+
+Sign in with the local-mode demo account — **`cikgu` / `cikgu123`**.
+
+With no Supabase env vars the app runs in **local mode**: everything persists to
+IndexedDB, sessions still go through the real cookie/scrypt path (just against
+a bundled demo account), and the whole product works offline. See
+`.env.example` to enable syncing.
+
+**Authentication is deliberately not Supabase Auth.** Accounts are rows in
+`erph.user` (username + scrypt hash), verified by `/api/auth/login`, and the
+session is an httpOnly HMAC cookie. See [Authentication](#authentication)
+below.
 
 ## Authentication
 

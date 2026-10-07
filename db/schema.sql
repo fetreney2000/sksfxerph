@@ -28,7 +28,6 @@
 
 -- ── 1 · EXTENSIONS ───────────────────────────────────────────────────────────
 create extension if not exists pg_trgm;   -- typo-tolerant search on DSKP text
-create extension if not exists unaccent;  -- Malay diacritic-free matching
 -- pg_cron is toggled per project in Supabase (Database → Extensions)
 
 -- ── 1b · SCHEMA ─────────────────────────────────────────────────────────────
@@ -61,7 +60,7 @@ create type erph.rph_status as enum ('draft','submitted','approved','returned');
 
 create type erph.curriculum as enum ('KSSR','KSSM','PRASEKOLAH');
 
-create type erph.template_visibility as enum ('private','erph.school','system');
+create type erph.template_visibility as enum ('private','school','system');
 
 create type erph.notification_type as enum
   ('deadline','returned','approved','reminder','system');
@@ -99,7 +98,7 @@ begin
      and coalesce(current_setting('app.rpc', true), '0') <> '1'
      and coalesce(current_setting('app.allow_review', true), '0') <> '1'
   then
-    raise exception 'Change review state via erph.submit_rph()/erph.review_rph() only';
+    raise exception 'Change review state via submit_rph()/review_rph() only';
   end if;
   return new;
 end $$;
@@ -213,7 +212,7 @@ create table erph.user (
   -- here and passwords are verified by our own handler (lib/server/auth).
   username      text not null,                        -- case-insensitive (index below)
   password_hash text not null,                        -- PHC-style scrypt string
-  role          member_role not null default 'teacher',
+  role          erph.member_role not null default 'teacher',
   is_active     boolean not null default true,
   failed_logins int not null default 0,               -- brute-force lockout
   locked_until  timestamptz,                          -- null = not locked
@@ -583,7 +582,20 @@ begin
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH not found'; end if;
-  if v_doc.owner_id <> erph.actor()
+
+  -- NULL-actor guard, matching sync_rph's.
+  --
+  -- This is load-bearing: `owner_id <> erph.actor()` evaluates to NULL when no
+  -- actor can be resolved, and PL/pgSQL treats NULL in IF as false — so the
+  -- "Not allowed" branch would be skipped and ANY caller (including one with
+  -- just the publishable key, for whom actor() is always null) could submit
+  -- another teacher's plan. `IS DISTINCT FROM` never yields NULL.
+  if erph.actor() is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  -- owner OR staff (an admin may resubmit on a teacher's behalf)
+  if v_doc.owner_id is distinct from erph.actor()
      and not erph.has_role(v_doc.school_id, array['coordinator','admin']::erph.member_role[])
   then raise exception 'Not allowed'; end if;
   if v_doc.status = 'approved' then raise exception 'Already approved'; end if;
@@ -606,7 +618,7 @@ begin
   on conflict (document_id, version) do nothing;
 
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
-  values (v_doc.school_id, erph.actor(), 'erph.rph_document', v_doc.id, 'submit',
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'submit',
           jsonb_build_object('completeness', v_pct, 'status', 'submitted'));
 
   return jsonb_build_object('ok', true, 'status', 'submitted', 'completeness', v_pct,
@@ -650,7 +662,7 @@ begin
           coalesce(p_comment, ''), 'dashboard');
 
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
-  values (v_doc.school_id, erph.actor(), 'erph.rph_document', v_doc.id, 'review',
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'review',
           jsonb_build_object('grade', p_grade, 'comment', p_comment));
 
   return jsonb_build_object('ok', true, 'grade', p_grade,
@@ -675,7 +687,7 @@ begin
   select school_id into v_school
     from erph.school_member where user_id = v_uid and is_active
    order by invited_at limit 1;
-  if v_school is null then raise exception 'No active erph.school membership'; end if;
+  if v_school is null then raise exception 'No active school membership'; end if;
 
   for v_op in select * from jsonb_array_elements(p_ops) loop
     v_op_id := (v_op->>'op_id')::uuid;
@@ -702,13 +714,13 @@ begin
     then
       v_out := v_out || jsonb_build_array(
         jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'erph.class not in your erph.school/session'));
+                           'error', 'class not in your school/session'));
       continue;
     end if;
     if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
       v_out := v_out || jsonb_build_array(
         jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'unknown erph.subject'));
+                           'error', 'unknown subject'));
       continue;
     end if;
 
@@ -958,7 +970,7 @@ create policy template_read on erph.rph_template
   for select using (
     owner_id = erph.actor()
     or (visibility = 'system' and erph.actor() is not null)
-    or (visibility = 'erph.school' and erph.is_member(erph.rph_template.school_id))
+    or (visibility = 'school' and erph.is_member(erph.rph_template.school_id))
   );
 create policy template_insert on erph.rph_template
   for insert with check (owner_id = erph.actor() and visibility <> 'system');

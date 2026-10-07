@@ -19,31 +19,56 @@ except ParseError as e:
     sys.exit(1)
 
 
-# 2 · plpgsql body structure balance
-funcs = re.findall(r"language plpgsql.*?as \$\$(.*?)\nend \$\$", SQL, re.S)
-print(f"[2] plpgsql bodies: {len(funcs)}")
+# 2 · function body balance, attributed by function name.
+#
+# Split per `create or replace function`, then take the body as everything
+# between that function's `as $$` and the next `$$`. This handles BOTH body
+# styles (`language sql` ends at `$$`, `language plpgsql` at `end $$`) — the
+# earlier `as $$ … end $$` pairing swallowed SQL bodies into the next plpgsql
+# function and reported a phantom imbalance.
+funcs: list[tuple[str, str]] = []
+starts = [m.start() for m in re.finditer(r"create or replace function\s+", SQL)]
+for idx, st in enumerate(starts):
+    stop = starts[idx + 1] if idx + 1 < len(starts) else len(SQL)
+    chunk = SQL[st:stop]
+    name_m = re.match(r"create or replace function\s+((?:erph\.)?\w+)", chunk)
+    body_m = re.search(r"as \$\$(.*?)\$\$", chunk, re.S)
+    if name_m and body_m:
+        funcs.append((name_m.group(1).split(".")[-1], body_m.group(1)))
+
+print(f"[2] function bodies: {len(funcs)}")
 bad = 0
-for i, b in enumerate(funcs):
-    open_if = len(re.findall(r"(?<!end )(?<!els)if\s", b, re.I))
-    end_if = len(re.findall(r"end\s+if", b, re.I))
-    open_lp = len(re.findall(r"(?<!end )\bloop\b", b, re.I))
-    end_lp = len(re.findall(r"end\s+loop", b, re.I))
-    begins = len(re.findall(r"^\s*begin\s*$", b, re.M | re.I))
-    end_blk = len(re.findall(r"^\s*end\s*;\s*$", b, re.M | re.I))
-    exc_blk = len(re.findall(r"exception\s+when", b, re.I))
-    ok = (
-        open_if == end_if
-        and open_lp == end_lp
-        # inner blocks close with `end;`, the function body closes with `end $$`
-        and end_blk == begins - 1
-        # a handler may belong to the function-level block (no `end;` for it),
-        # so exceptions can equal the number of begins, not just begins - 1
-        and exc_blk <= begins
-    )
+for name, b in funcs:
+    # Strip `--` comments before counting: a comment mentioning "IF" or "loop"
+    # is prose, not control flow (my own submit_rph comment caused a phantom
+    # imbalance by saying "treats NULL in IF as false").
+    code_lines = [
+        ln.split("--", 1)[0]
+        for ln in b.split("\n")
+        if not ln.strip().startswith("--")
+    ]
+    c = "\n".join(code_lines)
+
+    open_if = len(re.findall(r"(?<!end )(?<!els)if\s", c, re.I))
+    end_if = len(re.findall(r"end\s+if", c, re.I))
+    open_lp = len(re.findall(r"(?<!end )\bloop\b", c, re.I))
+    end_lp = len(re.findall(r"end\s+loop", c, re.I))
+    begins = len(re.findall(r"^\s*begin\s*$", c, re.M | re.I))
+    end_blk = len(re.findall(r"^\s*end\s*;\s*$", c, re.M | re.I))
+    exc_blk = len(re.findall(r"exception\s+when", c, re.I))
+
+    ok = open_if == end_if and open_lp == end_lp
+    if begins:
+        # plpgsql body: inner blocks close with `end;`, the body closes with
+        # `end $$`; a handler may belong to the function-level block.
+        ok = ok and end_blk == begins - 1 and exc_blk <= begins
+    # `language sql` bodies have no begin/end at all — the if/loop checks above
+    # are all that apply (and trivially pass).
+
     if not ok:
         bad += 1
         print(
-            f"    body#{i}: MISMATCH if {open_if}/{end_if} loop {open_lp}/{end_lp} "
+            f"    {name}: MISMATCH if {open_if}/{end_if} loop {open_lp}/{end_lp} "
             f"begin {begins} end; {end_blk} exc {exc_blk}"
         )
 print(f"    -> {'all balanced' if bad == 0 else str(bad) + ' unbalanced'}")
@@ -119,3 +144,49 @@ stray = stray_tables + stray_types + stray_views + stray_triggers
 print(f"[8] objects created outside erph: {stray or 'none'}")
 print(f"    schema declared: {'create schema if not exists erph' in SQL}")
 print(f"    grants present:  {'grant usage on schema erph' in SQL}")
+
+# 9 · the class of bug ONLY execution can catch — two halves, both of which
+#    shipped once and were found by running the schema against real Postgres:
+#
+#    a) a type used unqualified in type position. `create type erph.member_role`
+#       puts it in the erph schema, so bare `member_role` fails with 42704 at
+#       runtime while still parsing fine. (A column that merely happens to be
+#       *named* the same as a type is fine — that's what the leading-token
+#       exception below allows.)
+#    b) a schema qualifier leaked INTO a string literal during the bulk
+#       qualification pass: enum values ('erph.school') and audit labels
+#       ('erph.rph_document'). Valid SQL, wrong data, invisible to a parser.
+TYPES = [
+    "member_role",
+    "rph_status",
+    "curriculum",
+    "template_visibility",
+    "notification_type",
+]
+
+unqualified_types = []
+for i, line in enumerate(SQL.split("\n"), 1):
+    if line.lstrip().startswith("--"):
+        continue
+    code = line.split("--", 1)[0]
+    # column-definition lines: <indent><name> <rest> — the leading name is a
+    # column, never a type reference.
+    m = re.match(r"\s+(\w+)(\s+)(\w+.*)$", code)
+    body = code[m.end(1) :] if m else code
+    for t in TYPES:
+        if re.search(rf"(?<!erph\.)\b{t}\b", body):
+            unqualified_types.append(f"L{i}: {line.strip()[:90]}")
+            break
+
+leaked_literals = []
+for i, line in enumerate(SQL.split("\n"), 1):
+    if line.lstrip().startswith("--"):
+        continue
+    for lit in re.findall(r"'([^']*)'", line):
+        if "erph." in lit:
+            leaked_literals.append(f"L{i}: {lit!r}")
+
+print(f"[9] unqualified type refs: {unqualified_types or 'none'}")
+print(f"    schema qualifiers inside string literals: {leaked_literals or 'none'}")
+if unqualified_types or leaked_literals:
+    print("    ^ these parse cleanly and fail only at execution — see scripts/run_schema.py")

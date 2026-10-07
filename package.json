@@ -12,11 +12,12 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
     "check:sql": "python db/validate.py",
+    "check:sql:exec": "python scripts/run_schema.py",
     "check:api": "python scripts/check-api-contract.py",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "verify": "npm run typecheck && npm run lint && npm run check:sql && npm run check:api && npm run test && npm run build && npm run test:e2e"
+    "verify": "npm run typecheck && npm run lint && npm run check:sql && npm run check:sql:exec && npm run check:api && npm run test && npm run build && npm run test:e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",

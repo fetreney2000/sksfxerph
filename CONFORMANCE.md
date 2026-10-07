@@ -17,7 +17,8 @@ _Reviewed 4 October 2026 against the code at this commit._
 | Unit + component | `npm test` | **52 passed** (6 files, incl. password + session-token) |
 | Build | `npm run build` | 14 routes, Next.js 16.3.8 |
 | E2E | `npm run test:e2e` | **13 passed** (real Chromium, 0 console errors, incl. auth flows) |
-| SQL schema | `db/validate.py` | 125 statements parse, 9 plpgsql bodies balanced, 17/17 RLS, 26 policies |
+| SQL static | `npm run check:sql` | 124 statements parse, 16 bodies balanced, 17/17 RLS, 26 policies, no schema-identifier leaks |
+| SQL **executed** | `npm run check:sql:exec` | real PostgreSQL: objects, enum values, guard triggers, NULL-actor refusal |
 
 ### Supabase Auth removed (subsequent change)
 
@@ -160,3 +161,22 @@ python db/validate.py # 125 statements, plpgsql balanced, RLS + grants + erph-sc
 ```
 
 All green at time of review: **0 lint errors · 52 tests · 13 e2e · 14 routes**.
+
+### Finding: the schema failed on Supabase (follow-up)
+
+The first real run failed with `type "member_role" does not exist` — invisible
+to every static gate, because that statement *parses*; it only fails when
+Postgres resolves it against `search_path`. Executing the schema against a
+real PostgreSQL (the new `check:sql:exec` gate) surfaced the full set:
+
+| Found | Fix |
+|---|---|
+| `role member_role` unqualified in `erph.user` (the reported error) | → `erph.member_role` |
+| Bulk qualification leaked into **string literals**: enum value `'erph.school'`, audit entity `'erph.rph_document'` ×2, three error messages | reverted — schema qualifiers belong to code, never to data |
+| `unaccent` extension declared but never used | removed |
+| **`submit_rph` NULL-actor bypass**: `owner_id <> actor()` yields NULL when no actor resolves, and PL/pgSQL treats NULL in `IF` as *false* — so the "Not allowed" branch was skipped and any publishable-key caller could submit another teacher's plan | explicit `actor() is null` guard **and** `IS DISTINCT FROM` |
+
+Static guards added so the first three cannot recur: `db/validate.py` check [9]
+rejects unqualified type references and any `erph.` inside a string literal;
+`check:sql:exec` asserts enum values are intact, that the review-state guard
+blocks a direct `UPDATE`, and that `submit_rph` refuses a NULL actor.
