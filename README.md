@@ -33,6 +33,12 @@ npm run verify       # typecheck → lint → SQL static → SQL execution → A
 > asserts on the objects *and* the behaviour: enum values, the review-state
 > guard, and that `submit_rph` refuses a NULL actor.
 
+> **`verify` builds in local mode** (`build:local` forces the Supabase env
+> empty), because the E2E suite logs in with the demo account — which only
+> exists when Supabase is *not* configured. Your `.env` is untouched; but it
+> means the `.next` directory left behind after `npm run verify` is a local
+> build. Run `npm run build` before `npm start` or deploying.
+
 ## Running it
 
 ```bash
@@ -50,6 +56,32 @@ a bundled demo account), and the whole product works offline. See
 `erph.user` (username + scrypt hash), verified by `/api/auth/login`, and the
 session is an httpOnly HMAC cookie. See [Authentication](#authentication)
 below.
+
+### Seeded accounts
+
+Run `db/seed.sql` after `db/schema.sql` (Supabase SQL editor) and log in as:
+
+| Role | Username | Password | Can |
+|---|---|---|---|
+| `teacher` | `nurul.aisyah` | `guru2026` | write, submit, export own RPH |
+| `coordinator` | `ramlan.yusof` | `penyelaras2026` | review + school dashboard |
+| `admin` | `zulkifli.rahman` | `admin2026` | full review & monitoring |
+| `ppd` | `ppd.petaling` | `ppd2026` | district read-only (future) |
+| `jpn` | `jpn.selangor` | `jpn2026` | state read-only (future) |
+| `system` | `sistem.erph` | — *cannot log in* | service actor for automated rows |
+
+The seed also creates the school (`SK0000` — must match `NEXT_PUBLIC_SCHOOL_CODE`),
+its settings, 3 subjects, 3 classes, and **one complete submitted lesson plan**
+so the reviewer screens have something to grade on a fresh database.
+
+> ⚠ **These are development credentials and this repository is public.** They
+> exist so each role can be exercised. For any shared deployment, replace every
+> hash — `node scripts/hash-password.js 'new-password'`, paste over the value,
+> delete the `password:` comment. `npm test` verifies each documented password
+> against its stored hash, so a stale comment fails the suite instead of a
+> teacher's login.
+
+Regenerate the seed (new random salts): `node scripts/gen-seed-hashes.js && python scripts/gen-seed.py`.
 
 ## Authentication
 

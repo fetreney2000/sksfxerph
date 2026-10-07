@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:local": "cross-env NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= next build",
     "start": "next start",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -17,7 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "verify": "npm run typecheck && npm run lint && npm run check:sql && npm run check:sql:exec && npm run check:api && npm run test && npm run build && npm run test:e2e"
+    "verify": "npm run typecheck && npm run lint && npm run check:sql && npm run check:sql:exec && npm run check:api && npm run test && npm run build:local && npm run test:e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -51,6 +52,7 @@
     "@types/node": "^22.18.12",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "cross-env": "^10.1.0",
     "jsdom": "^27.0.0",
     "tailwindcss": "^4.1.16",
     "typescript": "^5.9.3",

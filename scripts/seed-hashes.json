@@ -1,0 +1,22 @@
+{
+  "nurul.aisyah": {
+    "password": "guru2026",
+    "hash": "scrypt$16384$8$1$dbsjVcXMhuT5Z7igUNHUcA$0g_lKAWtwbfOfJCvbLftN1hEzXTx8hcsr40d48K2803oKMTANbl8WYqYEWPYH7A50vCB0ClrWaDEPgzEXOy_FQ"
+  },
+  "ramlan.yusof": {
+    "password": "penyelaras2026",
+    "hash": "scrypt$16384$8$1$acdfe8ckwcAxPHiMwnG9Vg$toHYln8by5fkx2Lw7sa5xunepYbq0zpzW4HVDfEquWy10SfDN_QJ9-0cBDATMPfVs5rLSejGrSjl-KkZdKbLfQ"
+  },
+  "zulkifli.rahman": {
+    "password": "admin2026",
+    "hash": "scrypt$16384$8$1$nsx95Xm9eeThntZEU7ikrQ$RGd4agBkKXyGetTZc48kGbQPWASaw7KlhH3pIVUa0dBw69Ygz_CizEi18_6hw0nFdz60Lbxrd3iIUX35eqDsrQ"
+  },
+  "ppd.petaling": {
+    "password": "ppd2026",
+    "hash": "scrypt$16384$8$1$nSyY2Y-MbOw0rKiaGP1TEQ$TTDMPuUdIB6o-u1W8E7F-b6x3GXbTr-rcbErmO_9JhbMhaBqzZen6UMZwjTVP5nQWkSBCu16ECezy_dSpqSKsw"
+  },
+  "jpn.selangor": {
+    "password": "jpn2026",
+    "hash": "scrypt$16384$8$1$H02m4LvAKJXAzLpqFv5IJQ$CwYgTXWmt-dSp9KJ_zoCRYat9tZmbmfHIY4uCpnP7pRw_o_66kfB2yjkDdyXOgUsKSPFdXSXZV-0G-ktfssiAQ"
+  }
+}

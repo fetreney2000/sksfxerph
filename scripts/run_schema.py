@@ -112,7 +112,13 @@ class Runner:
 
     def q(self, sql: str, params=None):
         with self.conn.cursor() as cur:
-            cur.execute(sql, params or ())
+            if params is None:
+                # No parameters → execute verbatim. Passing an empty tuple
+                # would still make psycopg parse the SQL for `%s` placeholders,
+                # which chokes on legitimate SQL like `like 'scrypt$%'`.
+                cur.execute(sql)
+            else:
+                cur.execute(sql, params)
             if cur.description:
                 return cur.fetchall()
             return []
@@ -389,12 +395,108 @@ def main() -> int:
         print(f"  [FAIL] erph.actor(): {str(e).splitlines()[0][:160]}")
         errors += 1
 
-    # clean up test rows so a re-run starts fresh
+    # ── clean up EVERYTHING the behaviour tests created, before seeding ────
+    # Order matters: rph_document.school_id has no ON DELETE (deliberate — a
+    # statutory record must not vanish with its school), so the document has to
+    # go first or the school delete fails and every later count is polluted by
+    # fixture rows (this is exactly how the seed assertions first "failed").
     try:
-        r.q("delete from erph.school where kod_sekolah='SKTEST'")
+        r.q(
+            """
+            delete from erph.rph_document
+             where school_id = (select id from erph.school where kod_sekolah='SKTEST');
+            delete from erph.school where kod_sekolah='SKTEST';  -- cascades member/class/setting
+            delete from erph.user where username = 'uji';
+            delete from erph.subject where code = 'MAT';
+            """
+        )
         conn.commit()
     except Exception:  # noqa: BLE001
         conn.rollback()
+
+    # ── layer 4: seed data ────────────────────────────────────────────────
+    # The seed is SQL too, so it gets executed and asserted on rather than
+    # trusted: a hash column that silently lost its value, or a membership row
+    # that never landed, would only surface as "why can't I log in?".
+    seed_file = ROOT / "db" / "seed.sql"
+    if not seed_file.exists():
+        print("\nseed: db/seed.sql not found — skipped")
+    else:
+        print("\nseed:")
+        seed_sql = seed_file.read_text(encoding="utf-8")
+        seed_errors_before = errors
+        try:
+            with conn.cursor() as cur:
+                cur.execute(seed_sql)
+            conn.commit()
+            print("  [OK ] db/seed.sql applied")
+        except Exception as e:  # noqa: BLE001
+            conn.rollback()
+            print(f"  [FAIL] {str(e).splitlines()[0][:190]}")
+            errors += 1
+
+        if errors == seed_errors_before:
+            seed_checks: list[tuple[str, bool, str]] = []
+
+            def scheck(label, cond, detail=""):
+                seed_checks.append((label, bool(cond), detail))
+
+            n_users = r.one("select count(*) from erph.user")[0]
+            roles = {row[0] for row in r.q("select distinct role from erph.user")}
+            expected_roles = {"teacher", "coordinator", "admin", "ppd", "jpn", "system"}
+            scheck(
+                "one account per member_role",
+                n_users == 6 and roles == expected_roles,
+                f"{n_users} accounts, roles={sorted(roles)}",
+            )
+
+            orphan = r.one(
+                """select count(*) from erph.user u
+                   where u.is_active
+                     and not exists (select 1 from erph.school_member m
+                                     where m.user_id = u.id)"""
+            )[0]
+            scheck("every active account has a school membership", orphan == 0, f"{orphan} orphaned")
+
+            bad_hash = r.one(
+                """select count(*) from erph.user
+                   where is_active and password_hash not like 'scrypt$%'"""
+            )[0]
+            scheck("active accounts carry a scrypt hash", bad_hash == 0, f"{bad_hash} malformed")
+
+            inactive = r.one(
+                "select count(*) from erph.user where role = 'system' and not is_active"
+            )[0]
+            scheck("system account cannot log in (is_active=false)", inactive == 1, f"got {inactive}")
+
+            n_subj = r.one("select count(*) from erph.subject")[0]
+            n_cls = r.one("select count(*) from erph.class")[0]
+            scheck("3 subjects and 3 classes", n_subj == 3 and n_cls == 3,
+                   f"subjects={n_subj} classes={n_cls}")
+
+            submitted = r.one(
+                """select count(*) from erph.rph_document where status = 'submitted'"""
+            )[0]
+            scheck("one submitted plan for the reviewer screens", submitted == 1,
+                   f"found {submitted}")
+
+            # the seeded plan must actually satisfy KPM completeness, or the
+            # reviewer would grade something the teacher could not have submitted
+            pct = r.one(
+                """select erph.rph_completeness(payload) from erph.rph_document
+                   where status = 'submitted' limit 1"""
+            )
+            scheck("seeded plan scores 100% complete", pct and pct[0] == 100,
+                   f"got {pct[0] if pct else None}")
+
+            print("seed inventory:")
+            for label, ok, detail in seed_checks:
+                print(
+                    f"  [{'OK ' if ok else 'FAIL'}] {label}"
+                    + (f" — {detail}" if not ok else "")
+                )
+                if not ok:
+                    errors += 1
 
     conn.close()
     print()
