@@ -1,0 +1,227 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   eRPH design tokens — ported 1:1 from ui-mockup/index.html into Tailwind v4's
+   CSS-first config. No tailwind.config.js: v4 reads these directly.
+   ========================================================================== */
+
+@theme {
+  /* Surfaces */
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfcfe;
+  --color-surface-3: #f2f4f7;
+  --color-border: #e6e9ef;
+  --color-border-strong: #d3d8e2;
+
+  /* Ink */
+  --color-ink: #101828;
+  --color-ink-2: #33415c;
+  --color-ink-3: #66748c;
+  --color-ink-4: #98a2b3;
+
+  /* Brand + status */
+  --color-primary: #175cd3;
+  --color-primary-hover: #1849a9;
+  --color-primary-soft: #eef4ff;
+  --color-primary-soft-2: #dce7ff;
+  --color-primary-ink: #175cd3;
+
+  --color-success: #079455;
+  --color-success-soft: #ecfdf3;
+  --color-success-line: #c7f0d9;
+  --color-success-ink: #067647;
+
+  --color-warning: #dc6803;
+  --color-warning-soft: #fffaeb;
+  --color-warning-line: #fedf89;
+  --color-warning-ink: #b54708;
+
+  --color-danger: #d92d20;
+  --color-danger-soft: #fef3f2;
+  --color-danger-line: #fed2ce;
+  --color-danger-ink: #b42318;
+
+  --color-info: #1570ef;
+  --color-info-soft: #eff8ff;
+  --color-info-line: #cce5ff;
+  --color-info-ink: #175cd3;
+
+  /* Sidebar (dark by design, in both light and dark mode) */
+  --color-sidebar-bg: #0c1d33;
+  --color-sidebar-fg: #afbdd1;
+  --color-sidebar-dim: #6d7f99;
+  --color-sidebar-active: #8cc7ff;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 10px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.05);
+  --shadow-lg: 0 16px 28px -8px rgba(16, 24, 40, 0.16), 0 6px 10px -4px rgba(16, 24, 40, 0.06);
+
+  /* Type */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* ============================================================================
+   Dark mode — `html[data-theme="dark"]`, a deliberate switch rather than
+   prefers-color-scheme: the school asked for an explicit toggle.
+   ========================================================================== */
+:root {
+  --page-glow: radial-gradient(1100px 460px at 82% -12%, #eaf1ff 0%, transparent 60%);
+  --topbar-bg: rgba(255, 255, 255, 0.86);
+}
+
+html[data-theme="dark"] {
+  --color-bg: #0c111c;
+  --page-glow: radial-gradient(1100px 460px at 82% -12%, #132443 0%, transparent 60%);
+  --color-surface: #141b29;
+  --color-surface-2: #18202f;
+  --color-surface-3: #1e2737;
+  --color-border: #242e3f;
+  --color-border-strong: #313d52;
+  --color-ink: #e9eef6;
+  --color-ink-2: #c4cedd;
+  --color-ink-3: #93a0b4;
+  --color-ink-4: #6f7d93;
+  --color-primary: #4c8dff;
+  --color-primary-hover: #6ba1ff;
+  --color-primary-soft: rgba(76, 141, 255, 0.14);
+  --color-primary-soft-2: rgba(76, 141, 255, 0.26);
+  --color-primary-ink: #7faeff;
+  --color-success-soft: rgba(7, 148, 85, 0.16);
+  --color-success-line: rgba(7, 148, 85, 0.4);
+  --color-success-ink: #4ade9b;
+  --color-warning-soft: rgba(220, 104, 3, 0.16);
+  --color-warning-line: rgba(220, 104, 3, 0.4);
+  --color-warning-ink: #fec86b;
+  --color-danger-soft: rgba(217, 45, 32, 0.18);
+  --color-danger-line: rgba(217, 45, 32, 0.45);
+  --color-danger-ink: #fda29b;
+  --color-info-soft: rgba(21, 112, 239, 0.16);
+  --color-info-line: rgba(21, 112, 239, 0.4);
+  --color-info-ink: #8abeff;
+  --color-surface-3: #1d2636;
+  --topbar-bg: rgba(12, 17, 28, 0.86);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 28px -8px rgba(0, 0, 0, 0.6);
+}
+
+/* ============================================================================
+   Base
+   ========================================================================== */
+* {
+  box-sizing: border-box;
+  border-color: var(--color-border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  background-image: var(--page-glow);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+::selection {
+  background-color: var(--color-primary-soft-2);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Numbers in tables, stats and deadlines must not shift width while ticking. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Malay text runs long; keep cells from blowing out the table layout. */
+.ellip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   Lightweight animations — hand-rolled rather than pulling in an
+   animate-in plugin (Tailwind v4 ships no default keyframes for these).
+   ========================================================================== */
+@keyframes erph-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes erph-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes erph-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes erph-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.erph-fade-in {
+  animation: erph-fade 0.15s ease;
+}
+.erph-pop-in {
+  animation: erph-pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+.erph-rise-in {
+  animation: erph-rise 0.2s ease;
+}
+.erph-pulse {
+  animation: erph-pulse 1.1s ease-in-out infinite;
+}

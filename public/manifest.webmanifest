@@ -1,0 +1,20 @@
+{
+  "name": "eRPH · Rancangan Pengajaran Harian",
+  "short_name": "eRPH",
+  "description": "Rancangan Pengajaran Harian Secara Dalam Talian (KPM)",
+  "start_url": "/minggu",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f7fa",
+  "theme_color": "#175cd3",
+  "lang": "ms",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

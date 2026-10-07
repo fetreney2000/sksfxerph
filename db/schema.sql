@@ -1,0 +1,1105 @@
+-- ============================================================================
+-- eRPH · Supabase / PostgreSQL 15 schema  ·  v2 (refined)
+-- Sistem Rancangan Pengajaran Harian — single school, Supabase free tier
+--
+-- Conventions
+--   * snake_case, uuid PKs (client pre-generates ids for offline sync)
+--   * every tenant-owned row carries school_id → RLS becomes a one-liner
+--   * server clock for all timestamps; client clock only via client_updated_at
+--   * enums for closed value sets; check constraints for open sets
+--   * business-rule writes go through SECURITY DEFINER RPCs; table policies
+--     are mostly SELECT + owner-write
+--
+-- Section map
+--   1 Extensions        8 RPCs (submit / review / sync / stats)
+--   2 Enum types        9 Triggers (append-only guards)
+--   3 Helpers          10 Indexes (inline with tables)
+--   3b erph.actor()    11 Row Level Security
+--   4 Org & identity   12 Storage buckets & policies
+--   5 Reference data   13 Views
+--   6 Teaching context 14 pg_cron jobs (commented)
+--   7 Core documents   15 Expose schema + grants
+--
+-- Auth: Supabase Auth (GoTrue) is NOT used. Accounts are `erph.user`
+-- (username + scrypt hash), sessions are signed cookies minted by our route
+-- handlers, and `erph.actor()` (§3b) is the only way anything learns who is
+-- making a request.
+-- ============================================================================
+
+-- ── 1 · EXTENSIONS ───────────────────────────────────────────────────────────
+create extension if not exists pg_trgm;   -- typo-tolerant search on DSKP text
+create extension if not exists unaccent;  -- Malay diacritic-free matching
+-- pg_cron is toggled per project in Supabase (Database → Extensions)
+
+-- ── 1b · SCHEMA ─────────────────────────────────────────────────────────────
+-- Everything lives in `erph`, NOT `public`, so the app's tables never collide
+-- with extensions or other integrations that install into `public`, and the
+-- blast radius of a mistaken grant is one schema instead of everything.
+create schema if not exists erph;
+--
+-- Exposing it to the Data API is a two-step process (Supabase "Using custom
+-- schemas"); the GRANTs are at the END of this file, after the objects exist:
+--   1. Dashboard → Settings → API → Exposed schemas → add `erph`
+--   2. run this file (the grants are part of it)
+--
+-- Every object below is schema-qualified on purpose. RLS policies evaluate
+-- under the *requesting role's* search_path (`"$user", public`), so an
+-- unqualified `is_member(...)` in a policy would not resolve at runtime even
+-- though the migration applied cleanly.
+
+-- ── 2 · ENUM TYPES ───────────────────────────────────────────────────────────
+create type erph.member_role as enum (
+  'teacher',      -- default for every guru
+  'coordinator',  -- Guru Penyelaras eRPH
+  'admin',        -- GPK / Pengetua / Guru Besar (reviewer)
+  'ppd',          -- future: district read-only
+  'jpn',          -- future: state read-only
+  'system'        -- seeded/service accounts
+);
+
+create type erph.rph_status as enum ('draft','submitted','approved','returned');
+
+create type erph.curriculum as enum ('KSSR','KSSM','PRASEKOLAH');
+
+create type erph.template_visibility as enum ('private','erph.school','system');
+
+create type erph.notification_type as enum
+  ('deadline','returned','approved','reminder','system');
+
+-- ── 3 · HELPERS (SQL functions used by triggers & policies) ──────────────────
+create or replace function erph.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
+-- Append-only guard: UPDATE/DELETE blocked unless a purge switch is set
+-- (retention job: select set_config('app.purge','1',true); …)
+create or replace function erph.forbid_mutation()
+returns trigger language plpgsql as $$
+begin
+  if coalesce(current_setting('app.purge', true), '0') = '1' then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+  raise exception '% is not permitted on %.% (append-only table)',
+    tg_op, tg_table_schema, tg_table_name;
+end $$;
+
+-- Review-state guard: status / grade / reviewed_* may ONLY change inside
+-- SECURITY DEFINER RPCs (app.rpc='1') or trusted server code (app.allow_review='1').
+-- Prevents a client from PATCHing status='approved' directly through PostgREST.
+create or replace function erph.guard_review_fields()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'UPDATE'
+     and (new.status is distinct from old.status
+          or new.grade is distinct from old.grade
+          or new.reviewed_by is distinct from old.reviewed_by)
+     and coalesce(current_setting('app.rpc', true), '0') <> '1'
+     and coalesce(current_setting('app.allow_review', true), '0') <> '1'
+  then
+    raise exception 'Change review state via erph.submit_rph()/erph.review_rph() only';
+  end if;
+  return new;
+end $$;
+
+-- Completeness per KPM FAQ (profil SK/SP, objektif, aktiviti, refleksi, intervensi)
+-- returns 0..100 → drives the editor progress meter and the submit gate
+create or replace function erph.rph_completeness(p_payload jsonb)
+returns smallint language plpgsql immutable as $$
+declare
+  v int := 0;
+  v_act jsonb := coalesce(p_payload->'aktiviti', '[]'::jsonb);
+begin
+  if nullif(trim(coalesce(p_payload->>'standard_kandungan','')), '') is not null
+     and nullif(trim(coalesce(p_payload->>'standard_pembelajaran','')), '') is not null
+     and nullif(trim(coalesce(p_payload->>'objektif','')), '') is not null
+  then v := v + 25; end if;
+
+  if jsonb_typeof(v_act) = 'array' and jsonb_array_length(v_act) > 0
+     and nullif(trim(coalesce((v_act->0)->>'aktiviti_guru','')), '') is not null
+  then v := v + 25; end if;
+
+  if nullif(trim(coalesce(p_payload->>'refleksi','')), '') is not null
+  then v := v + 25; end if;
+
+  if nullif(trim(coalesce(p_payload->>'intervensi','')), '') is not null
+     or (jsonb_typeof(coalesce(p_payload->'emk', '[]'::jsonb)) = 'array'
+         and jsonb_array_length(coalesce(p_payload->'emk', '[]'::jsonb)) > 0)
+  then v := v + 25; end if;
+
+  return v::smallint;
+end $$;
+
+-- ── 3b · WHO IS ACTING ──────────────────────────────────────────────────────
+-- Single source of identity. Replaces `auth.uid()` because Supabase Auth
+-- (GoTrue) is no longer used: accounts live in `erph.user`, sessions are our
+-- own signed cookies, and no browser holds a Supabase JWT.
+--
+-- Two kinds of caller reach Postgres:
+--
+--   1. Someone with the PUBLISHABLE key hitting PostgREST directly (role
+--      `anon`/`authenticated`). There is no `sub` in that token, so actor =
+--      NULL and every RLS policy denies them. Deliberate: the browser must go
+--      through our route handlers, and this is the backstop if it doesn't.
+--
+--   2. Our route handlers, authenticated with the SECRET key and identifying
+--      the user via the `X-Erph-User` header.
+--
+-- The header is only honoured when the caller has already proven it holds the
+-- secret key (`role = 'service_role'`, or `current_user` where the claims GUC
+-- is absent). That proof comes from the key's signature, which is never
+-- exposed to a browser — so a publishable-key caller cannot send
+-- `X-Erph-User: <someone-else>` and impersonate them.
+create or replace function erph.actor()
+returns uuid
+language plpgsql stable
+set search_path = erph, public
+as $$
+declare
+  v_claims jsonb;
+  v_role   text;
+  v_hdr    text;
+begin
+  begin
+    v_claims := nullif(current_setting('request.jwt.claims', true), '')::jsonb;
+  exception when others then
+    v_claims := null;
+  end;
+
+  v_role := coalesce(v_claims->>'role', '');
+
+  if v_role = 'service_role' or current_user = 'service_role' then
+    -- Trusted path: read the identifying header, in whichever shape
+    -- PostgREST exposes it (JSON object since v12, dotted GUC before that).
+    begin
+      v_hdr := nullif(current_setting('request.headers', true), '')::jsonb->>'x-erph-user';
+    exception when others then
+      v_hdr := nullif(current_setting('request.headers.x-erph-user', true), '');
+    end;
+
+    if v_hdr is not null
+       and v_hdr ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    then
+      return v_hdr::uuid;
+    end if;
+    return null;
+  end if;
+
+  -- Unprivileged path: only a genuine token subject counts.
+  return nullif(v_claims->>'sub', '')::uuid;
+exception when others then
+  -- Any malformed claims/header must fail closed, never open.
+  return null;
+end $$;
+
+-- ── 4 · ORG & IDENTITY ───────────────────────────────────────────────────────
+create table erph.school (
+  id          uuid primary key default gen_random_uuid(),
+  kod_sekolah text unique not null,                    -- KPM school code (natural key)
+  nama        text not null,
+  level       text not null check (level in ('prasekolah','rendah','menengah','kembar')),
+  ppd         text,                                    -- district name (kept simple on free tier)
+  jpn         text,                                    -- state name
+  is_active   boolean not null default true,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create table erph.user (
+  id            uuid primary key default gen_random_uuid(),
+  -- Credentials. Supabase Auth (GoTrue) is deliberately NOT used: accounts live
+  -- here and passwords are verified by our own handler (lib/server/auth).
+  username      text not null,                        -- case-insensitive (index below)
+  password_hash text not null,                        -- PHC-style scrypt string
+  role          member_role not null default 'teacher',
+  is_active     boolean not null default true,
+  failed_logins int not null default 0,               -- brute-force lockout
+  locked_until  timestamptz,                          -- null = not locked
+  password_changed_at timestamptz not null default now(),
+  last_login_at timestamptz,
+
+  full_name     text not null,
+  email         text,                                 -- optional; login is by username
+  moe_id        text,                                 -- staff/teacher id if known
+  phone         text,
+  locale        text not null default 'ms-MY',
+  avatar_url    text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index profile_email_idx on erph.user (lower(email));
+
+create table erph.school_member (
+  school_id  uuid not null references erph.school(id) on delete cascade,
+  user_id    uuid not null references erph.user(id) on delete cascade,
+  role       erph.member_role not null default 'teacher',
+  title      text,                                      -- 'GPK Pentadbiran', 'Guru Matematik'
+  invited_at timestamptz not null default now(),
+  joined_at  timestamptz,
+  is_active  boolean not null default true,
+  primary key (school_id, user_id)
+);
+create index school_member_user_idx       on erph.school_member (user_id) where is_active;
+create index school_member_school_role_idx on erph.school_member (school_id, role) where is_active;
+
+create table erph.school_setting (
+  school_id       uuid primary key references erph.school(id) on delete cascade,
+  current_session text not null default '2026/2027'
+                  check (current_session ~ '^[0-9]{4}/[0-9]{4}$'),
+  submit_weekday  smallint not null default 5 check (submit_weekday between 1 and 7), -- 5 = Jumaat
+  submit_time     time not null default '16:00',
+  timezone        text not null default 'Asia/Kuala_Lumpur',
+  require_complete boolean not null default true,      -- block submit below 100%
+  updated_at      timestamptz not null default now()
+);
+
+-- ── 5 · REFERENCE DATA (seeded by CI; read-only to clients) ──────────────────
+create table erph.subject (
+  code       text primary key,                          -- 'MAT','BM','SAIN' …
+  nama       text not null,
+  curriculum erph.curriculum not null,
+  is_active  boolean not null default true
+);
+
+create table erph.dskp_standard (
+  id                    bigint generated always as identity primary key,
+  dskp_version          int not null,                   -- e.g. 2026 (KSSR Semakan)
+  curriculum            erph.curriculum not null,
+  subject_code          text not null references erph.subject(code),
+  tahap                 text not null,                  -- 'Tahun 5' / 'Tingkatan 3'
+  bidang                text,
+  kod_sk                text,                           -- '3.1'
+  standard_kandungan    text not null,
+  kod_sp                text,                           -- '3.1.1'
+  standard_pembelajaran text not null,
+  -- two-arg to_tsvector(regconfig, text) is IMMUTABLE → legal in a generated column.
+  -- 'simple' config: Malay has no tsvector dictionary (never use 'english').
+  search_tsv tsvector generated always as (
+    to_tsvector('simple',
+      coalesce(standard_kandungan,'') || ' ' ||
+      coalesce(standard_pembelajaran,'') || ' ' ||
+      coalesce(bidang,'') || ' ' || coalesce(kod_sk,'') || ' ' || coalesce(kod_sp,''))
+  ) stored,
+  unique (dskp_version, subject_code, tahap, kod_sk, kod_sp)
+);
+create index dskp_search_idx on erph.dskp_standard using gin (search_tsv);
+create index dskp_trgm_idx   on erph.dskp_standard using gin (standard_kandungan gin_trgm_ops);
+create index dskp_filter_idx on erph.dskp_standard (subject_code, tahap, dskp_version);
+
+create table erph.academic_calendar (
+  school_id       uuid not null references erph.school(id) on delete cascade,
+  session         text not null check (session ~ '^[0-9]{4}/[0-9]{4}$'),
+  week_no         smallint not null check (week_no between 1 and 52),
+  start_date      date not null,
+  end_date        date not null,
+  submit_deadline timestamptz,
+  label           text,                                 -- 'Minggu PTS', 'Minggu Peperiksaan'
+  primary key (school_id, session, week_no),
+  check (end_date >= start_date)
+);
+
+-- ── 6 · TEACHING CONTEXT ─────────────────────────────────────────────────────
+create table erph.class (
+  id         uuid primary key default gen_random_uuid(),
+  school_id  uuid not null references erph.school(id) on delete cascade,
+  nama       text not null,                             -- '5 Amanah'
+  tahun      smallint check (tahun between 1 and 6),
+  tingkatan  smallint check (tingkatan between 1 and 6),
+  session    text not null check (session ~ '^[0-9]{4}/[0-9]{4}$'),
+  is_active  boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (school_id, session, nama),
+  check (tahun is not null or tingkatan is not null)
+);
+create index class_school_idx on erph.class (school_id, session);
+
+create table erph.teaching_assignment (
+  class_id     uuid not null references erph.class(id) on delete cascade,
+  user_id      uuid not null references erph.user(id) on delete cascade,
+  subject_code text not null references erph.subject(code),
+  session      text not null,
+  primary key (class_id, user_id, subject_code, session)
+);
+create index assignment_user_idx on erph.teaching_assignment (user_id, session);
+
+-- NOTE on murid (pupils): deliberately NOT modelled in v1. RPH only needs the
+-- class headcount (payload.bilangan_murid); pupil-level data would add PDPA
+-- surface with zero benefit for lesson planning.
+
+-- ── 7 · CORE DOCUMENT ────────────────────────────────────────────────────────
+create table erph.rph_document (
+  -- client pre-generates id offline → same id arrives at sync time
+  id               uuid primary key default gen_random_uuid(),
+  school_id        uuid not null references erph.school(id),
+  owner_id         uuid not null references erph.user(id),
+  class_id         uuid not null references erph.class(id),   -- wizard step 1 ⇒ NOT NULL
+  subject_code     text not null references erph.subject(code),
+  session          text not null check (session ~ '^[0-9]{4}/[0-9]{4}$'),
+  week_no          smallint not null check (week_no between 1 and 52),
+  plan_date        date not null,
+  -- Lesson slot. Part of the document's identity (editor step 1), shown in the
+  -- review queue, and edited offline — so it belongs beside plan_date rather
+  -- than inside the free-form payload.
+  slot_time        time not null default '07:30',
+  status           erph.rph_status not null default 'draft',
+
+  -- flexible body: shape differs by level and evolves with KPM circulars
+  payload          jsonb not null default '{}'::jsonb,
+  payload_version  smallint not null default 1,          -- bump when the form shape changes
+
+  -- derived columns → filter/search/sort without parsing JSONB per row
+  standard_kandungan    text generated always as (payload->>'standard_kandungan') stored,
+  standard_pembelajaran text generated always as (payload->>'standard_pembelajaran') stored,
+  search_tsv tsvector generated always as (
+    to_tsvector('simple',
+      coalesce(payload->>'standard_kandungan','') || ' ' ||
+      coalesce(payload->>'standard_pembelajaran','') || ' ' ||
+      coalesce(payload->>'objektif','') || ' ' ||
+      coalesce(payload->>'refleksi',''))
+  ) stored,
+  -- coarse projection for list views; submit RPC recomputes with rph_completeness()
+  completeness smallint generated always as (
+    case
+      when payload->>'standard_kandungan' is not null
+       and payload->>'standard_pembelajaran' is not null
+       and payload->>'objektif' is not null
+       and payload->>'refleksi' is not null then 100
+      when payload->>'objektif' is not null then 50
+      else 0
+    end
+  ) stored,
+
+  -- review denormalisation (authoritative history lives in rph_review)
+  grade        smallint check (grade in (0,1)),
+  reviewed_by  uuid references erph.user(id),
+  reviewed_at  timestamptz,
+
+  -- concurrency + offline sync
+  version          int not null default 1,               -- optimistic lock, +1 per accepted write
+  client_updated_at timestamptz not null default now(),  -- client clock (offline)
+  content_hash     text,                                 -- skip no-op writes
+  submitted_at     timestamptz,
+  deleted_at       timestamptz,                          -- soft delete (statutory retention)
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+-- Idempotency key: one live plan per teacher×class×subject×week×date.
+-- All key columns are NOT NULL, so the plain unique index behaves as expected
+-- (PostgreSQL treats NULLs as distinct — which is why class_id/subject_code are NOT NULL).
+create unique index rph_document_uniq
+  on erph.rph_document (owner_id, class_id, subject_code, session, week_no, plan_date)
+  where deleted_at is null;
+create index rph_document_school_week_idx on erph.rph_document (school_id, session, week_no, status);
+create index rph_document_owner_idx       on erph.rph_document (owner_id, session, week_no, plan_date)
+  where deleted_at is null;
+create index rph_document_queue_idx       on erph.rph_document (school_id, status, submitted_at)
+  where deleted_at is null;
+create index rph_document_search_idx      on erph.rph_document using gin (search_tsv);
+create index rph_document_updated_idx     on erph.rph_document (updated_at desc);
+
+-- Append-only revision trail (Akta 550 / Peraturan 8 ⇒ never rewrite history)
+create table erph.rph_revision (
+  id           bigint generated always as identity primary key,
+  document_id  uuid not null references erph.rph_document(id) on delete cascade,
+  version      int not null,
+  payload      jsonb not null,
+  completeness smallint not null check (completeness between 0 and 100),
+  actor_id     uuid,                                     -- null = system/import
+  reason       text not null check (reason in
+                 ('create','edit','autosave','import','ai-generate','sync','resubmit')),
+  created_at   timestamptz not null default now(),
+  unique (document_id, version)
+);
+
+-- One row per review decision; the document keeps only the latest state
+create table erph.rph_review (
+  id               bigint generated always as identity primary key,
+  document_id      uuid not null references erph.rph_document(id) on delete cascade,
+  document_version int not null,                          -- which version was judged
+  reviewer_id      uuid not null references erph.user(id),
+  grade            smallint not null check (grade in (0,1)), -- KPM: 1 = lengkap, 0 = tidak
+  comment          text,                                  -- "komen sulit" (teacher-visible)
+  checklist        jsonb,                                 -- auto-check results at review time
+  created_at       timestamptz not null default now()
+);
+create index rph_review_doc_idx     on erph.rph_review (document_id, created_at desc);
+create index rph_review_reviewer_idx on erph.rph_review (reviewer_id, created_at desc);
+
+-- ── 8 · TEMPLATES, NOTIFICATIONS, SYNC, EXPORTS, AUDIT ───────────────────────
+create table erph.rph_template (
+  id           uuid primary key default gen_random_uuid(),
+  school_id    uuid references erph.school(id) on delete cascade,  -- null = system/global
+  owner_id     uuid references erph.user(id) on delete set null,
+  title        text not null,
+  subject_code text references erph.subject(code),
+  tahap        text,
+  curriculum   erph.curriculum,
+  payload      jsonb not null,
+  visibility   erph.template_visibility not null default 'private',
+  use_count    int not null default 0,
+  cloned_from  uuid references erph.rph_template(id) on delete set null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index rph_template_lookup_idx on erph.rph_template (school_id, subject_code, visibility);
+
+create table erph.notification (
+  id         uuid primary key default gen_random_uuid(),
+  school_id  uuid references erph.school(id) on delete cascade,
+  user_id    uuid not null references erph.user(id) on delete cascade,
+  type       erph.notification_type not null,
+  title      text not null,
+  body       text,
+  link_view  text,                                       -- deep-link target ('dashboard','review')
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+create index notification_user_idx on erph.notification (user_id, read_at, created_at desc);
+
+-- Sync idempotency: op_id is minted once on the client and replayed on retry
+create table erph.sync_op (
+  op_id     uuid primary key,
+  user_id   uuid not null references erph.user(id) on delete cascade,
+  entity    text not null,
+  entity_id uuid not null,
+  result    jsonb,
+  applied_at timestamptz not null default now()
+);
+create index sync_op_user_idx on erph.sync_op (user_id, applied_at desc);
+
+create table erph.export_file (
+  id          uuid primary key default gen_random_uuid(),
+  document_id uuid references erph.rph_document(id) on delete cascade,
+  school_id   uuid references erph.school(id) on delete cascade,
+  bucket      text not null,
+  path        text not null,
+  format      text not null check (format in ('pdf','docx','zip')),
+  bytes       int,
+  created_by  uuid references erph.user(id),
+  created_at  timestamptz not null default now()
+);
+
+create table erph.audit_log (
+  id         bigint generated always as identity primary key,
+  school_id  uuid,
+  actor_id   uuid,
+  entity     text not null,
+  entity_id  uuid,
+  action     text not null,                              -- 'submit','review','purge','login'
+  before     jsonb,
+  after      jsonb,
+  ip         inet,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+create index audit_log_school_idx on erph.audit_log (school_id, created_at desc);
+create index audit_log_entity_idx on erph.audit_log (entity, entity_id, created_at desc);
+
+-- ── 9 · RPCs (SECURITY DEFINER = RLS-aware service layer) ────────────────────
+-- Cross-tenant helpers are SECURITY DEFINER so policy expressions never
+-- re-enter RLS on the same table (which Postgres rejects as infinite recursion).
+
+create or replace function erph.is_member(p_school uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select exists (select 1 from erph.school_member
+                 where user_id = erph.actor() and school_id = p_school and is_active);
+$$;
+
+create or replace function erph.is_staff(p_school uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select exists (select 1 from erph.school_member
+                 where user_id = erph.actor() and school_id = p_school
+                   and role in ('coordinator','admin') and is_active);
+$$;
+
+create or replace function erph.has_role(p_school uuid, p_roles erph.member_role[])
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select exists (select 1 from erph.school_member
+                 where user_id = erph.actor() and school_id = p_school
+                   and role = any(p_roles) and is_active);
+$$;
+
+create or replace function erph.my_schools()
+returns uuid[] language sql stable security definer set search_path = erph, public as $$
+  select coalesce(array_agg(school_id) filter (where is_active), '{}')
+  from erph.school_member where user_id = erph.actor();
+$$;
+
+-- does `p_user` share a school with the caller, where the caller is staff?
+create or replace function erph.shares_school_with(p_user uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select exists (
+    select 1
+    from erph.school_member a
+    join erph.school_member b on a.school_id = b.school_id
+    where a.user_id = erph.actor() and a.is_active
+      and a.role in ('coordinator','admin')
+      and b.user_id = p_user and b.is_active);
+$$;
+
+-- is this class in this school? used by rph_document WITH CHECK so a client
+-- cannot plant a row into another tenant by pairing its own class with a
+-- foreign school_id (the FK alone doesn't guarantee they agree)
+create or replace function erph.class_in_school(p_class uuid, p_school uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select exists (select 1 from erph.class c where c.id = p_class and c.school_id = p_school);
+$$;
+
+-- may this caller draft for this class? lenient by design: assignment to the
+-- class, OR staff of the class's school, OR any assignment within that school
+-- (teachers cover classes ad hoc; the hard tenant boundary is class_in_school)
+create or replace function erph.teaches_class(p_class uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select exists (
+      -- direct assignment to this class
+      select 1 from erph.teaching_assignment t
+      where t.class_id = p_class and t.user_id = erph.actor()
+    ) or exists (
+      -- staff of the class's school
+      select 1 from erph.class c where c.id = p_class and erph.is_staff(c.school_id)
+    ) or exists (
+      -- any assignment within the class's school (teachers cover classes ad hoc)
+      select 1 from erph.class c
+      where c.id = p_class
+        and exists (
+          select 1 from erph.teaching_assignment t2
+          join erph.class c2 on c2.id = t2.class_id
+          where t2.user_id = erph.actor() and c2.school_id = c.school_id)
+    );
+$$;
+
+-- SUBMIT ─ enforce KPM completeness, stamp state, keep history
+create or replace function erph.submit_rph(p_document uuid, p_force boolean default false)
+returns jsonb language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_doc erph.rph_document%rowtype;
+  v_pct smallint;
+begin
+  perform set_config('app.rpc', '1', true);              -- unlocks guard_review_fields
+
+  select * into v_doc from erph.rph_document
+   where id = p_document and deleted_at is null for update;
+  if not found then raise exception 'RPH not found'; end if;
+  if v_doc.owner_id <> erph.actor()
+     and not erph.has_role(v_doc.school_id, array['coordinator','admin']::erph.member_role[])
+  then raise exception 'Not allowed'; end if;
+  if v_doc.status = 'approved' then raise exception 'Already approved'; end if;
+
+  v_pct := erph.rph_completeness(v_doc.payload);
+  if v_pct < 100 and not p_force then
+    return jsonb_build_object('ok', false, 'completeness', v_pct,
+      'error', 'Refleksi/Intervensi belum lengkap');
+  end if;
+
+  update erph.rph_document
+     set status = 'submitted', submitted_at = now(),
+         grade = null, reviewed_by = null, reviewed_at = null,
+         version = version + 1, client_updated_at = now()
+   where id = p_document
+  returning * into v_doc;
+
+  insert into erph.rph_revision (document_id, version, payload, completeness, actor_id, reason)
+  values (v_doc.id, v_doc.version, v_doc.payload, v_pct, erph.actor(), 'resubmit')
+  on conflict (document_id, version) do nothing;
+
+  insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
+  values (v_doc.school_id, erph.actor(), 'erph.rph_document', v_doc.id, 'submit',
+          jsonb_build_object('completeness', v_pct, 'status', 'submitted'));
+
+  return jsonb_build_object('ok', true, 'status', 'submitted', 'completeness', v_pct,
+                            'version', v_doc.version);
+end $$;
+
+-- REVIEW ─ KPM Lampiran 7: 1 = lengkap, 0 = tidak lengkap
+create or replace function erph.review_rph(p_document uuid, p_grade smallint,
+                                             p_comment text default null)
+returns jsonb language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_doc erph.rph_document%rowtype;
+begin
+  if p_grade not in (0,1) then raise exception 'Grade must be 0 or 1'; end if;
+  perform set_config('app.rpc', '1', true);
+
+  select * into v_doc from erph.rph_document
+   where id = p_document and deleted_at is null for update;
+  if not found then raise exception 'RPH not found'; end if;
+  if not erph.has_role(v_doc.school_id, array['admin','coordinator']::erph.member_role[]) then
+    raise exception 'Reviewer role required';
+  end if;
+
+  insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
+  values (v_doc.id, v_doc.version, erph.actor(), p_grade, p_comment,
+          jsonb_build_object('completeness', erph.rph_completeness(v_doc.payload)));
+
+  update erph.rph_document
+     set status = case when p_grade = 1 then 'approved'::erph.rph_status
+                       else 'returned'::erph.rph_status end,
+         grade = p_grade, reviewed_by = erph.actor(), reviewed_at = now(),
+         version = version + 1
+   where id = p_document;
+
+  insert into erph.notification (school_id, user_id, type, title, body, link_view)
+  values (v_doc.school_id, v_doc.owner_id,
+          case when p_grade = 1 then 'approved'::erph.notification_type
+               else 'returned'::erph.notification_type end,
+          case when p_grade = 1 then 'RPH disahkan lengkap'
+               else 'RPH perlu dibaiki' end,
+          coalesce(p_comment, ''), 'dashboard');
+
+  insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
+  values (v_doc.school_id, erph.actor(), 'erph.rph_document', v_doc.id, 'review',
+          jsonb_build_object('grade', p_grade, 'comment', p_comment));
+
+  return jsonb_build_object('ok', true, 'grade', p_grade,
+    'status', case when p_grade = 1 then 'approved' else 'returned' end);
+end $$;
+
+-- SYNC ─ batch, idempotent, offline-friendly; returns authoritative versions.
+-- p_ops: [{op_id, id?, entity:'rph', class_id, subject_code, session, week_no,
+--          plan_date, payload, status?, client_updated_at?, content_hash?}]
+create or replace function erph.sync_rph(p_ops jsonb)
+returns jsonb language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_op jsonb; v_op_id uuid; v_id uuid; v_uid uuid := erph.actor();
+  v_school uuid; v_doc_id uuid; v_ver int; v_status erph.rph_status;
+  v_rows int; v_pct smallint; v_client_ts timestamptz;
+  v_out jsonb := '[]'::jsonb;
+begin
+  if v_uid is null then raise exception 'Not authenticated'; end if;
+  perform set_config('app.rpc', '1', true);
+
+  -- resolve caller's school once (all ops must belong to it)
+  select school_id into v_school
+    from erph.school_member where user_id = v_uid and is_active
+   order by invited_at limit 1;
+  if v_school is null then raise exception 'No active erph.school membership'; end if;
+
+  for v_op in select * from jsonb_array_elements(p_ops) loop
+    v_op_id := (v_op->>'op_id')::uuid;
+    v_id    := coalesce((v_op->>'id')::uuid, gen_random_uuid());
+    v_pct    := erph.rph_completeness(v_op->'payload');
+    v_client_ts := coalesce((v_op->>'client_updated_at')::timestamptz, now());
+
+    -- 1) idempotency: replayed ops are no-ops
+    insert into erph.sync_op (op_id, user_id, entity, entity_id)
+    values (v_op_id, v_uid, 'rph', v_id)
+    on conflict (op_id) do nothing;
+    get diagnostics v_rows = row_count;
+    if v_rows = 0 then
+      v_out := v_out || jsonb_build_array(
+        jsonb_build_object('op_id', v_op_id, 'result', 'duplicate'));
+      continue;
+    end if;
+
+    -- 2) validate target class belongs to caller's school + session
+    if not exists (
+         select 1 from erph.class c
+          where c.id = (v_op->>'class_id')::uuid
+            and c.school_id = v_school and c.session = v_op->>'session' and c.is_active)
+    then
+      v_out := v_out || jsonb_build_array(
+        jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
+                           'error', 'erph.class not in your erph.school/session'));
+      continue;
+    end if;
+    if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
+      v_out := v_out || jsonb_build_array(
+        jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
+                           'error', 'unknown erph.subject'));
+      continue;
+    end if;
+
+    -- 3) resolve canonical row: by id, else by natural key (merge duplicates)
+    select id, version, status into v_doc_id, v_ver, v_status
+      from erph.rph_document
+     where owner_id = v_uid and deleted_at is null
+       and (id = v_id
+            or (class_id = (v_op->>'class_id')::uuid
+                and subject_code = v_op->>'subject_code'
+                and session = v_op->>'session'
+                and week_no = (v_op->>'week_no')::smallint
+                and plan_date = (v_op->>'plan_date')::date))
+     order by (id = v_id) desc
+     limit 1;
+
+    if v_doc_id is not null then
+      update erph.rph_document
+         set payload = v_op->'payload',
+             version = version + 1,
+             client_updated_at = v_client_ts,
+             slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
+             content_hash = coalesce(v_op->>'content_hash', content_hash),
+             -- Status is server-managed. The client may request only:
+             --   • nothing (null)     → keep current state
+             --   • 'submitted'        → allowed ONLY when 100% complete
+             -- Everything else (including leaving approved/returned) is dropped,
+             -- so sync can never bypass submit_rph()'s completeness gate or
+             -- let a teacher self-approve their own plan.
+             status = case
+                        when v_op->>'status' is null then status
+                        when status in ('approved', 'returned')
+                             and v_op->>'status' <> 'submitted' then status
+                        when v_op->>'status' = 'submitted' and v_pct = 100
+                          then 'submitted'::erph.rph_status
+                        when v_op->>'status' = 'submitted' then status
+                        else 'draft'::erph.rph_status
+                      end,
+             submitted_at = case when v_op->>'status' = 'submitted' and v_pct = 100
+                                 and submitted_at is null
+                                 then now() else submitted_at end
+       where id = v_doc_id and owner_id = v_uid
+      returning version, status into v_ver, v_status;
+    else
+      begin
+        insert into erph.rph_document
+          (id, school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
+           slot_time, payload, status, version, client_updated_at, content_hash, submitted_at)
+        values
+          (v_id, v_school, v_uid, (v_op->>'class_id')::uuid, v_op->>'subject_code',
+           v_op->>'session', (v_op->>'week_no')::smallint, (v_op->>'plan_date')::date,
+           coalesce((v_op->>'slot_time')::time, '07:30'::time),
+           v_op->'payload',
+           -- New documents are always drafts: submitting is an explicit act
+           -- through submit_rph(), and the same 100% gate applies here.
+           case when v_op->>'status' = 'submitted' and v_pct = 100
+                then 'submitted'::erph.rph_status
+                else 'draft'::erph.rph_status end,
+           1, v_client_ts, v_op->>'content_hash',
+           case when v_op->>'status' = 'submitted' and v_pct = 100 then now() end)
+        returning id, version, status into v_doc_id, v_ver, v_status;
+      exception when unique_violation then
+        -- race: another request created the same logical plan → merge into it
+        update erph.rph_document
+           set payload = v_op->'payload',
+               version = version + 1,
+               client_updated_at = v_client_ts,
+               slot_time = coalesce((v_op->>'slot_time')::time, slot_time)
+         where owner_id = v_uid
+           and class_id = (v_op->>'class_id')::uuid
+           and subject_code = v_op->>'subject_code'
+           and session = v_op->>'session'
+           and week_no = (v_op->>'week_no')::smallint
+           and plan_date = (v_op->>'plan_date')::date
+           and deleted_at is null
+        returning id, version, status into v_doc_id, v_ver, v_status;
+      end;
+    end if;
+
+    if v_doc_id is null then
+      v_out := v_out || jsonb_build_array(
+        jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
+                           'error', 'could not resolve document'));
+      continue;
+    end if;
+
+    insert into erph.rph_revision (document_id, version, payload, completeness, actor_id, reason)
+    values (v_doc_id, v_ver, v_op->'payload', v_pct, v_uid, 'sync')
+    on conflict (document_id, version) do nothing;
+
+    update erph.sync_op set result = jsonb_build_object('id', v_doc_id, 'version', v_ver)
+     where op_id = v_op_id;
+
+    v_out := v_out || jsonb_build_array(jsonb_build_object(
+      'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
+      'version', v_ver, 'status', v_status, 'completeness', v_pct));
+  end loop;
+
+  return v_out;
+end $$;
+
+-- School compliance for one week (drives the admin dashboard in one round-trip)
+create or replace function erph.school_week_stats(p_school uuid, p_session text, p_week smallint)
+returns table (expected int, submitted int, approved int, returned_t int,
+               drafts int, compliance numeric)
+language plpgsql stable security definer set search_path = erph, public as $$
+begin
+  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+    raise exception 'Not allowed';
+  end if;
+  return query
+  with t as (
+    select count(*)::int n from erph.school_member
+     where school_id = p_school and role = 'teacher' and is_active
+  ), d as (
+    select status, grade from erph.rph_document
+     where school_id = p_school and session = p_session
+       and week_no = p_week and deleted_at is null
+  )
+  select
+    (select n from t),
+    (select count(*)::int from d where status <> 'draft'),
+    (select count(*)::int from d where grade = 1),
+    (select count(*)::int from d where status = 'returned' or grade = 0),
+    (select count(*)::int from d where status = 'draft'),
+    round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
+          / nullif((select n from t), 0), 1);
+end $$;
+
+-- ── 10 · TRIGGERS ────────────────────────────────────────────────────────────
+create trigger tr_school_updated   before update on erph.school
+  for each row execute function erph.set_updated_at();
+create trigger tr_profile_updated  before update on erph.user
+  for each row execute function erph.set_updated_at();
+create trigger tr_setting_updated  before update on erph.school_setting
+  for each row execute function erph.set_updated_at();
+create trigger tr_document_updated before update on erph.rph_document
+  for each row execute function erph.set_updated_at();
+create trigger tr_template_updated before update on erph.rph_template
+  for each row execute function erph.set_updated_at();
+
+-- review state may only move inside RPCs / trusted server code
+create trigger tr_document_guard before update on erph.rph_document
+  for each row execute function erph.guard_review_fields();
+
+-- append-only enforcement (statutory record)
+create trigger tr_revision_appendonly before update or delete on erph.rph_revision
+  for each row execute function erph.forbid_mutation();
+create trigger tr_review_appendonly   before update or delete on erph.rph_review
+  for each row execute function erph.forbid_mutation();
+create trigger tr_audit_appendonly    before update or delete on erph.audit_log
+  for each row execute function erph.forbid_mutation();
+
+-- ── 11 · ROW LEVEL SECURITY ──────────────────────────────────────────────────
+-- PostgREST exposes every table in `erph`; an unpoliced table would be
+-- world-readable to anyone holding the publishable key. Pattern: permissive
+-- SELECT policies that call SECURITY DEFINER helpers (never inline subqueries
+-- on the same table → recursion), writes only via owner policy or RPC.
+--
+-- Identity in every policy comes from `erph.actor()`, not `auth.uid()` — see
+-- §3b. With no Supabase Auth in play, a direct PostgREST call resolves actor
+-- to NULL and is denied outright; our own traffic arrives through route
+-- handlers that authenticate first.
+alter table erph.school              enable row level security;
+alter table erph.user             enable row level security;
+alter table erph.school_member       enable row level security;
+alter table erph.school_setting      enable row level security;
+alter table erph.subject             enable row level security;
+alter table erph.dskp_standard       enable row level security;
+alter table erph.academic_calendar   enable row level security;
+alter table erph.class               enable row level security;
+alter table erph.teaching_assignment enable row level security;
+alter table erph.rph_document        enable row level security;
+alter table erph.rph_revision        enable row level security;
+alter table erph.rph_review          enable row level security;
+alter table erph.rph_template        enable row level security;
+alter table erph.notification        enable row level security;
+alter table erph.sync_op             enable row level security;
+alter table erph.export_file         enable row level security;
+alter table erph.audit_log           enable row level security;
+
+create policy school_read on erph.school
+  for select using (erph.is_member(erph.school.id));
+
+create policy setting_read on erph.school_setting
+  for select using (erph.is_member(erph.school_setting.school_id));
+
+create policy profile_read on erph.user
+  for select using (id = erph.actor() or erph.shares_school_with(erph.user.id));
+create policy profile_self_update on erph.user
+  for update using (id = erph.actor()) with check (id = erph.actor());
+
+create policy member_read on erph.school_member
+  for select using (user_id = erph.actor() or erph.is_staff(erph.school_member.school_id));
+
+-- reference data: read-only for any signed-in user
+create policy subject_read   on erph.subject         for select to authenticated using (true);
+create policy dskp_read      on erph.dskp_standard   for select to authenticated using (true);
+create policy calendar_read  on erph.academic_calendar for select to authenticated using (true);
+
+create policy class_read on erph.class
+  for select using (erph.is_member(erph.class.school_id));
+
+create policy assignment_read on erph.teaching_assignment
+  for select using (
+    user_id = erph.actor()
+    or exists (select 1 from erph.class c where c.id = erph.teaching_assignment.class_id
+                 and erph.is_staff(c.school_id))
+  );
+
+-- core document: owner may select/insert/update payload only — deliberately NO
+-- delete policy (soft delete goes through server code), and status changes are
+-- blocked by guard_review_fields even for the owner
+create policy rph_owner_select on erph.rph_document
+  for select using (owner_id = erph.actor() and deleted_at is null);
+create policy rph_owner_insert on erph.rph_document
+  for insert with check (
+    owner_id = erph.actor()
+    and school_id in (select unnest(erph.my_schools()))
+    and erph.class_in_school(class_id, school_id)
+    and erph.teaches_class(class_id)
+  );
+create policy rph_owner_update on erph.rph_document
+  for update using (owner_id = erph.actor() and deleted_at is null)
+  with check (
+    owner_id = erph.actor()
+    and school_id in (select unnest(erph.my_schools()))
+    and erph.class_in_school(class_id, school_id)
+  );
+create policy rph_reviewer_read on erph.rph_document
+  for select using (deleted_at is null
+                    and erph.has_role(school_id, array['admin','coordinator','ppd','jpn']::erph.member_role[]));
+
+-- history tables: SELECT only → writes happen inside SECURITY DEFINER RPCs
+create policy rph_revision_read on erph.rph_revision
+  for select using (exists (select 1 from erph.rph_document d
+                            where d.id = erph.rph_revision.document_id
+                              and (d.owner_id = erph.actor()
+                                   or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[]))));
+create policy rph_review_read on erph.rph_review
+  for select using (exists (select 1 from erph.rph_document d
+                            where d.id = erph.rph_review.document_id
+                              and (d.owner_id = erph.actor()
+                                   or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[]))));
+
+create policy template_read on erph.rph_template
+  for select using (
+    owner_id = erph.actor()
+    or (visibility = 'system' and erph.actor() is not null)
+    or (visibility = 'erph.school' and erph.is_member(erph.rph_template.school_id))
+  );
+create policy template_insert on erph.rph_template
+  for insert with check (owner_id = erph.actor() and visibility <> 'system');
+create policy template_update on erph.rph_template
+  for update using (owner_id = erph.actor()) with check (owner_id = erph.actor());
+
+create policy notification_read on erph.notification
+  for select using (user_id = erph.actor());
+create policy notification_mark_read on erph.notification
+  for update using (user_id = erph.actor()) with check (user_id = erph.actor());
+
+create policy sync_op_read on erph.sync_op
+  for select using (user_id = erph.actor());
+
+create policy export_read on erph.export_file
+  for select using (
+    created_by = erph.actor()
+    or exists (select 1 from erph.rph_document d where d.id = erph.export_file.document_id
+                 and (d.owner_id = erph.actor()
+                      or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[])))
+  );
+
+create policy audit_admin_read on erph.audit_log
+  for select using (erph.has_role(erph.audit_log.school_id, array['admin']::erph.member_role[]));
+
+-- ── 12 · STORAGE (private buckets, membership-scoped signed URLs) ────────────
+insert into storage.buckets (id, name, public) values
+  ('rph-exports', 'rph-exports', false),
+  ('attachments', 'attachments', false)
+on conflict (id) do nothing;
+
+-- path convention: rph-exports/<document_id>/<file>.pdf
+--                  attachments/<user_id>/<file>
+--
+-- KNOWN DORMANT STATE — read before using these buckets.
+-- These policies call erph.has_role() → erph.actor(), and erph.actor() only
+-- honours a caller-supplied identity for `service_role`. Storage requests do
+-- not arrive through PostgREST with our X-Erph-User header, so as written
+-- every check resolves to NULL and every read is DENIED. That is the correct
+-- default (fail closed) and costs nothing today because no code path touches
+-- Storage — exports stream straight from /api/export.
+--
+-- Before enabling uploads/downloads: either proxy Storage through a route
+-- handler (same pattern as every other DB access), or extend erph.actor() with
+-- a Storage-specific identity source. Do not simply relax the policy to
+-- `using (true)` — the buckets would then be readable by anyone holding the
+-- publishable key.
+create policy storage_read on storage.objects
+  for select to authenticated using (
+       (bucket_id = 'rph-exports'
+        and exists (select 1 from erph.rph_document d
+                     where d.id::text = (storage.foldername(name))[1]
+                       and (d.owner_id = erph.actor()
+                            or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[]))))
+    or (bucket_id = 'attachments'
+        and (storage.foldername(name))[1] = erph.actor()::text)
+  );
+create policy storage_upload_attachments on storage.objects
+  for insert to authenticated with check (
+    bucket_id = 'attachments' and (storage.foldername(name))[1] = erph.actor()::text
+  );
+
+-- ── 13 · VIEWS (security_invoker ⇒ RLS still applies through the view) ───────
+create view erph.v_teacher_week
+with (security_invoker = true) as
+select d.school_id, d.owner_id, d.session, d.week_no,
+       count(*) filter (where d.status = 'draft')     as drafts,
+       count(*) filter (where d.status = 'submitted') as submitted,
+       count(*) filter (where d.status = 'approved')  as approved,
+       count(*) filter (where d.status = 'returned')  as returned,
+       round(avg(d.completeness), 1)                  as avg_completeness
+from erph.rph_document d
+where d.deleted_at is null
+group by 1,2,3,4;
+
+create view erph.v_school_compliance
+with (security_invoker = true) as
+select d.school_id, d.session, d.week_no,
+       count(*)                                as total_docs,
+       count(*) filter (where d.grade = 1)     as approved,
+       count(*) filter (where d.grade = 0)     as rejected,
+       count(*) filter (where d.status = 'submitted') as pending,
+       round(100.0 * count(*) filter (where d.grade = 1)
+             / nullif(count(distinct d.owner_id), 0), 1) as compliance_pct
+from erph.rph_document d
+where d.deleted_at is null
+group by 1,2,3;
+
+-- ── 14 · pg_cron JOBS (enable after seeding the calendar) ────────────────────
+-- -- Thursday 20:00: nudge teachers with incomplete drafts
+-- select cron.schedule('erph-deadline-nag', '0 20 * * 4', $$
+--   insert into erph.notification (school_id, user_id, type, title, body, link_view)
+--   select distinct sm.school_id, sm.user_id, 'deadline',
+--          'RPH belum lengkap',
+--          'Mohon lengkapkan sebelum Jumaat 4:00 petang', 'dashboard'
+--   from erph.school_member sm
+--   join erph.rph_document d on d.owner_id = sm.user_id and d.school_id = sm.school_id
+--   where sm.role = 'teacher' and sm.is_active
+--     and d.status = 'draft' and d.completeness < 100
+--     and d.deleted_at is null
+--     and d.session = '2026/2027';
+-- $$);
+--
+-- -- Daily 00:10: retention purge for soft-deleted rows older than 5 years
+-- select cron.schedule('erph-retention', '10 0 * * *', $$
+--   select set_config('app.purge','1',true);
+--   delete from erph.rph_document where deleted_at < now() - interval '5 years';
+-- $$);
+--
+-- NOTE (free tier): pg_cron runs inside Supabase — any cadence is free.
+-- The KEEP-AWAKE heartbeat must come from OUTSIDE (Vercel daily cron →
+-- GET /api/heartbeat → trivial query), because a paused project stops pg_cron too.
+
+-- ── 15 · EXPOSE THE SCHEMA TO THE DATA API ─────────────────────────────────
+-- Required by Supabase's "Using custom schemas" guide. PostgREST connects as
+-- `authenticator` and switches to `authenticated`/`anon`; without USAGE on the
+-- schema and privileges on its objects, every request 404s even though RLS
+-- would have allowed it.
+--
+-- Order matters: `GRANT ... ON ALL ...` covers what exists now, while
+-- `ALTER DEFAULT PRIVILEGES` covers everything created later by this role.
+-- Run step 1 of the two-step setup first:
+--   Dashboard → Settings → API → Exposed schemas → add `erph`
+grant usage on schema erph to anon, authenticated, service_role;
+grant all on all tables in schema erph to anon, authenticated, service_role;
+grant all on all routines in schema erph to anon, authenticated, service_role;
+grant all on all sequences in schema erph to anon, authenticated, service_role;
+alter default privileges for role postgres in schema erph
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges for role postgres in schema erph
+  grant all on routines to anon, authenticated, service_role;
+alter default privileges for role postgres in schema erph
+  grant all on sequences to anon, authenticated, service_role;
+
+-- NOTE: granting broadly is correct here because RLS is the real guard — the
+-- same model Supabase itself uses for `public`. Every table in this schema has
+-- RLS enabled (see §11), and writes go through SECURITY DEFINER RPCs.
+--
+-- EXCEPT `erph.user`: it holds password hashes, so it is revoked outright from
+-- the API roles. The service role (route handlers, SECURITY DEFINER functions)
+-- keeps access; PostgREST clients get "permission denied" before RLS is even
+-- consulted. Column-level grants would still leak via PostgREST metadata, so
+-- the whole table goes.
+revoke all on erph.user from anon, authenticated;

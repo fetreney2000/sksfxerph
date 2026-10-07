@@ -1,0 +1,60 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import * as React from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { openDraft } from "@/lib/actions/plans";
+import { currentWeek } from "@/lib/config";
+import { CLASSES } from "@/lib/demo/seed";
+
+/**
+ * `/editor` with no id = "take me to the plan I should be working on".
+ *
+ * Resolves the most urgent draft (or returned plan) for the current week and
+ * creates one if the week is empty — so the sidebar link and "RPH baharu"
+ * both land somewhere useful without the user picking a class first.
+ */
+export default function EditorIndexPage() {
+  const router = useRouter();
+  const [state, setState] = React.useState<"resolving" | "empty" | "error">("resolving");
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const doc = await openDraft(currentWeek(), CLASSES);
+        if (cancelled) return;
+        if (doc) {
+          router.replace(`/editor/${doc.id}`);
+        } else {
+          setState("empty");
+        }
+      } catch {
+        if (!cancelled) setState("error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  return (
+    <Card>
+      <CardContent className="py-12 text-center">
+        {state === "error" ? (
+          <>
+            <p className="mb-4 text-ink-3">Gagal membuka editor.</p>
+            <Button variant="secondary" onClick={() => router.push("/minggu")}>
+              Kembali
+            </Button>
+          </>
+        ) : (
+          <p className="text-ink-4">Menyiapkan editor…</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

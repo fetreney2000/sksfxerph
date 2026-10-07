@@ -1,0 +1,16 @@
+# Normalise line endings: the repository stores LF, always.
+# The tree is authored LF; without this, core.autocrlf=true on Windows checks
+# out CRLF and every diff becomes a whole-file rewrite on another platform.
+* text=auto eol=lf
+
+# Explicitly binary — never normalise these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+package-lock.json linguist-generated=true
