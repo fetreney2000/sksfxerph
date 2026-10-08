@@ -94,7 +94,7 @@ User edits RPH (Client Component)
 - **Dexie schema mirrors the SQL natural key**: `documents` keyed by `id`, index `[owner_id, session, week_no, plan_date]`, so the client can find duplicates before they hit the server's unique constraint.
 - **`op_id` is minted once** per edit-commit (crypto.randomUUID) — retries are no-ops server-side via `sync_op`.
 - **Conflict display**: `/api/sync` returns `{result:'applied', version}` or a conflict flag → the UI shows the amber "versi lain dikemas kini" chip from the mockup.
-- **Never block the user on the network**: the editor's save button writes to Dexie only; sync is fire-and-forget in the background with a visible queue count (the mockup's `Disegerakkan / Luar talian · 2 belum disegerakkan` chip).
+- **Never block the user on the network**: the editor's save button writes to Dexie only; sync is fire-and-forget in the background with a visible queue count (the mockup's `Disegerakkan / Luar talian · 2 belum diselesaikan` chip).
 - **Service worker scope**: cache the app shell, routes, and the DSKP reference JSON; **never** cache authenticated API responses (stale RPH is a correctness bug, not just a UX one).
 
 ---

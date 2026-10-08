@@ -35,7 +35,6 @@ import { cn } from "@/lib/cn";
 import { SESSION, supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
 import { db } from "@/lib/db";
-import { searchDskp } from "@/lib/demo/dskp";
 import { CLASSES } from "@/lib/demo/seed";
 import { ms } from "@/lib/i18n/ms";
 import { RpcError, submitRph } from "@/lib/rpc";
@@ -1046,126 +1045,35 @@ function StepDskp({
   payload: RphPayload;
   onPatch: (p: Partial<RphPayload>) => void;
 }) {
-  const [term, setTerm] = React.useState("");
-  const [open, setOpen] = React.useState(true);
-  const results = searchDskp(term);
-
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <div className="relative">
+      <div>
         <Label required htmlFor="f-188949">
           {ms.editor.standardKandungan}
         </Label>
         <Input
           id="f-188949"
-          value={term || payload.standard_kandungan}
-          placeholder="Cari Standard Kandungan…"
-          onChange={(e) => {
-            setTerm(e.target.value);
-            setOpen(true);
-            onPatch({ standard_kandungan: e.target.value, kod_sk: "" });
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-          aria-expanded={open}
-          aria-controls="dskp-results"
+          value={payload.standard_kandungan}
+          placeholder="cth. 3.1 Mengenal, membaca dan menulis semula nombor"
+          onChange={(e) => onPatch({ standard_kandungan: e.target.value })}
         />
-
-        {open && results.length > 0 && (
-          <ul
-            id="dskp-results"
-            className="absolute z-20 mt-1.5 w-full overflow-hidden rounded-[9px] border border-border bg-surface shadow-md"
-          >
-            {results.map((d) => {
-              const selected = payload.kod_sk === d.kodSk;
-              return (
-                <li key={d.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    className={
-                      "flex w-full gap-2.5 border-b border-border px-3 py-2.5 text-left transition-colors last:border-b-0 " +
-                      (selected
-                        ? "bg-primary-soft shadow-[inset_3px_0_0_var(--color-primary)]"
-                        : "hover:bg-surface-2")
-                    }
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      onPatch({
-                        kod_sk: d.kodSk,
-                        standard_kandungan: d.standardKandungan,
-                        bidang: d.bidang,
-                        // Selecting an SK narrows the SP list automatically.
-                        kod_sp: "",
-                        standard_pembelajaran: "",
-                      });
-                      setTerm("");
-                      setOpen(false);
-                    }}
-                  >
-                    <span
-                      className={
-                        "min-w-[50px] pt-0.5 text-[11.5px] font-bold tracking-[0.4px] " +
-                        (selected ? "text-primary-ink" : "text-ink-4")
-                      }
-                    >
-                      SK {d.kodSk}
-                    </span>
-                    <span className="text-[13.5px] leading-[1.45] text-ink-2">
-                      {d.standardKandungan}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+        {payload.standard_kandungan.trim() === "" && (
+          <FieldError>Standard Kandungan diperlukan sebelum dihantar.</FieldError>
         )}
-
-        <p className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-ink-4">
-          Daripada DSKP KSSR Semakan · disediakan luar talian
-          <HelpHint label="Pemilih DSKP">
-            Taip untuk mencari mengikut kod (3.1), teks Standard Kandungan, atau bidang. Pilihan
-            SK akan menapis senarai SP secara automatik — jangan taip SK/SP sebagai teks bebas.
-          </HelpHint>
-        </p>
       </div>
 
       <div>
         <Label required htmlFor="f-907255">
           {ms.editor.standardPembelajaran}
         </Label>
-        {payload.kod_sk ? (
-          <Select
-            id="f-907255"
-            value={payload.kod_sp ?? ""}
-            onChange={(e) => {
-              const d = searchDskp(e.target.value, 1)[0];
-              // Value is the kod_sp; look it up to fill the full text.
-              const found = searchDskp("", 99).find((x) => x.kodSp === e.target.value);
-              if (found) {
-                onPatch({
-                  kod_sp: found.kodSp,
-                  standard_pembelajaran: `${found.kodSp} ${found.standardPembelajaran}`,
-                });
-              } else if (d) {
-                onPatch({ kod_sp: e.target.value, standard_pembelajaran: e.target.value });
-              }
-            }}
-          >
-            <option value="">— pilih Standard Pembelajaran —</option>
-            {searchDskp("", 99)
-              .filter((x) => x.kodSk === payload.kod_sk)
-              .map((x) => (
-                <option key={x.kodSp} value={x.kodSp}>
-                  {x.kodSp} {x.standardPembelajaran}
-                </option>
-              ))}
-          </Select>
-        ) : (
-          <p className="rounded-[9px] border border-dashed border-border-strong px-3 py-2.5 text-[13.5px] text-ink-4">
-            Pilih Standard Kandungan dahulu.
-          </p>
+        <Input
+          id="f-907255"
+          value={payload.standard_pembelajaran}
+          placeholder="cth. 3.1.1 Menulis semula nombor hingga 100,000"
+          onChange={(e) => onPatch({ standard_pembelajaran: e.target.value })}
+        />
+        {payload.standard_pembelajaran.trim() === "" && (
+          <FieldError>Standard Pembelajaran diperlukan sebelum dihantar.</FieldError>
         )}
 
         <div className="mt-3.5">

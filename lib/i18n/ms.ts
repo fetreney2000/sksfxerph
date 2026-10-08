@@ -31,7 +31,6 @@ export const ms = {
     guru: "Guru",
     pentadbiran: "Pentadbiran",
     urus: "Urus eRPH",
-    rujukan: "Rujukan rasmi",
   },
 
   dashboard: {
@@ -60,7 +59,7 @@ export const ms = {
     incomplete: "Tidak lengkap",
     notSubmitted: "belum hantar",
     offline: "Luar talian",
-    queued: (n: number) => `${n} belum disegerakkan`,
+    queued: (n: number) => `${n} belum diselesaikan`,
     synced: "Disegerakkan",
     saving: "Disimpan",
     online: "Dalam talian",

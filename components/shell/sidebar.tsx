@@ -122,41 +122,6 @@ export function Sidebar({
           </div>
         ))}
 
-        <div className="mt-4 rounded-xl border border-[rgba(255,255,255,0.09)] bg-white/[0.045] p-3">
-          <h4 className="flex items-center gap-1.5 text-[12.5px] font-semibold text-white">
-            <svg
-              className="h-3.75 w-3.75"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              aria-hidden
-            >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 16.2v-4.4M12 8h.01" />
-            </svg>
-            {ms.nav.rujukan}
-          </h4>
-          <p className="mt-1 mb-2.5 text-[11.5px] leading-[1.5] text-[#90a1ba]">
-            Surat Siaran KPM Bil. 2/2025 &amp; Garis Panduan Penyediaan e-RPH — disertakan terus
-            dalam sistem.
-          </p>
-          <button
-            type="button"
-            className="h-10 w-full rounded-lg border border-white/15 bg-white/10 px-2.5 text-[12.5px] font-semibold text-[#dce6f4] transition-colors hover:bg-white/[0.16]"
-            onClick={() =>
-              window.open(
-                // The actual Garis Panduan e-RPH PDF (§4.2(12): self-serve help),
-                // not the ministry homepage — the FAQ must be one click away.
-                "https://gurubesar.my/wp-content/uploads/2025/05/Surat-Siaran-Bilangan-2-Tahun-2025-eRPH-1.pdf",
-                "_blank",
-                "noopener",
-              )
-            }
-          >
-            Buka garis panduan
-          </button>
-        </div>
       </nav>
 
       <div className="flex items-center gap-2.5 border-t border-[rgba(255,255,255,0.08)] px-4 py-3">

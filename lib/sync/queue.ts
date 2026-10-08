@@ -101,7 +101,7 @@ async function writeDocument(doc: RphDocument): Promise<void> {
 /** Send everything due. Safe to call from online events, intervals and buttons. */
 export async function flushQueue(): Promise<SyncResult[]> {
   // Local mode: there is no remote to sync to, and IndexedDB already *is* the
-  // persisted copy. Drain the vestigial queue instead of showing "n belum disegerakkan"
+  // persisted copy. Drain the vestigial queue instead of showing "n belum diselesaikan"
   // to a teacher forever — the chip would otherwise lie about pending work.
   if (!hasBackend()) {
     await db.syncQueue.clear();

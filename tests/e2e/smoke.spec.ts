@@ -249,12 +249,12 @@ test.describe("eRPH smoke", () => {
     const errors = collectErrors(page);
     await page.goto("/minggu");
 
-    // Local mode must never show a phantom "n belum disegerakkan" — Dexie already holds
+    // Local mode must never show a phantom "n belum diselesaikan" — Dexie already holds
     // the data, so there is nothing pending.
     await expect(page.getByRole("status")).toHaveText(/Disegerakkan/, {
       timeout: 15_000,
     });
-    await expect(page.getByRole("status")).not.toHaveText(/belum disegerakkan/);
+    await expect(page.getByRole("status")).not.toHaveText(/belum diselesaikan/);
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -279,7 +279,7 @@ test.describe("eRPH smoke", () => {
 
     // 2. Cut the network — the whole point of the local-first design.
     await context.setOffline(true);
-    await expect(page.getByText(/Luar talian|belum disegerakkan/).first()).toBeVisible({
+    await expect(page.getByText(/Luar talian|belum diselesaikan/).first()).toBeVisible({
       timeout: 15_000,
     });
 
