@@ -23,9 +23,47 @@ const newId = () => (canUseCrypto ? crypto.randomUUID() : `${Date.now()}-${Math.
 /**
  * Persist a document locally and enqueue it for sync.
  * This is the ONLY write path the editor uses.
+ *
+ * Writes are funnelled through a single drain so rows can never land out of
+ * order: without it, Dexie runs overlapping transactions and a keystroke from
+ * a moment ago can overwrite the one after it — the form would save stale text.
+ * Only the newest doc is written; intermediate ones are superseded anyway.
  */
-export async function saveDocument(doc: RphDocument): Promise<void> {
+let pendingDoc: RphDocument | null = null;
+let draining: Promise<void> | null = null;
+
+async function drain(): Promise<void> {
+  while (pendingDoc) {
+    const doc = pendingDoc;
+    pendingDoc = null;
+    await writeDocument(doc);
+  }
+}
+
+export function saveDocument(doc: RphDocument): Promise<void> {
+  pendingDoc = doc;
+  if (!draining) {
+    draining = drain().finally(() => {
+      draining = null;
+      // Anything that slipped in after the loop's last check still needs a pass.
+      if (pendingDoc) void saveDocument(pendingDoc);
+    });
+  }
+  return draining;
+}
+
+async function writeDocument(doc: RphDocument): Promise<void> {
   const now = Date.now();
+
+  // Local mode has no queue consumer — flushQueue() clears it on sight — so
+  // enqueueing here would be a write followed immediately by a delete on every
+  // keystroke, and the depth it produces would make the sync chip advertise
+  // work that will never be sent. One put, nothing else.
+  if (!hasBackend()) {
+    await db.documents.put(doc);
+    return;
+  }
+
   const contentHash = hashPayload(doc.payload);
 
   await db.transaction("rw", db.documents, db.syncQueue, async () => {
@@ -194,8 +232,31 @@ export const hasBackend = () =>
 
 export const pendingCount = queueDepth;
 
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Trailing-edge flush, used by `commit()` only when a backend exists.
+ *
+ * Without it, saving a burst of keystrokes would POST once per character. The
+ * `online` event and the 30s interval in providers.tsx are the safety net, so
+ * a tab that closes before the timer fires still flushes next session.
+ *
+ * Deliberately *not* applied to the document write itself: `commit()` must
+ * reach Dexie before the next keystroke, because controlled inputs read the
+ * row back and an offline edit has to survive an immediate reload (the
+ * "offline edit survives a reload" e2e test is exactly that contract).
+ */
+function scheduleFlush(delayMs = 1000): void {
+  if (flushTimer !== undefined) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = undefined;
+    void flushQueue();
+  }, delayMs);
+}
+
 /** Push a fresh document through the whole path — used by the editor. */
 export async function commit(doc: RphDocument): Promise<void> {
   await saveDocument(doc);
-  void flushQueue();
+  if (hasBackend()) scheduleFlush();
+  else void flushQueue();
 }

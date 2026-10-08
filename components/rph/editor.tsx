@@ -171,6 +171,8 @@ export function RphEditor({ docId }: { docId?: string }) {
 
   const [submitOpen, setSubmitOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  /** Writes in flight — the indicator only speaks up if one is genuinely slow. */
+  const inFlight = React.useRef(0);
 
   // ── Tier B: the gated wizard became four collapsible sections ────────────
   /** Which tab owns the narrow layout; ignored at `xl` where both columns dock. */
@@ -183,17 +185,68 @@ export function RphEditor({ docId }: { docId?: string }) {
   const [openSet, setOpenSet] = React.useState<ReadonlySet<number> | null>(null);
   /** Height of the app topbar — content-driven, so it cannot be a magic number. */
   const [topInset, setTopInset] = React.useState(64);
+  /** Phone-width: only one section open at a time (measured after mount). */
+  const [narrow, setNarrow] = React.useState(false);
+  /** Stored-section preference consumed exactly once per document. */
+  const [resumed, setResumed] = React.useState(false);
+  /** Stable across every write to this row — safe as an effect dependency. */
+  const liveId = live?.id;
+
+  /**
+   * What the teacher has typed, held *synchronously*.
+   *
+   * `live` only changes once Dexie confirms a write, so a render landing
+   * between two fast keystrokes restores the older stored value — and React
+   * resets a controlled input to its prop, which discards the characters
+   * typed since. Tracing this showed `SLOW typing: ok / FAST typing: lost`.
+   * The draft makes the keystroke the source of truth; the store is where it
+   * lands.
+   */
+  const [draft, setDraft] = React.useState<RphPayload | null>(null);
+  const payload = draft ?? live?.payload ?? emptyPayload();
+  /** The newest payload, readable from callbacks without a stale closure. */
+  const payloadRef = React.useRef(payload);
+  payloadRef.current = payload;
+
+  /**
+   * The A4 preview is a couple of hundred nodes; deferring it lets React paint
+   * the field you are typing in first and catch the document up a beat later.
+   * A hook, so it lives with the others — before the loading guards.
+   */
+  const deferredPayload = React.useDeferredValue(payload);
+
+  // A different document is a different draft. The effect only re-runs when
+  // the id changes, so this can never clobber something being typed.
+  React.useEffect(() => {
+    if (liveId) setDraft(null);
+  }, [liveId]);
 
   const update = React.useCallback(
     async (patch: Partial<RphDocument>) => {
       if (!live) return;
-      setSaving(true);
+      inFlight.current += 1;
+      // A Dexie put lands in about a millisecond — well inside a frame.
+      // Toggling the indicator for those would strobe it on every keystroke,
+      // so it only turns amber if a write is still pending after 200ms:
+      // routine success stays quiet, slowness becomes conspicuous.
+      const showIfSlow = window.setTimeout(() => {
+        if (inFlight.current > 0) setSaving(true);
+      }, 200);
       try {
         // commit() writes to Dexie first (optimistic, instant for the UI) and
-        // queues the network sync in the background.
-        await commit({ ...live, ...patch, clientUpdatedAt: Date.now() });
+        // queues the network sync in the background. `payload` comes from the
+        // ref, never from `patch` — a doc-level patch carrying an older payload
+        // would revert whatever was typed after it was built.
+        await commit({
+          ...live,
+          ...patch,
+          payload: payloadRef.current,
+          clientUpdatedAt: Date.now(),
+        });
       } finally {
-        setSaving(false);
+        inFlight.current -= 1;
+        window.clearTimeout(showIfSlow);
+        if (inFlight.current === 0) setSaving(false);
       }
     },
     [live],
@@ -201,10 +254,14 @@ export function RphEditor({ docId }: { docId?: string }) {
 
   const updatePayload = React.useCallback(
     (patch: Partial<RphPayload>) => {
-      if (!live) return;
-      void update({ payload: { ...live.payload, ...patch } });
+      const next = { ...payloadRef.current, ...patch };
+      // Update the ref *before* anything can render — `update()` reads it to
+      // build the commit — then let React render from the same value.
+      payloadRef.current = next;
+      setDraft(next);
+      void update({ payload: next });
     },
-    [live, update],
+    [update],
   );
 
   // Park the section nav flush under the topbar. Measured rather than assumed:
@@ -223,6 +280,54 @@ export function RphEditor({ docId }: { docId?: string }) {
     };
   }, []);
 
+  // Phone width: a second open section is just more scrolling, so the
+  // accordion becomes exclusive below md. Measured after mount — using it for
+  // the first paint would cause a hydration mismatch for no benefit.
+  React.useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    const apply = () => setNarrow(mql.matches);
+    apply();
+    mql.addEventListener("change", apply);
+    return () => mql.removeEventListener("change", apply);
+  }, []);
+
+  // Scroll-spy: the nav highlights whichever section is actually in view, so
+  // it answers "where am I" without the teacher having to look up. Re-keyed on
+  // the id rather than the row, or it would re-observe on every keystroke.
+  React.useEffect(() => {
+    // No document yet — there is nothing to observe.
+    if (!liveId) return;
+    const els = STEPS.map((_, i) => document.getElementById(`bahagian-${i}`)).filter(
+      (el): el is HTMLElement => el !== null,
+    );
+    if (els.length === 0) return;
+    const io = new IntersectionObserver(
+      () => {
+        // Recompute over every section, not just the ones that changed in
+        // this batch: otherwise a section that merely nudged into the band can
+        // win over the one actually sitting at the top of it.
+        const bandTop = topInset + 56;
+        const bandBottom = window.innerHeight * 0.55;
+        let best: HTMLElement | null = null;
+        let bestTop = Number.POSITIVE_INFINITY;
+        for (const el of els) {
+          const r = el.getBoundingClientRect();
+          if (r.bottom > bandTop && r.top < bandBottom && r.top < bestTop) {
+            best = el;
+            bestTop = r.top;
+          }
+        }
+        if (best) setActive(Number(best.id.split("-")[1]));
+      },
+      // Fires when any section crosses an edge of that same band.
+      { rootMargin: `-${topInset + 56}px 0px -45% 0px` },
+    );
+    els.forEach((el) => {
+      io.observe(el);
+    });
+    return () => io.disconnect();
+  }, [liveId, topInset]);
+
   // Restore the docked-preview preference. Written only from the toggle so
   // mount-time effects cannot clobber it before they read it.
   React.useEffect(() => {
@@ -237,26 +342,66 @@ export function RphEditor({ docId }: { docId?: string }) {
     });
   }, []);
 
-  // Open the first section with outstanding work until the teacher chooses.
+  // Resume: on a tool opened every week, the section the teacher left open is
+  // a better bet than re-deriving "first incomplete". The guess only runs when
+  // nothing is stored for this document (or storage is unavailable).
   React.useEffect(() => {
-    if (!live || openSet !== null) return;
+    if (!live || resumed) return;
+    setResumed(true);
+    try {
+      const raw = window.localStorage.getItem(`erph-rph-sesi:${live.id}`);
+      if (raw) {
+        const saved = JSON.parse(raw) as { active?: number; open?: number[] };
+        if (Array.isArray(saved.open)) {
+          setActive(Number.isInteger(saved.active) ? (saved.active as number) : 0);
+          setOpenSet(new Set(saved.open));
+          return;
+        }
+      }
+    } catch {
+      // corrupt or unavailable storage — fall through to the default
+    }
     const f = stepStatus(live.payload ?? emptyPayload());
     const flags = [f.profil, f.dskp, f.pdpc, f.refleksi];
     const i = flags.findIndex((done) => !done);
     const start = i === -1 ? 0 : i;
     setActive(start);
     setOpenSet(new Set([start]));
-  }, [live, openSet]);
+  }, [live, resumed]);
 
-  const toggleSection = React.useCallback((i: number) => {
-    setActive(i);
-    setOpenSet((prev) => {
-      const next = new Set(prev ?? []);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      return next;
-    });
-  }, []);
+  // Persist that choice. Keyed on the *id*, not the row, so a keystroke's
+  // Dexie emit cannot turn this into a synchronous storage write per character.
+  React.useEffect(() => {
+    if (!liveId || openSet === null) return;
+    try {
+      window.localStorage.setItem(
+        `erph-rph-sesi:${liveId}`,
+        JSON.stringify({ active, open: [...openSet] }),
+      );
+    } catch {
+      // private mode or quota — losing a preference is not worth an error
+    }
+  }, [liveId, active, openSet]);
+
+  const toggleSection = React.useCallback(
+    (i: number) => {
+      setActive(i);
+      setOpenSet((prev) => {
+        const open = prev ?? new Set<number>();
+        // Phone width: a second open section is just more scrolling, so the
+        // accordion goes exclusive — tapping the only open one still closes it.
+        if (narrow) {
+          const soleOpen = open.size === 1 && open.has(i);
+          return new Set(soleOpen ? [] : [i]);
+        }
+        const next = new Set(open);
+        if (next.has(i)) next.delete(i);
+        else next.add(i);
+        return next;
+      });
+    },
+    [narrow],
+  );
 
   /**
    * Reveal a section (and optionally focus one field in it), then scroll to it.
@@ -264,26 +409,30 @@ export function RphEditor({ docId }: { docId?: string }) {
    * The target only exists once React has committed the reveal, so the scroll
    * runs a frame later. Reduced-motion users get an instant jump.
    */
-  const goTo = React.useCallback((section: number, field?: string) => {
-    setActive(section);
-    setOpenSet((prev) => {
-      const next = new Set(prev ?? []);
-      next.add(section);
-      return next;
-    });
-    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.requestAnimationFrame(() => {
-      const target =
-        (field ? document.getElementById(field) : null) ??
-        document.getElementById(`bahagian-${section}`);
-      if (!target) return;
-      target.scrollIntoView({
-        behavior: smooth ? "smooth" : "auto",
-        block: field ? "center" : "start",
+  const goTo = React.useCallback(
+    (section: number, field?: string) => {
+      setActive(section);
+      setOpenSet((prev) => {
+        if (narrow) return new Set([section]);
+        const next = new Set(prev ?? []);
+        next.add(section);
+        return next;
       });
-      if (field) target.focus({ preventScroll: true });
-    });
-  }, []);
+      const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.requestAnimationFrame(() => {
+        const target =
+          (field ? document.getElementById(field) : null) ??
+          document.getElementById(`bahagian-${section}`);
+        if (!target) return;
+        target.scrollIntoView({
+          behavior: smooth ? "smooth" : "auto",
+          block: field ? "center" : "start",
+        });
+        if (field) target.focus({ preventScroll: true });
+      });
+    },
+    [narrow],
+  );
 
   if (!id) {
     return (
@@ -315,7 +464,6 @@ export function RphEditor({ docId }: { docId?: string }) {
     );
   }
 
-  const payload = live.payload ?? emptyPayload();
   const score = completeness(payload);
   const flags = stepStatus(payload);
   const stepDone = [flags.profil, flags.dskp, flags.pdpc, flags.refleksi];
@@ -544,7 +692,14 @@ export function RphEditor({ docId }: { docId?: string }) {
               onToggle={() => toggleSection(i)}
               scrollMarginTop={topInset + 56}
             >
-              {i === 0 && <StepProfil doc={live} onPatch={update} />}
+              {i === 0 && (
+                <StepProfil
+                  doc={live}
+                  payload={payload}
+                  onPatch={update}
+                  onPayload={updatePayload}
+                />
+              )}
               {i === 1 && <StepDskp payload={payload} onPatch={updatePayload} />}
               {i === 2 && <StepPdPc payload={payload} onPatch={updatePayload} />}
               {i === 3 && <StepRefleksi payload={payload} onPatch={updatePayload} />}
@@ -589,7 +744,7 @@ export function RphEditor({ docId }: { docId?: string }) {
             </Button>
           </div>
 
-          <RphPaper payload={payload} session={SESSION} />
+          <RphPaper payload={deferredPayload} session={SESSION} />
         </div>
       </div>
 
@@ -780,10 +935,14 @@ function Row({ k, v, tone }: { k: string; v: string; tone?: "ok" | "bad" | "warn
 
 function StepProfil({
   doc,
+  payload,
   onPatch,
+  onPayload,
 }: {
   doc: RphDocument;
+  payload: RphPayload;
   onPatch: (p: Partial<RphDocument>) => void;
+  onPayload: (p: Partial<RphPayload>) => void;
 }) {
   return (
     <div>
@@ -856,13 +1015,10 @@ function StepProfil({
             min={0}
             max={100}
             className="num"
-            value={doc.payload.bilangan_murid ?? ""}
+            value={payload.bilangan_murid ?? ""}
             onChange={(e) =>
-              onPatch({
-                payload: {
-                  ...doc.payload,
-                  bilangan_murid: e.target.value === "" ? undefined : Number(e.target.value),
-                },
+              onPayload({
+                bilangan_murid: e.target.value === "" ? undefined : Number(e.target.value),
               })
             }
           />
@@ -871,11 +1027,9 @@ function StepProfil({
           <Label htmlFor="f-995730">Fasa / Tema</Label>
           <Input
             id="f-995730"
-            value={doc.payload.fasa_tema ?? ""}
+            value={payload.fasa_tema ?? ""}
             placeholder="Nombor & Operasi"
-            onChange={(e) =>
-              onPatch({ payload: { ...doc.payload, fasa_tema: e.target.value } })
-            }
+            onChange={(e) => onPayload({ fasa_tema: e.target.value })}
           />
         </div>
       </div>
