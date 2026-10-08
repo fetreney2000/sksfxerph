@@ -72,6 +72,24 @@ Run `db/seed.sql` after `db/schema.sql` (Supabase SQL editor) and log in as:
 In local mode (no Supabase) the login screen names `cikgu` / `cikgu123`
 (Guru Besar). A second account, `guru.biasa` / `biasa123`, exists so role
 separation can be exercised and tested — a single superuser proves nothing.
+A third, `pentadbir` / `pentadbir123`, is the Administrator.
+
+### Upgrading an existing database
+
+`db/schema.sql` describes the end state but is not idempotent, so an existing
+project runs `db/migrations/` instead. Both files are generated from
+`db/schema.sql` by `scripts/gen-migration.py` so they cannot drift, and are
+tested against the pre-rename schema by `scripts/test-migration.py`.
+
+| File | How |
+|---|---|
+| `db/migrations/001a_alter_types.sql` | **Six lines, one at a time** — select a line, press Run, repeat |
+| `db/migrations/001b_schema_delta.sql` | Paste the whole file |
+
+001a is separate for two hard Postgres reasons: `rename value` refuses to run
+inside a transaction block, and a value added inside one cannot be used until
+it commits — which 001b immediately does, in `admin_list_members` and the
+views. Pasting 001a in one go fails, which is why it is not in 001b.
 
 The seed also creates the school (`SK0000` — must match `NEXT_PUBLIC_SCHOOL_CODE`),
 its settings, 3 subjects, 3 classes, and **one complete submitted lesson plan**
