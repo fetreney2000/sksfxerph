@@ -82,7 +82,7 @@ describe("RphPaper — KPM document render", () => {
 
   it("shows session, school and teacher in the header", () => {
     render(<RphPaper payload={full} session={SESSION} teacherName="Ramlan bin Yusof" />);
-    expect(screen.getByText(/SK Taman Harmoni/)).toBeTruthy();
+    expect(screen.getByText(/SK St. Francis Xavier/)).toBeTruthy();
     expect(screen.getByText(/Ramlan bin Yusof/)).toBeTruthy();
     expect(screen.getByText(new RegExp(SESSION))).toBeTruthy();
   });

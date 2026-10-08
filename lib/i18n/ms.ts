@@ -9,7 +9,6 @@
  * the Garis Panduan e-RPH.
  */
 export const ms = {
-  appName: "eRPH",
   appTagline: "Rancangan Pengajaran Harian",
 
   /** How each `erph.member_role` is written to the person using the account. */

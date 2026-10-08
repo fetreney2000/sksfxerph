@@ -10,7 +10,7 @@ import {
 } from "docx";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { supabaseConfigured } from "@/lib/config";
+import { SCHOOL, supabaseConfigured } from "@/lib/config";
 import { rphPayloadSchema } from "@/lib/schemas/rph";
 import { requireUser } from "@/lib/server/auth/guard";
 import { DB_SCHEMA } from "@/lib/supabase/schema";
@@ -34,7 +34,7 @@ const bodySchema = z.object({
   payload: rphPayloadSchema,
   session: z.string(),
   teacherName: z.string().default("Nurul Aisyah binti Rahim"),
-  schoolName: z.string().default("SK Taman Harmoni"),
+  schoolName: z.string().default(SCHOOL.name),
   planDate: z.string().optional(),
   className: z.string().optional(),
   subjectName: z.string().optional(),

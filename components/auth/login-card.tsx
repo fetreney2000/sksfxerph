@@ -60,9 +60,9 @@ export function LoginCard() {
 
   return (
     <Card className="shadow-lg">
-      <CardHeader className="pb-0">
+      <CardHeader className="flex-col items-start gap-1 pb-0">
         <CardTitle className="text-base">Log masuk</CardTitle>
-        <CardDescription className="pt-1.5">
+        <CardDescription className="pt-0">
           Gunakan nama pengguna dan kata laluan sekolah anda.
         </CardDescription>
       </CardHeader>

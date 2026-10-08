@@ -24,6 +24,21 @@ export const supabaseConfigured =
 
 export const schoolCode = process.env.NEXT_PUBLIC_SCHOOL_CODE ?? "SK0000";
 
+/**
+ * The school this deployment belongs to.
+ *
+ * One constant rather than a string in six files: the crest is the login
+ * screen, the sidebar and the browser tab, and the name has to match what
+ * prints on the RPH itself — or a teacher signs into one school and hands in
+ * a document for another.
+ */
+export const SCHOOL = {
+  name: "SK St. Francis Xavier",
+  place: "Keningau, Sabah",
+  motto: "Bersatu Kita Teguh",
+  logo: "/logo.png",
+} as const;
+
 /** School session + week — single source of truth for the whole UI. */
 export const SESSION = "2026/2027";
 

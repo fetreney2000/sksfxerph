@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { cn } from "@/lib/cn";
+import { SCHOOL } from "@/lib/config";
 import type { RphPayload } from "@/lib/schemas/rph";
 
 /**
@@ -14,7 +15,7 @@ export function RphPaper({
   payload,
   className,
   teacherName = "Nurul Aisyah binti Rahim",
-  schoolName = "SK Taman Harmoni",
+  schoolName = SCHOOL.name,
   session,
 }: {
   payload: RphPayload;

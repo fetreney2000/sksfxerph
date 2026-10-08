@@ -1,11 +1,12 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navFor } from "@/components/shell/nav";
 import { cn } from "@/lib/cn";
-import { currentWeek, SESSION } from "@/lib/config";
+import { currentWeek, SCHOOL, SESSION } from "@/lib/config";
 import { db } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { ms } from "@/lib/i18n/ms";
@@ -58,18 +59,19 @@ export function Sidebar({
       className="sticky top-0 z-40 hidden h-dvh w-63 shrink-0 flex-col border-r border-[rgba(255,255,255,0.07)] bg-gradient-to-b from-[#0c1d33] to-[#0a1729] lg:flex"
       aria-label={ms.a11y.mainNavigation}
     >
-      <Link href="/minggu" className="flex items-center gap-2.5 px-4.5 py-4.5">
-        <span className="grid h-9.5 w-9.5 place-items-center rounded-[11px] bg-gradient-to-br from-primary to-[#53b1fd] text-[13px] font-extrabold text-white shadow-[0_4px_12px_rgba(23,92,211,0.45)]">
-          eR
-        </span>
+      <Link href="/minggu" className="flex items-center gap-2.5 px-4.5 py-4">
+        <Image
+          src={SCHOOL.logo}
+          alt=""
+          width={512}
+          height={512}
+          className="h-10 w-10 shrink-0 rounded-[10px] bg-white object-contain p-0.5 shadow-xs"
+        />
         <span className="min-w-0">
-          <span className="block text-[15.5px] font-bold tracking-[-0.2px] text-white">
-            {ms.appName}
+          <span className="block truncate text-[13.5px] leading-tight font-bold text-white">
+            {SCHOOL.name}
           </span>
-          <span className="block text-[11px] text-[#6d7f99]">{ms.appTagline}</span>
-        </span>
-        <span className="ml-auto rounded-md border border-[rgba(83,177,253,0.3)] bg-[rgba(83,177,253,0.14)] px-1.5 py-0.5 text-[9.5px] font-bold tracking-[0.6px] text-[#8cc7ff]">
-          BETA
+          <span className="block truncate text-[10.5px] text-[#6d7f99]">{ms.appTagline}</span>
         </span>
       </Link>
 
@@ -121,7 +123,6 @@ export function Sidebar({
             })}
           </div>
         ))}
-
       </nav>
 
       <div className="flex items-center gap-2.5 border-t border-[rgba(255,255,255,0.08)] px-4 py-3">

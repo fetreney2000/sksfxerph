@@ -7,7 +7,7 @@ import { NotificationBell } from "@/components/shell/notifications";
 import { SyncChip } from "@/components/shell/sync-chip";
 import { useTheme } from "@/components/shell/theme";
 import { initialsOf, useUser } from "@/components/shell/user-context";
-import { currentWeek, SESSION } from "@/lib/config";
+import { currentWeek, SCHOOL, SESSION } from "@/lib/config";
 import { weekRangeLabel } from "@/lib/date";
 import { ms } from "@/lib/i18n/ms";
 
@@ -24,7 +24,7 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
       <div className="min-w-0">
         <h1 className="truncate text-[16.5px] font-bold tracking-[-0.35px]">{meta.title}</h1>
         <p className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-3">
-          <span className="truncate">SK Taman Harmoni</span>
+          <span className="truncate">{SCHOOL.name}</span>
           <Chevron />
           <span>{SESSION}</span>
           <Chevron />

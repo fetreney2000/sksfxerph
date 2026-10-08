@@ -1,5 +1,5 @@
 {
-  "name": "eRPH · Rancangan Pengajaran Harian",
+  "name": "eRPH — Rancangan Pengajaran Harian",
   "short_name": "eRPH",
   "description": "Rancangan Pengajaran Harian Secara Dalam Talian (KPM)",
   "start_url": "/minggu",
@@ -11,10 +11,16 @@
   "lang": "ms",
   "icons": [
     {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ]
 }

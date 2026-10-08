@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     "Sistem Rancangan Pengajaran Harian Secara Dalam Talian bagi guru di sekolah bawah Kementerian Pendidikan Malaysia.",
   applicationName: "eRPH",
   manifest: "/manifest.webmanifest",
+  // The school crest, not the "eR" mark — a teacher should recognise the tab
+  // as their own school's before reading a word of it.
+  icons: { icon: "/logo.png", apple: "/logo.png" },
 };
 
 export const viewport: Viewport = {

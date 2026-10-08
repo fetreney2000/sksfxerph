@@ -25,7 +25,7 @@
 
 -- ── 1 · school (kod_sekolah must match NEXT_PUBLIC_SCHOOL_CODE) ──────────────
 insert into erph.school (kod_sekolah, nama, level, ppd, jpn)
-values ('SK0000', 'SK Taman Harmoni', 'rendah', 'PPD Petaling', 'JPN Selangor')
+values ('SK0000', 'SK St. Francis Xavier', 'rendah', 'PPD Keningau', 'JPN Sabah')
 on conflict (kod_sekolah) do nothing;
 
 insert into erph.school_setting (school_id)
