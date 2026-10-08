@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { openDraft, reuseLastWeek } from "@/lib/actions/plans";
+import { createBlankRph, reuseLastWeek } from "@/lib/actions/plans";
 import { currentWeek, weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel } from "@/lib/date";
 import { CLASSES } from "@/lib/demo/seed";
@@ -48,9 +48,13 @@ export default function MingguPage() {
   const approved = week.documents.filter((d) => d.status === "approved").length;
   const pct = week.total === 0 ? 0 : Math.round((approved / week.total) * 100);
 
+  // "RPH baharu" has to mean *new*: resuming unfinished work is what the
+  // per-row "Sambung" buttons are for. createBlankRph reuses an untouched
+  // blank, so tapping this twice still lands on one empty plan.
   const onNew = async () => {
-    const doc = await openDraft(WEEK, CLASSES);
+    const doc = await createBlankRph(WEEK, CLASSES);
     if (doc) router.push(`/editor/${doc.id}`);
+    else toast.error("Tiada slot kosong untuk eRPH baharu");
   };
 
   const onReuse = async () => {

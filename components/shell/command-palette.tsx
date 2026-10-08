@@ -4,7 +4,10 @@ import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { NAV } from "@/components/shell/nav";
+import { createBlankRph } from "@/lib/actions/plans";
 import { cn } from "@/lib/cn";
+import { currentWeek } from "@/lib/config";
+import { CLASSES } from "@/lib/demo/seed";
 
 interface Cmd {
   id: string;
@@ -40,7 +43,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         group: "Tindakan",
         label: "RPH baharu untuk kelas",
         hint: "N",
-        run: () => router.push("/editor"),
+        // Creates the plan before navigating so the URL names the document —
+        // falling back to /editor, which resolves an unfinished one, if the
+        // store cannot produce a free slot.
+        run: () => {
+          void (async () => {
+            const doc = await createBlankRph(currentWeek(), CLASSES);
+            router.push(doc ? `/editor/${doc.id}` : "/editor");
+          })();
+        },
       },
       {
         id: "reuse",

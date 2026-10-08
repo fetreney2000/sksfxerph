@@ -244,6 +244,42 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
+  test("the template page's create button opens a brand-new blank eRPH", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto("/templat");
+    await page.getByRole("button", { name: /Cipta templat baharu/ }).click();
+
+    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
+    const first = page.url();
+
+    // "Blank" means blank: none of the four sections has anything in it yet.
+    await expect(page.getByText(/0 daripada 4 bahagian/)).toBeVisible({ timeout: 15_000 });
+
+    // A second tap must not litter the dashboard with another empty plan —
+    // an untouched blank is reused, because the natural key is unique per
+    // lesson and cannot hold two plans for the same class/date anyway.
+    await page.goto("/templat");
+    await page.getByRole("button", { name: /Cipta templat baharu/ }).click();
+    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
+    expect(page.url()).toBe(first);
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("RPH baharu creates a blank plan instead of resuming an old one", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto("/minggu");
+    await page
+      .getByRole("button", { name: /RPH baharu/ })
+      .first()
+      .click();
+
+    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
+    await expect(page.getByText(/0 daripada 4 bahagian/)).toBeVisible({ timeout: 15_000 });
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
   test("service worker registers in production build", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/minggu");

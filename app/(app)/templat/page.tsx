@@ -7,6 +7,9 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { createBlankRph } from "@/lib/actions/plans";
+import { currentWeek } from "@/lib/config";
+import { CLASSES } from "@/lib/demo/seed";
 
 interface Template {
   id: string;
@@ -73,6 +76,30 @@ const FILTERS = ["Semua", "Saya", "Sekolah", "KPM"] as const;
 export default function TemplatPage() {
   const router = useRouter();
   const [filter, setFilter] = React.useState<(typeof FILTERS)[number]>("Semua");
+  const [starting, setStarting] = React.useState(false);
+
+  /**
+   * "Start from scratch" — lands in the editor on a brand-new empty eRPH
+   * rather than a plan that already has content in it.
+   */
+  const startBlank = () => {
+    if (starting) return;
+    setStarting(true);
+    void (async () => {
+      try {
+        const doc = await createBlankRph(currentWeek(), CLASSES);
+        if (!doc) {
+          toast.error("Tiada slot kosong untuk eRPH baharu");
+          return;
+        }
+        router.push(`/editor/${doc.id}`);
+      } catch {
+        toast.error("Gagal mencipta eRPH baharu");
+      } finally {
+        setStarting(false);
+      }
+    })();
+  };
 
   const visible = TEMPLATES.filter((t) =>
     filter === "Semua"
@@ -169,8 +196,9 @@ export default function TemplatPage() {
 
         <button
           type="button"
-          onClick={() => toast("Cipta templat daripada RPH sedia ada atau mulakan dari kosong")}
-          className="grid min-h-[172px] place-items-center rounded-[14px] border-2 border-dashed border-border-strong bg-surface-2 p-5 text-center transition-colors hover:border-primary hover:bg-primary-soft"
+          disabled={starting}
+          onClick={startBlank}
+          className="grid min-h-[172px] place-items-center rounded-[14px] border-2 border-dashed border-border-strong bg-surface-2 p-5 text-center transition-colors hover:border-primary hover:bg-primary-soft disabled:opacity-60"
         >
           <span>
             <span className="mx-auto mb-2.5 grid h-10.5 w-10.5 place-items-center rounded-[11px] border border-primary-soft-2 bg-surface text-primary shadow-xs">
@@ -178,7 +206,7 @@ export default function TemplatPage() {
             </span>
             <span className="block text-sm font-bold">Cipta templat baharu</span>
             <span className="mt-1 block max-w-[230px] text-[12.5px] text-ink-3">
-              Simpan mana-mana RPH sebagai templat untuk kelas lain atau sesi akan datang.
+              Mulakan eRPH baharu dari kosong — lengkapkan, kemudian simpan sebagai templat.
             </span>
           </span>
         </button>

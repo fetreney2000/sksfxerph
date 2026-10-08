@@ -66,6 +66,77 @@ export async function createPlan(input: NewPlanInput): Promise<RphDocument> {
   return doc;
 }
 
+/** True when nothing a teacher would recognise as their own work is in it. */
+function isBlank(doc: RphDocument): boolean {
+  const p = doc.payload;
+  const empty = (s?: string) => !s?.trim();
+  return (
+    empty(p.standard_kandungan) &&
+    empty(p.standard_pembelajaran) &&
+    empty(p.objektif) &&
+    empty(p.refleksi) &&
+    empty(p.intervensi) &&
+    empty(p.kbat) &&
+    empty(p.fasa_tema) &&
+    p.bilangan_murid === undefined &&
+    p.aktiviti.length === 0 &&
+    p.emk.length === 0
+  );
+}
+
+const slotKey = (classId: string, subjectCode: string, weekNo: number, planDate: string) =>
+  `${classId}|${subjectCode}|${weekNo}|${planDate}`;
+
+/**
+ * Open a completely new, empty RPH — never a plan that already has content.
+ *
+ * Two rules make it safe to hang off a button people will tap more than once:
+ *
+ *  - An untouched blank is reused rather than duplicated, so a double-tap
+ *    cannot litter the dashboard with empty drafts — the same idempotency
+ *    `createPlan` promises for "RPH baharu".
+ *  - Otherwise it claims the next *free* lesson slot. The natural key
+ *    (class, subject, session, week, date) is unique by design, so "new" has
+ *    to mean a slot nobody has used yet; it spills into later weeks when the
+ *    current one is full rather than colliding with `rph_document_uniq`.
+ */
+export async function createBlankRph(
+  weekNo: number,
+  classes: SchoolClass[],
+): Promise<RphDocument | undefined> {
+  const mine = await db.documents
+    .where("[ownerId+session]")
+    .equals([LOCAL_OWNER_ID, SESSION])
+    .toArray();
+
+  const untouched = mine
+    .filter((d) => d.status === "draft" && isBlank(d))
+    .sort((a, b) => a.createdAt - b.createdAt)[0];
+  if (untouched) return untouched;
+
+  const taken = new Set(
+    mine.map((d) => slotKey(d.classId, d.subjectCode, d.weekNo, d.planDate)),
+  );
+
+  // Soonest free slot: this week first, staying with a class before moving on.
+  for (let w = weekNo; w < weekNo + 8; w++) {
+    for (const cls of classes) {
+      for (const day of schoolDays(w)) {
+        if (taken.has(slotKey(cls.id, DEFAULT_SUBJECT.code, w, day))) continue;
+        return createPlan({
+          classId: cls.id,
+          className: cls.nama,
+          planDate: day,
+          slotTime: "07:30",
+          weekNo: w,
+        });
+      }
+    }
+  }
+
+  return undefined;
+}
+
 /** Open the most urgent unfinished plan for this week, creating one if needed. */
 export async function openDraft(
   weekNo: number,
