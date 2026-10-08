@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /* ============================================================================
-   eRPH design tokens — ported 1:1 from ui-mockup/index.html into Tailwind v4's
-   CSS-first config. No tailwind.config.js: v4 reads these directly.
+   eRPH design tokens — ported 1:1 from the original design mockup into Tailwind
+   v4's CSS-first config. No tailwind.config.js: v4 reads these directly.
    ========================================================================== */
 
 @theme {

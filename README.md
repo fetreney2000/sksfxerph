@@ -209,7 +209,6 @@ Free tier covers a whole school: 50k MAU, 500 MB DB (≈2 years of RPH), 100 GB 
 | `erph-frontend-research.md` | UX: audit of existing products, IA, interaction patterns |
 | `erph-backend-research.md` | Supabase/Vercel limits, data model, free-tier audit |
 | `erph-frontend-stack.md` | Stack decision matrix, rendering strategy, budget |
-| `ui-mockup/index.html` | High-fidelity design mockup the implementation follows |
 | `db/schema.sql` | Migration-ready schema (validated with PostgreSQL's own parser) |
 
 ---

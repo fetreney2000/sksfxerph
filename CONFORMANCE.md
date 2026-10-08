@@ -131,9 +131,12 @@ Each was a documented promise with no corresponding implementation.
 | 10.4 | Cross-user RLS test | ❌ needs a live Supabase project |
 | 10.5 | MSW | ❌ not adopted — Playwright covers route handlers; recorded as a deliberate omission |
 
-### `ui-mockup/index.html`
+### UI mockup (since removed)
 
-Dashboard, editor wizard, template library, archive, review queue, school monitoring, command palette, submit dialog, dark mode, offline chip, toast — **all present** and token-matched to `app/globals.css`.
+The original high-fidelity mockup covered dashboard, editor, template library,
+archive, review queue, school monitoring, command palette, submit dialog, dark
+mode, offline chip and toast — **all present** and token-matched to
+`app/globals.css`.
 
 ---
 
