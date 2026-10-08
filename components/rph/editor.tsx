@@ -767,8 +767,8 @@ function StepPdPc({
       <div className="mb-3 flex items-center justify-between">
         <Label className="mb-0">{ms.editor.activities}</Label>
         <span className="num text-[12px] text-ink-3">
-          Jumlah masa aktif: <b className="text-ink">{totalMin} min</b>
-          {totalMin === 50 && " (sesuai 1 waktu pengajaran)"}
+          Jumlah masa aktif: <b className="text-ink">{totalMin} minit</b>
+          {totalMin === 50 && " (sesuai 1 masa pengajaran)"}
         </span>
       </div>
 
@@ -793,7 +793,7 @@ function StepPdPc({
                   <Input
                     className="num px-2 py-1.5 text-[12.5px]"
                     value={a.masa}
-                    placeholder="10 min"
+                    placeholder="10 minit"
                     onChange={(e) => setAktiviti(i, "masa", e.target.value)}
                     aria-label={`Masa aktiviti ${i + 1}`}
                   />

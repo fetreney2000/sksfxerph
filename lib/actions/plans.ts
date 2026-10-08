@@ -96,7 +96,7 @@ export async function openDraft(
 }
 
 /**
- * "Guna semula minggu lalu" — the single biggest time saving in the product.
+ * "Guna semula minggu lepas" — the single biggest time saving in the product.
  *
  * Clones last week's payloads into this week's empty slots, skipping anything
  * that already has a plan. Teachers write the differences, not the document.

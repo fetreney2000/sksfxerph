@@ -42,7 +42,7 @@ async function post<T>(path: string, body: unknown): Promise<T | null> {
   } catch (err) {
     // Network failure: let the caller decide (offline-first means falling
     // through to the local rule, not surfacing a hard error).
-    throw new RpcError(path, err instanceof Error ? err.message : "network error");
+    throw new RpcError(path, err instanceof Error ? err.message : "ralat rangkaian");
   }
 
   // A 500 page, a proxy error or an empty body must not blow up as an
@@ -68,7 +68,7 @@ async function post<T>(path: string, body: unknown): Promise<T | null> {
   }
 
   if (json === null) {
-    throw new RpcError(path, "malformed response", res.status);
+    throw new RpcError(path, "tindak balas tidak sah", res.status);
   }
   return json as T;
 }

@@ -24,10 +24,10 @@ const full: RphPayload = {
   standard_pembelajaran: "3.1.1 Menulis semula nombor",
   objektif: "Murid dapat menulis semula nombor hingga 100,000.",
   aktiviti: [
-    { masa: "10 min", aktiviti_guru: "Set induksi", aktiviti_murid: "Menjawab kuiz" },
-    { masa: "20 min", aktiviti_guru: "Penerangan", aktiviti_murid: "Lembaran kerja" },
+    { masa: "10 minit", aktiviti_guru: "Set induksi", aktiviti_murid: "Menjawab kuiz" },
+    { masa: "20 minit", aktiviti_guru: "Penerangan", aktiviti_murid: "Lembaran kerja" },
   ],
-  emk: ["Kerajasama", "Kreativiti"],
+  emk: ["Kerjasama", "Kreativiti"],
   kbat: "Murid menilai situasi sebenar.",
   refleksi: "7 daripada 28 murid keliru nilai puluhan.",
   intervensi: "Intervensi kumpulan kecil Khamis.",
@@ -57,7 +57,7 @@ describe("RphPaper — KPM document render", () => {
     expect(screen.getByText(/Murid dapat menulis semula/)).toBeTruthy();
     expect(screen.getByText("Set induksi")).toBeTruthy();
     expect(screen.getByText(/7 daripada 28 murid/)).toBeTruthy();
-    expect(screen.getByText(/Kerajasama/)).toBeTruthy();
+    expect(screen.getByText(/Kerjasama/)).toBeTruthy();
   });
 
   it("renders one activity row per plan entry", () => {

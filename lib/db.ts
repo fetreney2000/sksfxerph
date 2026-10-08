@@ -32,7 +32,7 @@ export { db };
 
 /* ── Small helpers the UI leans on ─────────────────────────────────────────── */
 
-/** Total queued mutations — drives the sync chip's "n antrian" label. */
+/** Total queued mutations — drives the sync chip's "n belum disegerakkan" label. */
 export async function queueDepth(): Promise<number> {
   return db.syncQueue.count();
 }

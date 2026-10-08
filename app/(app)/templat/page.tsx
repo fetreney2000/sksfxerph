@@ -149,7 +149,7 @@ export default function TemplatPage() {
                   size="sm"
                   className="flex-1"
                   onClick={() => {
-                    toast(`Templat “${t.title}” dimuatkan ke editor`);
+                    toast(`Templat “${t.title}” dimuatkan ke penyunting`);
                     router.push("/editor");
                   }}
                 >

@@ -221,7 +221,7 @@ export default function MingguPage() {
             <CardTitle>{ms.dashboard.activity}</CardTitle>
             <CardDescription>Kemas kini langsung</CardDescription>
             <span className="ml-auto">
-              <Badge variant="success">Realtime</Badge>
+              <Badge variant="success">Masa nyata</Badge>
             </span>
           </CardHeader>
           <CardContent className="pt-1 pb-2">
@@ -292,7 +292,7 @@ export default function MingguPage() {
             />
             <Shortcut
               icon={<Upload className="h-4 w-4" />}
-              label="Import RPH sedia ada"
+              label="Masukkan RPH sedia ada"
               onClick={() => toast("Muat naik .docx sedia ada — dipecahkan kepada medan RPH")}
             />
             <Shortcut

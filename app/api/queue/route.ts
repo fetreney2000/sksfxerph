@@ -33,7 +33,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (error) {
     console.error("[queue] query failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Ralat pelayan semasa mengambil baris gilir." },
+      { status: 500 },
+    );
   }
 
   // No generated Database types, so supabase-js cannot infer the embedded

@@ -79,13 +79,13 @@ export async function POST(request: NextRequest) {
   try {
     raw = await request.json();
   } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+    return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
   }
 
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "validation failed", issues: parsed.error.issues },
+      { error: "Pengesahan data gagal", issues: parsed.error.issues },
       { status: 422 },
     );
   }

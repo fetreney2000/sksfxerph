@@ -17,7 +17,7 @@ export async function requireUser(
   const user = await userFromRequest(req);
   if (!user) {
     return {
-      error: NextResponse.json({ error: "not authenticated" }, { status: 401 }),
+      error: NextResponse.json({ error: "Belum log masuk" }, { status: 401 }),
     };
   }
   return { user };
@@ -35,7 +35,7 @@ export async function requireDbUser(
     // instead; routes that need writes report the mode honestly.
     return {
       error: NextResponse.json(
-        { error: "local mode: no database configured" },
+        { error: "Mod setempat: tiada pangkalan data ditetapkan" },
         { status: 503 },
       ),
     };
@@ -53,7 +53,7 @@ export async function requireReviewer(
   if ("error" in gate) return gate;
   if (gate.user.role !== "admin" && gate.user.role !== "coordinator") {
     return {
-      error: NextResponse.json({ error: "reviewer role required" }, { status: 403 }),
+      error: NextResponse.json({ error: "Peranan penyemak diperlukan" }, { status: 403 }),
     };
   }
   return gate;

@@ -45,7 +45,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       {
         id: "reuse",
         group: "Tindakan",
-        label: "Guna semula RPH minggu lalu",
+        label: "Guna semula RPH minggu lepas",
         run: () => router.push("/editor?reuse=1"),
       },
       {

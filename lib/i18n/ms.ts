@@ -14,7 +14,7 @@ export const ms = {
 
   nav: {
     minggu: "Minggu Ini",
-    editor: "Editor RPH",
+    editor: "Penyunting RPH",
     templat: "Perpustakaan Templat",
     arkib: "Sejarah & Arkib",
     semakan: "Semakan RPH",
@@ -33,7 +33,7 @@ export const ms = {
     onTime: "Ketepatan masa",
     weeklySchedule: "Jadual PdP minggu ini",
     newRph: "RPH baharu",
-    reuseLast: "Guna semula minggu lalu",
+    reuseLast: "Guna semula minggu lepas",
     shortcuts: "Pintasan",
     activity: "Aktiviti semakan terkini",
     noPrint: "Tiada keperluan mencetak — dokumen hanya perlu diemaskan apabila diminta.",
@@ -49,7 +49,7 @@ export const ms = {
     incomplete: "Tidak lengkap",
     notSubmitted: "belum hantar",
     offline: "Luar talian",
-    queued: (n: number) => `${n} antrian`,
+    queued: (n: number) => `${n} belum disegerakkan`,
     synced: "Disegerakkan",
     saving: "Disimpan",
     online: "Dalam talian",

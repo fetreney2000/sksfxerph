@@ -63,7 +63,7 @@ export async function saveDocument(doc: RphDocument): Promise<void> {
 /** Send everything due. Safe to call from online events, intervals and buttons. */
 export async function flushQueue(): Promise<SyncResult[]> {
   // Local mode: there is no remote to sync to, and IndexedDB already *is* the
-  // persisted copy. Drain the vestigial queue instead of showing "n antrian"
+  // persisted copy. Drain the vestigial queue instead of showing "n belum disegerakkan"
   // to a teacher forever — the chip would otherwise lie about pending work.
   if (!hasBackend()) {
     await db.syncQueue.clear();
@@ -107,7 +107,7 @@ export async function flushQueue(): Promise<SyncResult[]> {
       signal: AbortSignal.timeout(15_000),
     });
 
-    if (!res.ok) throw new Error(`sync failed: ${res.status}`);
+    if (!res.ok) throw new Error(`penyegerakan gagal: ${res.status}`);
 
     const { results } = (await res.json()) as { results: SyncResult[] };
     await reconcile(

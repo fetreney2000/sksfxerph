@@ -16,10 +16,13 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+    return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
   }
   if (!body.documentId || (body.grade !== 0 && body.grade !== 1)) {
-    return NextResponse.json({ error: "documentId and grade (0|1) required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "documentId dan gred (0|1) diperlukan" },
+      { status: 400 },
+    );
   }
 
   const { data, error } = await gate.db.rpc("review_rph", {

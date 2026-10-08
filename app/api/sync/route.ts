@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   if (!supabaseConfigured) {
     // The client never calls this in local mode (hasBackend() gates it), so
     // reaching here means a stale build talking to a stripped env — fail loudly.
-    return NextResponse.json({ error: "sync not configured" }, { status: 503 });
+    return NextResponse.json({ error: "Penyegerakan tidak disediakan" }, { status: 503 });
   }
 
   const gate = await requireDbUser(request);
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+    return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
   }
 
   const ops = Array.isArray(body.ops) ? body.ops : [];
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results: empty });
   }
   if (ops.length > 25) {
-    return NextResponse.json({ error: "batch too large (max 25)" }, { status: 413 });
+    return NextResponse.json({ error: "Batch terlalu besar (maksimum 25)" }, { status: 413 });
   }
 
   try {
@@ -58,13 +58,13 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("[sync] rpc failed:", error.message);
       const status =
-        error.code === "PGRST301" || /not authenticated/i.test(error.message) ? 401 : 422;
+        error.code === "PGRST301" || /belum log masuk/i.test(error.message) ? 401 : 422;
       return NextResponse.json({ error: error.message }, { status });
     }
 
     return NextResponse.json({ results: (data as SyncResult[] | null) ?? [] });
   } catch (err) {
     console.error("[sync] handler error:", err);
-    return NextResponse.json({ error: "sync failed" }, { status: 500 });
+    return NextResponse.json({ error: "Penyegerakan gagal" }, { status: 500 });
   }
 }

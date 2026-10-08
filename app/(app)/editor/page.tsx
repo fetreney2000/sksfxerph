@@ -46,13 +46,13 @@ export default function EditorIndexPage() {
       <CardContent className="py-12 text-center">
         {state === "error" ? (
           <>
-            <p className="mb-4 text-ink-3">Gagal membuka editor.</p>
+            <p className="mb-4 text-ink-3">Gagal membuka penyunting.</p>
             <Button variant="secondary" onClick={() => router.push("/minggu")}>
               Kembali
             </Button>
           </>
         ) : (
-          <p className="text-ink-4">Menyiapkan editor…</p>
+          <p className="text-ink-4">Menyiapkan penyunting…</p>
         )}
       </CardContent>
     </Card>

@@ -51,7 +51,7 @@ export default function LaporanPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Laporan &amp; Eksport</h2>
         <span className="h-px flex-1 bg-border" />
-        <Badge variant="success">Rekod statutory · Peraturan 8</Badge>
+        <Badge variant="success">Rekod berkanunan · Peraturan 8</Badge>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

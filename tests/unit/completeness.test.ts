@@ -27,7 +27,7 @@ const FULL_PROFILE = {
 };
 
 const FULL_ACTIVITY = {
-  aktiviti: [{ masa: "10 min", aktiviti_guru: "Set induksi", aktiviti_murid: "Menjawab" }],
+  aktiviti: [{ masa: "10 minit", aktiviti_guru: "Set induksi", aktiviti_murid: "Menjawab" }],
 };
 
 describe("completeness — four 25-point checks", () => {
@@ -63,7 +63,7 @@ describe("completeness — four 25-point checks", () => {
       completeness(
         payload({
           ...FULL_PROFILE,
-          aktiviti: [{ masa: "10 min", aktiviti_guru: "   ", aktiviti_murid: "jawab" }],
+          aktiviti: [{ masa: "10 minit", aktiviti_guru: "   ", aktiviti_murid: "jawab" }],
         }),
       ),
     ).toBe(25);
@@ -161,7 +161,7 @@ describe("stepStatus — drives the stepper and the reviewer checklist", () => {
     const s = stepStatus(
       payload({
         ...FULL_PROFILE,
-        aktiviti: [{ masa: "10 min", aktiviti_guru: "Terang", aktiviti_murid: "" }],
+        aktiviti: [{ masa: "10 minit", aktiviti_guru: "Terang", aktiviti_murid: "" }],
       }),
     );
     expect(s.pdpc).toBe(false);

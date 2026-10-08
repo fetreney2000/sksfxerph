@@ -37,7 +37,7 @@ export function rateLimit(key: string): NextResponse | null {
 
   const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
   return NextResponse.json(
-    { error: "too many requests", retry_after: retryAfter },
+    { error: "Terlalu banyak permintaan", retry_after: retryAfter },
     { status: 429, headers: { "retry-after": String(retryAfter) } },
   );
 }

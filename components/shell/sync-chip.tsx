@@ -13,7 +13,7 @@ type SyncState = "synced" | "offline" | "saving";
  *
  * Teachers are told explicitly what happened to their work:
  *   • Disegerakkan          — server has it
- *   • Luar talian · n antrian — saved on device, queued
+ *   • Luar talian · n belum disegerakkan — saved on device, queued
  *   • Menyimpan…            — write in flight
  *
  * It never reports "error" at the user: an unreachable server is an *offline*

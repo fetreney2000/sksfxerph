@@ -39,22 +39,22 @@ const completePayload = () => ({
     "Murid dapat menulis semula nombor hingga 100,000 dalam bentuk angka dan perkataan dengan ketepatan 80%.",
   aktiviti: [
     {
-      masa: "10 min",
+      masa: "10 minit",
       aktiviti_guru: "Set induksi: slaid nombor harian (harga barang, bilangan penduduk)",
       aktiviti_murid: "Mengenal pasti nombor besar dalam kehidupan seharian",
     },
     {
-      masa: "20 min",
+      masa: "20 minit",
       aktiviti_guru: "Penerangan nilai tempat menggunakan carta digit interaktif",
       aktiviti_murid: "Saling mengajar dalam kumpulan; melengkapkan carta",
     },
     {
-      masa: "15 min",
+      masa: "15 minit",
       aktiviti_guru: "PdM: agihan lembaran kerja & pemerhatian",
       aktiviti_murid: "Menyelesaikan 5 soalan nombor hingga 100,000",
     },
     {
-      masa: "5 min",
+      masa: "5 minit",
       aktiviti_guru: "Penutup: kuiz pantas “beri contoh nombor 4 angka”",
       aktiviti_murid: "Menjawab melalui aplikasi papan putih",
     },
@@ -78,7 +78,7 @@ const partialPayload = () => ({
   objektif: "Murid dapat mengenal pasti pecahan setara.",
   aktiviti: [
     {
-      masa: "15 min",
+      masa: "15 minit",
       aktiviti_guru: "Penerangan pecahan setara dengan gambar",
       aktiviti_murid: "Menyusun kad pecahan",
     },

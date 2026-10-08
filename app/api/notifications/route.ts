@@ -36,7 +36,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (error) {
     console.error("[notifications] query failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Ralat pelayan semasa mengambil makluman." },
+      { status: 500 },
+    );
   }
 
   const rows = (data ?? []) as unknown as NotificationRow[];

@@ -88,8 +88,8 @@ export default function SekolahPage() {
         <Stat
           label="Purata masa siap"
           value={String(s.avgMinutes)}
-          sub=" min"
-          trend="▼ 2.1 min sejak guna templat"
+          sub=" minit"
+          trend="▼ 2.1 minit sejak guna templat"
         />
       </div>
 

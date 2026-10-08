@@ -17,7 +17,7 @@ import { adminDb } from "@/lib/server/db";
  *   2. account lockout after 5 failures (15 minutes)
  *   3. constant-time-ish verification — a missing user still pays the scrypt
  *      cost via verifyAgainstDummy, so timing doesn't enumerate usernames
- *   4. generic error message ("username atau kata laluan salah") for every case
+ *   4. generic error message ("nama pengguna atau kata laluan salah") for every case
  */
 
 const MAX_FAILURES = 5;
@@ -56,20 +56,26 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+    return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
   }
 
   const username = (body.username ?? "").trim();
   const password = body.password ?? "";
   if (!username || !password) {
-    return NextResponse.json({ error: "username dan kata laluan diperlukan" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Nama pengguna dan kata laluan diperlukan" },
+      { status: 400 },
+    );
   }
 
   // ── local mode: same code path, demo account, no database ────────────────
   if (!supabaseConfigured) {
     const ok = await verifyPassword(password, LOCAL_ACCOUNT.password_hash);
     if (!ok) {
-      return NextResponse.json({ error: "Username atau kata laluan salah." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Nama pengguna atau kata laluan salah." },
+        { status: 401 },
+      );
     }
     const res = NextResponse.json({
       username: LOCAL_ACCOUNT.username,
@@ -103,12 +109,18 @@ export async function POST(request: NextRequest) {
   if (!user) {
     // Pay the same cost as a real verification so timing leaks nothing.
     await verifyAgainstDummy(password);
-    return NextResponse.json({ error: "Username atau kata laluan salah." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Nama pengguna atau kata laluan salah." },
+      { status: 401 },
+    );
   }
 
   if (!user.is_active) {
     await verifyAgainstDummy(password);
-    return NextResponse.json({ error: "Username atau kata laluan salah." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Nama pengguna atau kata laluan salah." },
+      { status: 401 },
+    );
   }
 
   const ok = await verifyPassword(password, user.password_hash);
@@ -133,7 +145,10 @@ export async function POST(request: NextRequest) {
       if (updErr) console.error("[login] failed to record failure:", updErr.message);
     }
 
-    return NextResponse.json({ error: "Username atau kata laluan salah." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Nama pengguna atau kata laluan salah." },
+      { status: 401 },
+    );
   }
 
   // Password proved correct — *now* the lock message is safe to reveal, and it

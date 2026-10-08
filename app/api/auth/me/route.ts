@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/server/auth/session";
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.json({ error: "not authenticated" }, { status: 401 });
+    return NextResponse.json({ error: "Belum log masuk" }, { status: 401 });
   }
   return NextResponse.json({
     id: user.id,

@@ -29,6 +29,12 @@ import re
 import sys
 import tempfile
 
+# A Windows console defaults to cp1252, which cannot encode the arrows this
+# script prints. The resulting UnicodeEncodeError is caught by the behaviour
+# tests and reported as a bogus "[FAIL] insert chain", so force UTF-8 output.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SQL_FILE = ROOT / "db" / "schema.sql"
 
@@ -379,7 +385,7 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         conn.rollback()
         msg = str(e).splitlines()[0]
-        if "Not authenticated" in msg or "Not allowed" in msg:
+        if "Belum log masuk" in msg or "Tidak dibenarkan" in msg:
             print(f"  [OK ] submit_rph refuses a NULL actor ({msg.split(':')[0].strip()})")
         else:
             print(f"  [FAIL] submit_rph raised the wrong error: {msg[:140]}")

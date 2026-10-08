@@ -81,7 +81,7 @@ begin
   if coalesce(current_setting('app.purge', true), '0') = '1' then
     if tg_op = 'DELETE' then return old; else return new; end if;
   end if;
-  raise exception '% is not permitted on %.% (append-only table)',
+  raise exception '% tidak dibenarkan pada %.% (jadual hanya boleh dibaca)',
     tg_op, tg_table_schema, tg_table_name;
 end $$;
 
@@ -98,7 +98,7 @@ begin
      and coalesce(current_setting('app.rpc', true), '0') <> '1'
      and coalesce(current_setting('app.allow_review', true), '0') <> '1'
   then
-    raise exception 'Change review state via submit_rph()/review_rph() only';
+    raise exception 'Tukar status semakan melalui submit_rph()/review_rph() sahaja';
   end if;
   return new;
 end $$;
@@ -581,24 +581,24 @@ begin
 
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
-  if not found then raise exception 'RPH not found'; end if;
+  if not found then raise exception 'RPH tidak dijumpai'; end if;
 
   -- NULL-actor guard, matching sync_rph's.
   --
   -- This is load-bearing: `owner_id <> erph.actor()` evaluates to NULL when no
   -- actor can be resolved, and PL/pgSQL treats NULL in IF as false — so the
-  -- "Not allowed" branch would be skipped and ANY caller (including one with
+  -- "Tidak dibenarkan" branch would be skipped and ANY caller (including one with
   -- just the publishable key, for whom actor() is always null) could submit
   -- another teacher's plan. `IS DISTINCT FROM` never yields NULL.
   if erph.actor() is null then
-    raise exception 'Not authenticated';
+    raise exception 'Belum log masuk';
   end if;
 
   -- owner OR staff (an admin may resubmit on a teacher's behalf)
   if v_doc.owner_id is distinct from erph.actor()
      and not erph.has_role(v_doc.school_id, array['coordinator','admin']::erph.member_role[])
-  then raise exception 'Not allowed'; end if;
-  if v_doc.status = 'approved' then raise exception 'Already approved'; end if;
+  then raise exception 'Tidak dibenarkan'; end if;
+  if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
   if v_pct < 100 and not p_force then
@@ -632,14 +632,14 @@ returns jsonb language plpgsql security definer set search_path = erph, public a
 declare
   v_doc erph.rph_document%rowtype;
 begin
-  if p_grade not in (0,1) then raise exception 'Grade must be 0 or 1'; end if;
+  if p_grade not in (0,1) then raise exception 'Gred mesti 0 atau 1'; end if;
   perform set_config('app.rpc', '1', true);
 
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
-  if not found then raise exception 'RPH not found'; end if;
+  if not found then raise exception 'RPH tidak dijumpai'; end if;
   if not erph.has_role(v_doc.school_id, array['admin','coordinator']::erph.member_role[]) then
-    raise exception 'Reviewer role required';
+    raise exception 'Peranan penyemak diperlukan';
   end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
@@ -680,14 +680,14 @@ declare
   v_rows int; v_pct smallint; v_client_ts timestamptz;
   v_out jsonb := '[]'::jsonb;
 begin
-  if v_uid is null then raise exception 'Not authenticated'; end if;
+  if v_uid is null then raise exception 'Belum log masuk'; end if;
   perform set_config('app.rpc', '1', true);
 
   -- resolve caller's school once (all ops must belong to it)
   select school_id into v_school
     from erph.school_member where user_id = v_uid and is_active
    order by invited_at limit 1;
-  if v_school is null then raise exception 'No active school membership'; end if;
+  if v_school is null then raise exception 'Tiada keahlian sekolah aktif'; end if;
 
   for v_op in select * from jsonb_array_elements(p_ops) loop
     v_op_id := (v_op->>'op_id')::uuid;
@@ -714,13 +714,13 @@ begin
     then
       v_out := v_out || jsonb_build_array(
         jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'class not in your school/session'));
+                           'error', 'kelas bukan dalam sekolah/sesi anda'));
       continue;
     end if;
     if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
       v_out := v_out || jsonb_build_array(
         jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'unknown subject'));
+                           'error', 'mata pelajaran tidak dikenali'));
       continue;
     end if;
 
@@ -803,7 +803,7 @@ begin
     if v_doc_id is null then
       v_out := v_out || jsonb_build_array(
         jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'could not resolve document'));
+                           'error', 'tidak dapat menentukan dokumen'));
       continue;
     end if;
 
@@ -829,7 +829,7 @@ returns table (expected int, submitted int, approved int, returned_t int,
 language plpgsql stable security definer set search_path = erph, public as $$
 begin
   if not erph.is_member(p_school) and not erph.is_staff(p_school) then
-    raise exception 'Not allowed';
+    raise exception 'Tidak dibenarkan';
   end if;
   return query
   with t as (

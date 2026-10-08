@@ -113,9 +113,9 @@ export function LoginCard() {
           <p className="mt-3.5 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
             <User className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
             <span>
-              <b>Mod setempat.</b> Tiada pangkalan data dikonfigurasikan. Gunakan demo: nama
-              pengguna <b>{LOCAL_ACCOUNT.username}</b>, kata laluan <b>{LOCAL_DEMO_PASSWORD}</b>
-              . Semua ciri berfungsi; penyegerakan aktif sebaik kunci API ditambah.
+              <b>Mod setempat.</b> Tiada pangkalan data ditetapkan. Gunakan demo: nama pengguna{" "}
+              <b>{LOCAL_ACCOUNT.username}</b>, kata laluan <b>{LOCAL_DEMO_PASSWORD}</b>. Semua
+              ciri berfungsi; penyegerakan aktif sebaik kunci API ditambah.
             </span>
           </p>
         )}
@@ -127,8 +127,8 @@ export function LoginCard() {
           Kata laluan disimpan dalam bentuk scrypt — ia tidak pernah disimpan secara teks.
         </span>
         <span>
-          Dengan menggunakan sistem ini, anda memahami dan bersetuju dengan pernyataan data
-          rasmi KPM.
+          Dengan menggunakan sistem ini, anda memahami dan bersetuju dengan penyataan data rasmi
+          KPM.
         </span>
         <span>Hak Cipta Terpelihara · Kementerian Pendidikan Malaysia</span>
       </CardFooter>

@@ -174,7 +174,7 @@ real PostgreSQL (the new `check:sql:exec` gate) surfaced the full set:
 | `role member_role` unqualified in `erph.user` (the reported error) | → `erph.member_role` |
 | Bulk qualification leaked into **string literals**: enum value `'erph.school'`, audit entity `'erph.rph_document'` ×2, three error messages | reverted — schema qualifiers belong to code, never to data |
 | `unaccent` extension declared but never used | removed |
-| **`submit_rph` NULL-actor bypass**: `owner_id <> actor()` yields NULL when no actor resolves, and PL/pgSQL treats NULL in `IF` as *false* — so the "Not allowed" branch was skipped and any publishable-key caller could submit another teacher's plan | explicit `actor() is null` guard **and** `IS DISTINCT FROM` |
+| **`submit_rph` NULL-actor bypass**: `owner_id <> actor()` yields NULL when no actor resolves, and PL/pgSQL treats NULL in `IF` as *false* — so the "Tidak dibenarkan" branch was skipped and any publishable-key caller could submit another teacher's plan | explicit `actor() is null` guard **and** `IS DISTINCT FROM` |
 
 Static guards added so the first three cannot recur: `db/validate.py` check [9]
 rejects unqualified type references and any `erph.` inside a string literal;

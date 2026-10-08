@@ -36,21 +36,21 @@ const ramlan = base({
   objektif: "Murid dapat memecahkan nombor hingga 100,000 kepada nilai tempat dengan betul.",
   aktiviti: [
     {
-      masa: "10 min",
+      masa: "10 minit",
       aktiviti_guru: "Set induksi kad nilai tempat",
       aktiviti_murid: "Menyusun kad",
     },
     {
-      masa: "25 min",
+      masa: "25 minit",
       aktiviti_guru: "Penerangan & tunjuk cara",
       aktiviti_murid: "Lembaran kerja berkumpulan",
     },
     {
-      masa: "10 min",
+      masa: "10 minit",
       aktiviti_guru: "PdM pemerhatian",
       aktiviti_murid: "Penyelesaian masalah",
     },
-    { masa: "5 min", aktiviti_guru: "Penutup & rumusan", aktiviti_murid: "Refleksi ringkas" },
+    { masa: "5 minit", aktiviti_guru: "Penutup & rumusan", aktiviti_murid: "Refleksi ringkas" },
   ],
   emk: ["Kerjasama", "KBAT · Analisis"],
   kbat: "Murid menilai punca ralat nilai tempat dalam situasi sebenar.",
@@ -65,9 +65,9 @@ const suhaila = base({
   standard_pembelajaran: "2.2.1 Mengenal pasti maklumat penting dalam petikan",
   objektif: "Murid dapat mengenal pasti lima maklumat penting dalam petikan prosedur.",
   aktiviti: [
-    { masa: "15 min", aktiviti_guru: "Bacaan berpandu", aktiviti_murid: "Menanda maklumat" },
+    { masa: "15 minit", aktiviti_guru: "Bacaan berpandu", aktiviti_murid: "Menanda maklumat" },
     {
-      masa: "25 min",
+      masa: "25 minit",
       aktiviti_guru: "Perbincangan kumpulan",
       aktiviti_murid: "Sintesis maklumat",
     },
@@ -83,7 +83,7 @@ const aizuddin = base({
   objektif: "Murid dapat mengenal pasti daya yang bertindak pada objek harian.",
   aktiviti: [
     {
-      masa: "20 min",
+      masa: "20 minit",
       aktiviti_guru: "Eksperimen ringkas",
       aktiviti_murid: "Merekod pemerhatian",
     },

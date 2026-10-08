@@ -17,7 +17,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) {
-    return NextResponse.json({ error: "no school membership" }, { status: 403 });
+    return NextResponse.json({ error: "Tiada keahlian sekolah aktif" }, { status: 403 });
   }
 
   const { data, error } = await gate.db.rpc("school_week_stats", {

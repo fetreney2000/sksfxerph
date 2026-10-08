@@ -21,7 +21,7 @@ export const LOCAL_ACCOUNT = {
     "scrypt$16384$8$1$eNeYGEYGseBchq2cCkdbEw$_HcR2qoDKwgZK7FsRa5ZSnEOmp79n_-xhk6svmnyCej_QIXc3XhEo2hdRcOtN1L_nZEVo61LV9_GoXHJmRtDeA",
   role: "admin" as const, // so every screen (incl. review/monitoring) is reachable
   full_name: "Nurul Aisyah binti Rahim",
-  email: "nurul@sktamanharini.local",
+  email: "nurul@sktamanharmoni.local",
 };
 
 /**

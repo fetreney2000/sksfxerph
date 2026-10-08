@@ -42,7 +42,7 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
           className="hidden items-center gap-2 rounded-[9px] border border-border bg-surface px-2.5 py-[7px] text-left text-[13px] text-ink-4 shadow-xs transition-colors hover:border-border-strong md:flex md:w-60"
         >
           <Search className="h-3.75 w-3.75" strokeWidth={2} aria-hidden />
-          <span className="truncate">Cari kelas, guru, Standard…</span>
+          <span className="truncate">Cari kelas, guru, Standard Kandungan…</span>
           <kbd className="ml-auto rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono text-[10.5px] font-semibold text-ink-3">
             ⌘K
           </kbd>
