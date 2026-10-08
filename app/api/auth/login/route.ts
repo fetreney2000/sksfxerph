@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { supabaseConfigured } from "@/lib/config";
 import { clientKey, rateLimit } from "@/lib/http/rate-limit";
-import { LOCAL_ACCOUNT } from "@/lib/server/auth/local";
+import { localAccountByUsername } from "@/lib/server/auth/local";
 import { verifyAgainstDummy, verifyPassword } from "@/lib/server/auth/password";
 import { cookieOptions, mintSession, SESSION_COOKIE } from "@/lib/server/auth/session";
 import { adminDb } from "@/lib/server/db";
+import type { MemberRole } from "@/lib/types";
 
 /**
  * POST /api/auth/login — username + password against `erph.user`.
@@ -39,7 +40,7 @@ interface UserRow {
   username: string;
   full_name: string;
   email: string | null;
-  role: "teacher" | "coordinator" | "admin" | "ppd" | "jpn" | "system";
+  role: MemberRole;
   password_hash: string;
   is_active: boolean;
   failed_logins: number;
@@ -68,22 +69,25 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── local mode: same code path, demo account, no database ────────────────
+  // ── local mode: same code path, demo accounts, no database ────────────────
   if (!supabaseConfigured) {
-    const ok = await verifyPassword(password, LOCAL_ACCOUNT.password_hash);
-    if (!ok) {
+    // Matched by username: local mode has one account per role, and accepting
+    // any username against a single hash would hand out the wrong one.
+    const account = localAccountByUsername(username);
+    const ok = account ? await verifyPassword(password, account.password_hash) : false;
+    if (!account || !ok) {
       return NextResponse.json(
         { error: "Nama pengguna atau kata laluan salah." },
         { status: 401 },
       );
     }
     const res = NextResponse.json({
-      username: LOCAL_ACCOUNT.username,
-      fullName: LOCAL_ACCOUNT.full_name,
-      role: LOCAL_ACCOUNT.role,
+      username: account.username,
+      fullName: account.full_name,
+      role: account.role,
       localMode: true,
     });
-    res.cookies.set(SESSION_COOKIE, mintSession(LOCAL_ACCOUNT.id), cookieOptions);
+    res.cookies.set(SESSION_COOKIE, mintSession(account.id), cookieOptions);
     return res;
   }
 

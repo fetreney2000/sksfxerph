@@ -274,7 +274,7 @@ def main() -> int:
     roles = enums.get("member_role", [])
     check(
         "member_role values intact",
-        roles == ["teacher", "coordinator", "admin", "ppd", "jpn", "system"],
+        roles == ["guru_biasa", "gpk", "guru_besar", "pentadbir", "ppd", "jpn", "system"],
         f"got {roles}",
     )
 
@@ -322,9 +322,9 @@ def main() -> int:
             insert into erph.school (kod_sekolah, nama, level) values ('SKTEST','Sekolah Ujian','rendah');
             insert into erph.subject (code, nama, curriculum) values ('MAT','Matematik','KSSR');
             insert into erph.user (username, password_hash, full_name, role)
-            values ('uji', 'scrypt$x', 'Guru Ujian', 'teacher');
+            values ('uji', 'scrypt$x', 'Guru Ujian', 'guru_biasa');
             insert into erph.school_member (school_id, user_id, role)
-            select s.id, u.id, 'teacher' from erph.school s, erph.user u where s.kod_sekolah='SKTEST';
+            select s.id, u.id, 'guru_biasa' from erph.school s, erph.user u where s.kod_sekolah='SKTEST';
             insert into erph.school_setting (school_id) select id from erph.school where kod_sekolah='SKTEST';
             insert into erph.class (school_id, nama, tahun, session)
             select id, '5 Ujian', 5, '2026/2027' from erph.school where kod_sekolah='SKTEST';
@@ -449,10 +449,18 @@ def main() -> int:
 
             n_users = r.one("select count(*) from erph.user")[0]
             roles = {row[0] for row in r.q("select distinct role from erph.user")}
-            expected_roles = {"teacher", "coordinator", "admin", "ppd", "jpn", "system"}
+            expected_roles = {
+                "guru_biasa",
+                "gpk",
+                "guru_besar",
+                "pentadbir",
+                "ppd",
+                "jpn",
+                "system",
+            }
             scheck(
                 "one account per member_role",
-                n_users == 6 and roles == expected_roles,
+                n_users == 7 and roles == expected_roles,
                 f"{n_users} accounts, roles={sorted(roles)}",
             )
 

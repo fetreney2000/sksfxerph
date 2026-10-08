@@ -40,6 +40,15 @@ const bodySchema = z.object({
   subjectName: z.string().optional(),
 });
 
+async function supabaseAdmin() {
+  const { createClient } = await import("@supabase/supabase-js");
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false }, db: { schema: DB_SCHEMA } },
+  );
+}
+
 function cell(text: string, opts: { bold?: boolean; width?: number } = {}) {
   return new TableCell({
     width: opts.width ? { size: opts.width, type: WidthType.PERCENTAGE } : undefined,
@@ -92,6 +101,23 @@ export async function POST(request: NextRequest) {
 
   const { payload, session, teacherName, schoolName, planDate, className, subjectName } =
     parsed.data;
+
+  // `document_id` is a claim by the caller, and it is stamped into the
+  // statutory export log below. The *payload* is whatever was sent — that is
+  // fine, it is this caller's own draft — but recording a colleague's plan as
+  // the document this copy came from would falsify the audit trail, so the id
+  // has to belong to the person asking.
+  if (supabaseConfigured && parsed.data.document_id && "user" in gate) {
+    const admin = await supabaseAdmin();
+    const { data: owned, error } = await admin
+      .from("rph_document")
+      .select("owner_id")
+      .eq("id", parsed.data.document_id)
+      .maybeSingle();
+    if (error || owned?.owner_id !== gate.user.id) {
+      return NextResponse.json({ error: "Dokumen bukan milik anda" }, { status: 403 });
+    }
+  }
 
   const nonEmpty = (s: string) => s.trim() !== "";
 
@@ -214,12 +240,7 @@ export async function POST(request: NextRequest) {
   if (supabaseConfigured && "user" in gate) {
     void (async () => {
       try {
-        const { createClient } = await import("@supabase/supabase-js");
-        const admin = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
-          { auth: { persistSession: false }, db: { schema: DB_SCHEMA } },
-        );
+        const admin = await supabaseAdmin();
         const { error } = await admin.from("export_file").insert({
           document_id: parsed.data.document_id ?? null,
           created_by: gate.user.id,

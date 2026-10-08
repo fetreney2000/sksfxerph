@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek, SESSION } from "@/lib/config";
-import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
+import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
 
 /**
  * GET /api/stats — school compliance for the current week.
@@ -12,7 +12,7 @@ import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
  * 503 in local mode — the caller falls back to the bundled demo figures.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const gate = await requireDbUser(request);
+  const gate = await requireReviewer(request);
   if ("error" in gate) return gate.error;
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);

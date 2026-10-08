@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { NAV } from "@/components/shell/nav";
+import { navFor } from "@/components/shell/nav";
+import { useUser } from "@/components/shell/user-context";
 import { cn } from "@/lib/cn";
 import { ms } from "@/lib/i18n/ms";
 
@@ -10,14 +11,18 @@ import { ms } from "@/lib/i18n/ms";
  *
  * The sidebar is desktop-only (`hidden lg:flex`), so without this a teacher on
  * a phone has no visible way to move between screens except the ⌘K palette,
- * which is not discoverable at 6am on a 5-inch screen. Five destinations, the
- * admin pair only for reviewers, ≥48px touch targets.
+ * which is not discoverable at 6am on a 5-inch screen. Up to five destinations,
+ * filtered through `navFor()` so the reviewer pair never appears for a Guru
+ * Biasa, ≥48px touch targets.
  */
 const PRIMARY = ["/minggu", "/editor", "/templat", "/semakan", "/sekolah"];
 
 export function MobileNav() {
   const pathname = usePathname();
-  const items = NAV.flatMap((g) => g.items).filter((i) => PRIMARY.includes(i.href));
+  const { role } = useUser();
+  const items = navFor(role)
+    .flatMap((g) => g.items)
+    .filter((i) => PRIMARY.includes(i.href));
 
   return (
     <nav

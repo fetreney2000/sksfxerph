@@ -18,5 +18,9 @@
   "jpn.selangor": {
     "password": "jpn2026",
     "hash": "scrypt$16384$8$1$H02m4LvAKJXAzLpqFv5IJQ$CwYgTXWmt-dSp9KJ_zoCRYat9tZmbmfHIY4uCpnP7pRw_o_66kfB2yjkDdyXOgUsKSPFdXSXZV-0G-ktfssiAQ"
+  },
+  "pentadbir.sk": {
+    "password": "pentadbir2026",
+    "hash": "scrypt$16384$8$1$sBZJbXJZGtDoXYVtM_r_MA$_Q_vvOJhHbPEbvKonOnd-ktpbXbn0axcvfihN6Gvw3QbzfzfEWoXvyhHi8rFcWaxKqNtYn9iUxIlQYOTgGmVGg"
   }
 }

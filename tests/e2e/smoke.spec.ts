@@ -13,6 +13,9 @@ import { expect, type Page, test } from "@playwright/test";
  */
 const DEMO_USER = "cikgu";
 const DEMO_PASS = "cikgu123";
+/** Local-mode account with no supervisory permission (lib/server/auth/local.ts). */
+const GURU_BIASA_USER = "guru.biasa";
+const GURU_BIASA_PASS = "biasa123";
 
 /** Collect anything React/Next would surface to a real user as a broken page. */
 function collectErrors(page: Page): string[] {
@@ -60,6 +63,35 @@ test.describe("authentication", () => {
       timeout: 10_000,
     });
     await expect(page).toHaveURL(/\/login/);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("a Guru Biasa is kept out of every supervisory screen", async ({ page }) => {
+    const errors = collectErrors(page);
+    await login(page, GURU_BIASA_USER, GURU_BIASA_PASS);
+
+    // 1. The navigation must not offer what the role cannot reach — this is
+    //    the "clear UI separation" requirement, checked on all three surfaces.
+    await expect(page.getByRole("link", { name: /Semakan RPH/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Paparan Sekolah/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Laporan & Eksport/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Minggu Ini/ })).toHaveCount(1);
+
+    await page.keyboard.press("Control+k");
+    await page.getByPlaceholder(/Cari arahan/).fill("sekolah");
+    await expect(page.getByText("Paparan Sekolah", { exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // 2. Typing the URL must redirect, not render a screen full of data the
+    //    role is not entitled to. The route group keeps the address the same.
+    for (const url of ["/semakan", "/sekolah", "/laporan"]) {
+      await page.goto(url);
+      await expect(page).toHaveURL(/\/minggu/, { timeout: 15_000 });
+    }
+
+    // 3. Their own surfaces still work.
+    await expect(page.getByRole("heading", { name: /Selamat pagi/ })).toBeVisible();
+
     expect(errors, errors.join("\n")).toEqual([]);
   });
 

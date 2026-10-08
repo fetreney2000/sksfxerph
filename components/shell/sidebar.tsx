@@ -3,16 +3,17 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV } from "@/components/shell/nav";
+import { navFor } from "@/components/shell/nav";
 import { cn } from "@/lib/cn";
 import { currentWeek, SESSION } from "@/lib/config";
 import { db } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { ms } from "@/lib/i18n/ms";
+import type { MemberRole } from "@/lib/types";
 
 const WEEK = currentWeek();
 
-export function Sidebar({ user }: { user: { fullName: string; role: string } }) {
+export function Sidebar({ user }: { user: { fullName: string; role: MemberRole } }) {
   const pathname = usePathname();
   const initials =
     user.fullName
@@ -20,12 +21,7 @@ export function Sidebar({ user }: { user: { fullName: string; role: string } }) 
       .slice(0, 2)
       .map((w) => w[0]?.toUpperCase() ?? "")
       .join("") || "U";
-  const roleLabel =
-    user.role === "admin"
-      ? "Guru Penyelaras"
-      : user.role === "coordinator"
-        ? "Penyelaras"
-        : "Guru";
+  const roleLabel = ms.roles[user.role];
 
   const signOut = async () => {
     try {
@@ -74,7 +70,7 @@ export function Sidebar({ user }: { user: { fullName: string; role: string } }) 
       </Link>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-3">
-        {NAV.map((group) => (
+        {navFor(user.role).map((group) => (
           <div key={group.label}>
             <p className="px-2.5 pt-4 pb-1.5 text-[10.5px] font-bold tracking-[0.9px] text-[#6d7f99] uppercase">
               {group.label}

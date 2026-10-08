@@ -3,7 +3,8 @@
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
-import { NAV } from "@/components/shell/nav";
+import { navFor } from "@/components/shell/nav";
+import { useUser } from "@/components/shell/user-context";
 import { createBlankRph } from "@/lib/actions/plans";
 import { cn } from "@/lib/cn";
 import { currentWeek } from "@/lib/config";
@@ -23,12 +24,13 @@ interface Cmd {
  */
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
+  const { role } = useUser();
   const [q, setQ] = React.useState("");
   const [sel, setSel] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const commands = React.useMemo<Cmd[]>(() => {
-    const nav: Cmd[] = NAV.flatMap((g) =>
+    const nav: Cmd[] = navFor(role).flatMap((g) =>
       g.items.map((i) => ({
         id: i.href,
         group: "Navigasi",
@@ -73,7 +75,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     ];
 
     return [...nav, ...actions];
-  }, [router]);
+  }, [router, role]);
 
   const filtered = React.useMemo(() => {
     const term = q.trim().toLowerCase();

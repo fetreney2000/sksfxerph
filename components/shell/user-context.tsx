@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
+import type { MemberRole } from "@/lib/types";
 
 export interface ShellUser {
   fullName: string;
-  role: string;
+  role: MemberRole;
 }
 
 const UserContext = React.createContext<ShellUser | null>(null);
@@ -32,7 +33,7 @@ export function useUser(): ShellUser {
   if (!ctx) {
     // Rendered outside the provider would mean the layout gate was bypassed —
     // fall back rather than crash the tree.
-    return { fullName: "", role: "teacher" };
+    return { fullName: "", role: "guru_biasa" };
   }
   return ctx;
 }

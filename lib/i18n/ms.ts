@@ -12,6 +12,17 @@ export const ms = {
   appName: "eRPH",
   appTagline: "Rancangan Pengajaran Harian",
 
+  /** How each `erph.member_role` is written to the person using the account. */
+  roles: {
+    guru_biasa: "Guru Biasa",
+    gpk: "Guru Penolong Kanan",
+    guru_besar: "Guru Besar",
+    pentadbir: "Administrator",
+    ppd: "PPD",
+    jpn: "JPN",
+    system: "Sistem",
+  },
+
   nav: {
     minggu: "Minggu Ini",
     editor: "Penyunting RPH",

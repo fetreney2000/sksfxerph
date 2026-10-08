@@ -42,7 +42,7 @@ interface WeekStatsRow {
   compliance: number | null;
 }
 
-/** Plans awaiting a grade (reviewers only; teachers get 403 and we fall back). */
+/** Plans awaiting a grade (reviewers only; teachers get 403 and we show none). */
 export function useReviewQueueData(): { items: QueueItem[]; loading: boolean } {
   const remote = useQuery<{ items: QueueItem[] }>({
     queryKey: ["review-queue", schoolCode, SESSION],
@@ -51,8 +51,12 @@ export function useReviewQueueData(): { items: QueueItem[]; loading: boolean } {
       // Expired session: leave rather than fall back to demo data — a reviewer
       // must never be shown fake plans as if they were the real queue.
       if (handleExpiredSession(res.status)) return { items: [] };
-      // 403 (not a reviewer) and 503 (local mode) are legitimate states.
-      if (!res.ok) return { items: QUEUE };
+      // Local mode has no backend, and there the bundled dataset *is* the data.
+      if (res.status === 503) return { items: QUEUE };
+      // Anything else — a Guru Biasa's 403, a 500 — must not be papered over
+      // with fabricated plans. An empty queue reads as "nothing to do", which
+      // is the truth; three colleagues' demo RPH read as work that is not there.
+      if (!res.ok) return { items: [] };
       return (await res.json()) as { items: QueueItem[] };
     },
     // Local mode has no backend: don't issue a request we know returns 503,

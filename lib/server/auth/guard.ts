@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { can } from "@/lib/auth/permissions";
 import { supabaseConfigured } from "@/lib/config";
 import { type SessionUser, userFromRequest } from "@/lib/server/auth/session";
 import { adminDb } from "@/lib/server/db";
@@ -45,15 +46,29 @@ export async function requireDbUser(
   return { user: gate.user, db: admin };
 }
 
-/** Reviewers only (admin / coordinator) — used by the queue + review routes. */
+/** Graders only — the queue and review routes. Roles come from `permissions`. */
 export async function requireReviewer(
   req: NextRequest,
 ): Promise<{ user: SessionUser; db: ReturnType<typeof adminDb> } | { error: NextResponse }> {
   const gate = await requireDbUser(req);
   if ("error" in gate) return gate;
-  if (gate.user.role !== "admin" && gate.user.role !== "coordinator") {
+  if (!can(gate.user.role, "semak")) {
     return {
       error: NextResponse.json({ error: "Peranan penyemak diperlukan" }, { status: 403 }),
+    };
+  }
+  return gate;
+}
+
+/** App set-up only — reserved for the `/pentadbiran` API. */
+export async function requireAdministrator(
+  req: NextRequest,
+): Promise<{ user: SessionUser; db: ReturnType<typeof adminDb> } | { error: NextResponse }> {
+  const gate = await requireDbUser(req);
+  if ("error" in gate) return gate;
+  if (!can(gate.user.role, "pentadbir")) {
+    return {
+      error: NextResponse.json({ error: "Peranan pentadbir diperlukan" }, { status: 403 }),
     };
   }
   return gate;

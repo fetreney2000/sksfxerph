@@ -8,6 +8,7 @@ const ACCOUNTS = [
   { username: "zulkifli.rahman", password: "admin2026" },
   { username: "ppd.petaling", password: "ppd2026" },
   { username: "jpn.selangor", password: "jpn2026" },
+  { username: "pentadbir.sk", password: "pentadbir2026" },
 ];
 
 function hash(password) {

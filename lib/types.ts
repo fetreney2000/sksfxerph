@@ -3,9 +3,10 @@ import type { RphPayload } from "@/lib/schemas/rph";
 /* ── Mirrors of the enum types in db/schema.sql ────────────────────────────── */
 
 export const MEMBER_ROLES = [
-  "teacher",
-  "coordinator",
-  "admin",
+  "guru_biasa",
+  "gpk",
+  "guru_besar",
+  "pentadbir",
   "ppd",
   "jpn",
   "system",

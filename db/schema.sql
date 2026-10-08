@@ -48,9 +48,13 @@ create schema if not exists erph;
 
 -- ── 2 · ENUM TYPES ───────────────────────────────────────────────────────────
 create type erph.member_role as enum (
-  'teacher',      -- default for every guru
-  'coordinator',  -- Guru Penyelaras eRPH
-  'admin',        -- GPK / Pengetua / Guru Besar (reviewer)
+  -- Renamed from teacher/coordinator/admin to the job titles people recognise.
+  -- `pentadbir` is new: app set-up only, deliberately outside `is_staff`, so it
+  -- can never review, monitor or read the audit log.
+  'guru_biasa',   -- Guru Mata Pelajaran; writes and submits own RPH
+  'gpk',          -- Guru Penolong Kanan; reviews and monitors
+  'guru_besar',   -- PGB; reviewer with the same reach as GPK
+  'pentadbir',    -- Administrator; set-up and manage the app only
   'ppd',          -- future: district read-only
   'jpn',          -- future: state read-only
   'system'        -- seeded/service accounts
@@ -212,7 +216,7 @@ create table erph.user (
   -- here and passwords are verified by our own handler (lib/server/auth).
   username      text not null,                        -- case-insensitive (index below)
   password_hash text not null,                        -- PHC-style scrypt string
-  role          erph.member_role not null default 'teacher',
+  role          erph.member_role not null default 'guru_biasa',
   is_active     boolean not null default true,
   failed_logins int not null default 0,               -- brute-force lockout
   locked_until  timestamptz,                          -- null = not locked
@@ -233,7 +237,7 @@ create index profile_email_idx on erph.user (lower(email));
 create table erph.school_member (
   school_id  uuid not null references erph.school(id) on delete cascade,
   user_id    uuid not null references erph.user(id) on delete cascade,
-  role       erph.member_role not null default 'teacher',
+  role       erph.member_role not null default 'guru_biasa',
   title      text,                                      -- 'GPK Pentadbiran', 'Guru Matematik'
   invited_at timestamptz not null default now(),
   joined_at  timestamptz,
@@ -511,7 +515,7 @@ create or replace function erph.is_staff(p_school uuid)
 returns boolean language sql stable security definer set search_path = erph, public as $$
   select exists (select 1 from erph.school_member
                  where user_id = erph.actor() and school_id = p_school
-                   and role in ('coordinator','admin') and is_active);
+                   and role in ('gpk','guru_besar') and is_active);
 $$;
 
 create or replace function erph.has_role(p_school uuid, p_roles erph.member_role[])
@@ -535,7 +539,7 @@ returns boolean language sql stable security definer set search_path = erph, pub
     from erph.school_member a
     join erph.school_member b on a.school_id = b.school_id
     where a.user_id = erph.actor() and a.is_active
-      and a.role in ('coordinator','admin')
+      and a.role in ('gpk','guru_besar')
       and b.user_id = p_user and b.is_active);
 $$;
 
@@ -594,9 +598,9 @@ begin
     raise exception 'Belum log masuk';
   end if;
 
-  -- owner OR staff (an admin may resubmit on a teacher's behalf)
+  -- owner OR staff (a GPK or Guru Besar may resubmit on the teacher's behalf)
   if v_doc.owner_id is distinct from erph.actor()
-     and not erph.has_role(v_doc.school_id, array['coordinator','admin']::erph.member_role[])
+     and not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[])
   then raise exception 'Tidak dibenarkan'; end if;
   if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
 
@@ -638,7 +642,7 @@ begin
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH tidak dijumpai'; end if;
-  if not erph.has_role(v_doc.school_id, array['admin','coordinator']::erph.member_role[]) then
+  if not erph.has_role(v_doc.school_id, array['guru_besar','gpk']::erph.member_role[]) then
     raise exception 'Peranan penyemak diperlukan';
   end if;
 
@@ -828,13 +832,15 @@ returns table (expected int, submitted int, approved int, returned_t int,
                drafts int, compliance numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
 begin
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Staff only (GPK / Guru Besar). The old `is_member OR is_staff` made the
+  -- disjunction a no-op, so any Guru Biasa could read whole-school compliance.
+  if not erph.is_staff(p_school) then
     raise exception 'Tidak dibenarkan';
   end if;
   return query
   with t as (
     select count(*)::int n from erph.school_member
-     where school_id = p_school and role = 'teacher' and is_active
+     where school_id = p_school and role = 'guru_biasa' and is_active
   ), d as (
     select status, grade from erph.rph_document
      where school_id = p_school and session = p_session
@@ -952,19 +958,19 @@ create policy rph_owner_update on erph.rph_document
   );
 create policy rph_reviewer_read on erph.rph_document
   for select using (deleted_at is null
-                    and erph.has_role(school_id, array['admin','coordinator','ppd','jpn']::erph.member_role[]));
+                    and erph.has_role(school_id, array['guru_besar','gpk','ppd','jpn']::erph.member_role[]));
 
 -- history tables: SELECT only → writes happen inside SECURITY DEFINER RPCs
 create policy rph_revision_read on erph.rph_revision
   for select using (exists (select 1 from erph.rph_document d
                             where d.id = erph.rph_revision.document_id
                               and (d.owner_id = erph.actor()
-                                   or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[]))));
+                                   or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[]))));
 create policy rph_review_read on erph.rph_review
   for select using (exists (select 1 from erph.rph_document d
                             where d.id = erph.rph_review.document_id
                               and (d.owner_id = erph.actor()
-                                   or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[]))));
+                                   or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[]))));
 
 create policy template_read on erph.rph_template
   for select using (
@@ -990,11 +996,11 @@ create policy export_read on erph.export_file
     created_by = erph.actor()
     or exists (select 1 from erph.rph_document d where d.id = erph.export_file.document_id
                  and (d.owner_id = erph.actor()
-                      or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[])))
+                      or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[])))
   );
 
 create policy audit_admin_read on erph.audit_log
-  for select using (erph.has_role(erph.audit_log.school_id, array['admin']::erph.member_role[]));
+  for select using (erph.has_role(erph.audit_log.school_id, array['guru_besar','gpk']::erph.member_role[]));
 
 -- ── 12 · STORAGE (private buckets, membership-scoped signed URLs) ────────────
 insert into storage.buckets (id, name, public) values
@@ -1024,7 +1030,7 @@ create policy storage_read on storage.objects
         and exists (select 1 from erph.rph_document d
                      where d.id::text = (storage.foldername(name))[1]
                        and (d.owner_id = erph.actor()
-                            or erph.has_role(d.school_id, array['admin','coordinator']::erph.member_role[]))))
+                            or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[]))))
     or (bucket_id = 'attachments'
         and (storage.foldername(name))[1] = erph.actor()::text)
   );
@@ -1068,7 +1074,7 @@ group by 1,2,3;
 --          'Mohon lengkapkan sebelum Jumaat 4:00 petang', 'dashboard'
 --   from erph.school_member sm
 --   join erph.rph_document d on d.owner_id = sm.user_id and d.school_id = sm.school_id
---   where sm.role = 'teacher' and sm.is_active
+--   where sm.role = 'guru_biasa' and sm.is_active
 --     and d.status = 'draft' and d.completeness < 100
 --     and d.deleted_at is null
 --     and d.session = '2026/2027';

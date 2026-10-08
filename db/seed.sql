@@ -12,9 +12,9 @@
 --
 -- What gets seeded:
 --   · 1 school            + its school_setting row
---   · 1 account per member_role  (teacher / coordinator / admin / ppd / jpn,
---     plus an inactive `system` row used as a stable actor id for automated
---     rows — it cannot log in: is_active = false)
+--   · 1 account per member_role  (guru_biasa / gpk / guru_besar / pentadbir /
+--     ppd / jpn, plus an inactive `system` row used as a stable actor id for
+--     automated rows — it cannot log in: is_active = false)
 --   · a school_member row per account, mirroring the account role
 --   · 3 subjects + 3 classes  — the FK targets a plan cannot be created without
 --   · 1 submitted lesson plan so the reviewer screens have something to grade
@@ -55,11 +55,13 @@ on conflict (school_id, session, nama) do nothing;
 insert into erph.user (username, password_hash, full_name, email, role, is_active)
 values
   -- username: nurul.aisyah       password: guru2026
-  ('nurul.aisyah', 'scrypt$16384$8$1$dbsjVcXMhuT5Z7igUNHUcA$0g_lKAWtwbfOfJCvbLftN1hEzXTx8hcsr40d48K2803oKMTANbl8WYqYEWPYH7A50vCB0ClrWaDEPgzEXOy_FQ', 'Nurul Aisyah binti Rahim', 'nurul.aisyah@sk0000.local', 'teacher', true),
+  ('nurul.aisyah', 'scrypt$16384$8$1$dbsjVcXMhuT5Z7igUNHUcA$0g_lKAWtwbfOfJCvbLftN1hEzXTx8hcsr40d48K2803oKMTANbl8WYqYEWPYH7A50vCB0ClrWaDEPgzEXOy_FQ', 'Nurul Aisyah binti Rahim', 'nurul.aisyah@sk0000.local', 'guru_biasa', true),
   -- username: ramlan.yusof       password: penyelaras2026
-  ('ramlan.yusof', 'scrypt$16384$8$1$acdfe8ckwcAxPHiMwnG9Vg$toHYln8by5fkx2Lw7sa5xunepYbq0zpzW4HVDfEquWy10SfDN_QJ9-0cBDATMPfVs5rLSejGrSjl-KkZdKbLfQ', 'Ramlan bin Yusof', 'ramlan.yusof@sk0000.local', 'coordinator', true),
+  ('ramlan.yusof', 'scrypt$16384$8$1$acdfe8ckwcAxPHiMwnG9Vg$toHYln8by5fkx2Lw7sa5xunepYbq0zpzW4HVDfEquWy10SfDN_QJ9-0cBDATMPfVs5rLSejGrSjl-KkZdKbLfQ', 'Ramlan bin Yusof', 'ramlan.yusof@sk0000.local', 'gpk', true),
   -- username: zulkifli.rahman    password: admin2026
-  ('zulkifli.rahman', 'scrypt$16384$8$1$nsx95Xm9eeThntZEU7ikrQ$RGd4agBkKXyGetTZc48kGbQPWASaw7KlhH3pIVUa0dBw69Ygz_CizEi18_6hw0nFdz60Lbxrd3iIUX35eqDsrQ', 'Zulkifli bin Rahman', 'zulkifli.rahman@sk0000.local', 'admin', true),
+  ('zulkifli.rahman', 'scrypt$16384$8$1$nsx95Xm9eeThntZEU7ikrQ$RGd4agBkKXyGetTZc48kGbQPWASaw7KlhH3pIVUa0dBw69Ygz_CizEi18_6hw0nFdz60Lbxrd3iIUX35eqDsrQ', 'Zulkifli bin Rahman', 'zulkifli.rahman@sk0000.local', 'guru_besar', true),
+  -- username: pentadbir.sk       password: pentadbir2026
+  ('pentadbir.sk', 'scrypt$16384$8$1$sBZJbXJZGtDoXYVtM_r_MA$_Q_vvOJhHbPEbvKonOnd-ktpbXbn0axcvfihN6Gvw3QbzfzfEWoXvyhHi8rFcWaxKqNtYn9iUxIlQYOTgGmVGg', 'Pentadbir eRPH', 'pentadbir@sk0000.local', 'pentadbir', true),
   -- username: ppd.petaling       password: ppd2026
   ('ppd.petaling', 'scrypt$16384$8$1$nSyY2Y-MbOw0rKiaGP1TEQ$TTDMPuUdIB6o-u1W8E7F-b6x3GXbTr-rcbErmO_9JhbMhaBqzZen6UMZwjTVP5nQWkSBCu16ECezy_dSpqSKsw', 'PPD Petaling', 'ppd@ppdpetaling.moe.gov.my', 'ppd', true),
   -- username: jpn.selangor       password: jpn2026
@@ -74,13 +76,13 @@ insert into erph.school_member (school_id, user_id, role)
 select s.id, u.id, u.role
 from erph.school s
 join erph.user u
-  on u.username in ('nurul.aisyah', 'ramlan.yusof', 'zulkifli.rahman', 'ppd.petaling', 'jpn.selangor')
+  on u.username in ('nurul.aisyah', 'ramlan.yusof', 'zulkifli.rahman', 'pentadbir.sk', 'ppd.petaling', 'jpn.selangor')
 where s.kod_sekolah = 'SK0000'
 on conflict do nothing;
 
 -- ── 6 · one submitted plan, so the reviewer screens are not empty ────────────
 -- Complete by KPM's rules (profil + aktiviti + refleksi + intervensi), status
--- 'submitted' so an admin logging in can grade it immediately.
+-- 'submitted' so a Guru Besar logging in can grade it immediately.
 insert into erph.rph_document
   (school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
    slot_time, status, payload, version, submitted_at)

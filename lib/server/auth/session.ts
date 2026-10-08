@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import { supabaseConfigured } from "@/lib/config";
-import { LOCAL_ACCOUNT } from "@/lib/server/auth/local";
+import { localAccountById } from "@/lib/server/auth/local";
 import {
   type DecodedSession,
   mintSession,
@@ -10,6 +10,7 @@ import {
   SESSION_TTL_SECONDS,
 } from "@/lib/server/auth/token";
 import { adminDb } from "@/lib/server/db";
+import type { MemberRole } from "@/lib/types";
 
 /**
  * Cookie session → authenticated user.
@@ -30,7 +31,7 @@ export interface SessionUser {
   username: string;
   fullName: string;
   email: string | null;
-  role: "teacher" | "coordinator" | "admin" | "ppd" | "jpn" | "system";
+  role: MemberRole;
   issuedAt: number;
 }
 
@@ -40,7 +41,7 @@ function toUser(
     username: string;
     full_name: string;
     email: string | null;
-    role: SessionUser["role"];
+    role: MemberRole;
     is_active: boolean;
     password_changed_at: string;
   },
@@ -69,9 +70,13 @@ export async function resolveUser(
   if (!session) return null;
 
   if (!supabaseConfigured) {
+    // Resolved by the cookie's subject, not "whoever is demoing" — local mode
+    // has more than one account precisely so role separation can be exercised.
+    const account = localAccountById(session.sub);
+    if (!account) return null;
     return toUser(
       {
-        ...LOCAL_ACCOUNT,
+        ...account,
         is_active: true,
         // Nothing to invalidate a demo cookie against.
         password_changed_at: new Date(0).toISOString(),

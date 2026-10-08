@@ -9,14 +9,20 @@ import {
   School,
   ScrollText,
 } from "lucide-react";
+import { can, type Permission } from "@/lib/auth/permissions";
 import { ms } from "@/lib/i18n/ms";
 
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  /** `teacher` = everyone; `admin` = reviewers only. */
-  scope: "teacher" | "admin";
+  /**
+   * Permission needed to see this entry. Read by `navFor()` — the sidebar,
+   * the mobile bar and the command palette all go through it, so an item a
+   * role cannot reach disappears everywhere at once instead of surviving in
+   * one surface (the old `scope` field was declared and never read).
+   */
+  perm: Permission;
   /** Optional live badge source, resolved by the sidebar. */
   badge?: "drafts" | "pending";
 }
@@ -30,16 +36,16 @@ export const NAV: NavGroup[] = [
   {
     label: ms.nav.guru,
     items: [
-      { href: "/minggu", label: ms.nav.minggu, icon: LayoutGrid, scope: "teacher" },
+      { href: "/minggu", label: ms.nav.minggu, icon: LayoutGrid, perm: "rph" },
       {
         href: "/editor",
         label: ms.nav.editor,
         icon: PenLine,
-        scope: "teacher",
+        perm: "rph",
         badge: "drafts",
       },
-      { href: "/templat", label: ms.nav.templat, icon: BookOpen, scope: "teacher" },
-      { href: "/arkib", label: ms.nav.arkib, icon: History, scope: "teacher" },
+      { href: "/templat", label: ms.nav.templat, icon: BookOpen, perm: "rph" },
+      { href: "/arkib", label: ms.nav.arkib, icon: History, perm: "rph" },
     ],
   },
   {
@@ -49,14 +55,22 @@ export const NAV: NavGroup[] = [
         href: "/semakan",
         label: ms.nav.semakan,
         icon: ScrollText,
-        scope: "admin",
+        perm: "semak",
         badge: "pending",
       },
-      { href: "/sekolah", label: ms.nav.sekolah, icon: School, scope: "admin" },
-      { href: "/laporan", label: "Laporan & Eksport", icon: FileText, scope: "admin" },
+      { href: "/sekolah", label: ms.nav.sekolah, icon: School, perm: "pantau" },
+      { href: "/laporan", label: "Laporan & Eksport", icon: FileText, perm: "laporan" },
     ],
   },
 ];
+
+/** Navigation for a role — groups with nothing permitted in them disappear. */
+export function navFor(role: string | null | undefined): NavGroup[] {
+  return NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => can(role, item.perm)),
+  })).filter((group) => group.items.length > 0);
+}
 
 export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/minggu": { title: ms.nav.minggu, crumb: "Minggu ini" },

@@ -6,6 +6,7 @@ import { MobileNav } from "@/components/shell/mobile-nav";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { UserProvider } from "@/components/shell/user-context";
+import type { MemberRole } from "@/lib/types";
 
 /**
  * Client chrome: holds the command-palette open state so ⌘K works anywhere and
@@ -16,7 +17,7 @@ export function AppShell({
   user,
 }: {
   children: React.ReactNode;
-  user: { fullName: string; role: string };
+  user: { fullName: string; role: MemberRole };
 }) {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
@@ -32,19 +33,21 @@ export function AppShell({
   }, []);
 
   return (
-    <div className="flex min-h-dvh">
-      {/* Skip link — WCAG 2.4.1 */}
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-200 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
-      >
-        Langkau ke kandungan
-      </a>
+    // One provider around the *whole* shell: MobileNav and the command palette
+    // sit outside <main>, and both need the role to filter their entries.
+    <UserProvider user={user}>
+      <div className="flex min-h-dvh">
+        {/* Skip link — WCAG 2.4.1 */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-200 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-white"
+        >
+          Langkau ke kandungan
+        </a>
 
-      <Sidebar user={user} />
+        <Sidebar user={user} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <UserProvider user={user}>
+        <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onOpenPalette={() => setPaletteOpen(true)} />
           {/* pb-28 clears the mobile bottom nav; lg:pb-14 because it disappears */}
           <main
@@ -53,11 +56,11 @@ export function AppShell({
           >
             <div className="erph-rise-in">{children}</div>
           </main>
-        </UserProvider>
-      </div>
+        </div>
 
-      <MobileNav />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-    </div>
+        <MobileNav />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      </div>
+    </UserProvider>
   );
 }
