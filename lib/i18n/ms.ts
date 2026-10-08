@@ -79,14 +79,27 @@ export const ms = {
     completeness: "Keluargaan dokumen",
     preview: "Pratonton langsung",
     submit: "Hantar untuk semakan",
-    saveDraft: "Simpan draf",
     next: "Seterusnya",
     back: "Kembali",
     exportPdf: "Eksport PDF",
     required: "diperlukan",
-    missingReflection:
-      "Belum boleh dihantar: Refleksi & Intervensi wajib diisi (Langkah 4). Kandungan anda tetap disimpan.",
     totalTime: "Jumlah masa aktif",
+    ready: "Sedia dihantar",
+    notReady: "Belum lengkap",
+    attentionLabel: "Perkara perlu diberi perhatian",
+    incompleteHeading: (n: number) => `${n} perkara perlu diberi perhatian`,
+    draftWarning:
+      "Dokumen boleh dihantar sebagai draf tidak lengkap, tetapi GPK mungkin mengembalikannya (gred 0).",
+    missing: {
+      sk: "Standard Kandungan belum dipilih",
+      sp: "Standard Pembelajaran belum dipilih",
+      objektif: "Objektif pembelajaran belum diisi",
+      noAktiviti: "Tiada aktiviti PdPc lagi",
+      aktivitiGuru: "Aktiviti 1 — aktiviti guru belum diisi",
+      aktivitiMurid: "Aktiviti 1 — aktiviti murid belum diisi",
+      refleksi: "Refleksi belum diisi",
+      intervensi: "Intervensi atau elemen EMK belum dipilih",
+    },
   },
 
   review: {

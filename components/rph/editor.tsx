@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogBody,
+  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -88,6 +89,64 @@ const STEPS = [
   { key: "refleksi", title: ms.editor.step4, sub: ms.editor.step4sub },
 ] as const;
 
+/** One fixable gap, phrased as a sentence and tied to the section that holds it. */
+interface Note {
+  section: number;
+  field?: string;
+  text: string;
+  /**
+   * `blocking` notes mirror the four 25-point checks in `completeness()` —
+   * there is no open blocking note exactly when the score is 100, so the
+   * badge, the meter and this list can never contradict each other.
+   *
+   * Non-blocking notes come from `stepStatus()`, which is deliberately
+   * stricter (the stepper and the reviewer checklist also want the activity's
+   * *murid* column filled) but is not part of the submit gate. They are shown
+   * muted so a green "Sedia dihantar" can coexist with a useful nudge.
+   */
+  blocking: boolean;
+}
+
+function notes(payload: RphPayload): Note[] {
+  const has = (s?: string) => !!s?.trim();
+  const out: Note[] = [];
+  const add = (n: Note) => {
+    out.push(n);
+  };
+
+  const first = payload.aktiviti[0];
+
+  if (!has(payload.standard_kandungan))
+    add({ section: 1, field: "f-188949", text: ms.editor.missing.sk, blocking: true });
+  if (!has(payload.standard_pembelajaran))
+    add({ section: 1, field: "f-907255", text: ms.editor.missing.sp, blocking: true });
+  if (!has(payload.objektif))
+    add({ section: 1, field: "f-675227", text: ms.editor.missing.objektif, blocking: true });
+  if (payload.aktiviti.length === 0)
+    add({ section: 2, text: ms.editor.missing.noAktiviti, blocking: true });
+  else if (!has(first?.aktiviti_guru))
+    add({
+      section: 2,
+      field: "f-aktiviti-0-guru",
+      text: ms.editor.missing.aktivitiGuru,
+      blocking: true,
+    });
+  if (!has(payload.refleksi))
+    add({ section: 3, field: "f-270580", text: ms.editor.missing.refleksi, blocking: true });
+  if (!has(payload.intervensi) && payload.emk.length === 0)
+    add({ section: 3, field: "f-305006", text: ms.editor.missing.intervensi, blocking: true });
+
+  if (payload.aktiviti.length > 0 && has(first?.aktiviti_guru) && !has(first?.aktiviti_murid))
+    add({
+      section: 2,
+      field: "f-aktiviti-0-murid",
+      text: ms.editor.missing.aktivitiMurid,
+      blocking: false,
+    });
+
+  return out;
+}
+
 export function RphEditor({ docId }: { docId?: string }) {
   const router = useRouter();
   const params = useParams();
@@ -136,6 +195,30 @@ export function RphEditor({ docId }: { docId?: string }) {
     [live, update],
   );
 
+  const formRef = React.useRef<HTMLDivElement>(null);
+
+  /**
+   * Jump to the section that holds a gap — the whole point of listing them.
+   *
+   * The target section only mounts after the step switch, so the focus runs a
+   * frame later. Reduced-motion users get an instant jump, not a glide.
+   */
+  const goTo = React.useCallback((section: number, field?: string) => {
+    setStep(section);
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.requestAnimationFrame(() => {
+      const target = field
+        ? (document.getElementById(field) as HTMLElement | null)
+        : formRef.current;
+      const scroll = (el: HTMLElement, block: ScrollLogicalPosition) =>
+        el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block });
+      if (target) {
+        scroll(target, field ? "center" : "start");
+        if (field) target.focus({ preventScroll: true });
+      }
+    });
+  }, []);
+
   if (!id) {
     return (
       <Card>
@@ -170,8 +253,11 @@ export function RphEditor({ docId }: { docId?: string }) {
   const score = completeness(payload);
   const flags = stepStatus(payload);
   const stepDone = [flags.profil, flags.dskp, flags.pdpc, flags.refleksi];
+  const doneCount = stepDone.filter(Boolean).length;
 
-  const canSubmit = score === 100;
+  const allNotes = notes(payload);
+  const blocking = allNotes.filter((n) => n.blocking);
+  const ready = blocking.length === 0;
 
   const onSubmit = async (force: boolean) => {
     // Offline-first: never block a teacher on a network hiccup. When we ARE
@@ -211,11 +297,18 @@ export function RphEditor({ docId }: { docId?: string }) {
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
       {/* ══ Left: the wizard ════════════════════════════════════════════ */}
-      <Card className="self-start overflow-hidden">
-        {/* Stepper */}
-        <ol className="flex gap-0.5 overflow-x-auto border-b border-border bg-surface-2 px-4 py-3.5">
+      {/* `min-w-0` is load-bearing: grid items default to `min-width: auto`,
+          so the stepper's nowrap labels would blow the track out to ~760px and
+          the whole page would scroll sideways (it did, at 390/1280/1440).
+          With it, the track respects the container and the stepper's own
+          `overflow-x-auto` handles the overflow instead. */}
+      <Card className="self-start min-w-0">
+        {/* Stepper — takes the card's top radius (14px outer − 1px border). */}
+        <ol className="flex gap-0.5 overflow-x-auto rounded-t-[13px] border-b border-border bg-surface-2 px-4 py-3.5">
           {STEPS.map((s, i) => {
-            const done = i < step && stepDone[i];
+            // Completion, not "have you visited this yet" — a section the
+            // teacher already filled must read as done wherever they are.
+            const done = stepDone[i];
             const current = i === step;
             return (
               <li key={s.key} className="relative min-w-[150px] flex-1">
@@ -237,10 +330,12 @@ export function RphEditor({ docId }: { docId?: string }) {
                   >
                     {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : i + 1}
                   </span>
-                  <span className="min-w-0">
+                  {/* Opaque + raised so the absolutely-positioned connector below
+                      passes *behind* the label instead of striking through it. */}
+                  <span className="relative z-10 -mx-2 min-w-0 bg-surface-2 px-2">
                     <span
                       className={cn(
-                        "block truncate text-[13px] font-semibold",
+                        "block truncate text-[13.5px] font-semibold",
                         current ? "text-primary-ink" : done ? "text-ink-2" : "text-ink-3",
                       )}
                     >
@@ -248,7 +343,7 @@ export function RphEditor({ docId }: { docId?: string }) {
                     </span>
                     <span
                       className={cn(
-                        "block truncate text-[10.5px]",
+                        "block truncate text-[11.5px]",
                         current ? "text-primary-ink" : "text-ink-4",
                       )}
                     >
@@ -260,7 +355,7 @@ export function RphEditor({ docId }: { docId?: string }) {
                   <span
                     className={cn(
                       "absolute top-4 right-0 left-9 h-0.5",
-                      i < step ? "bg-success-line" : "bg-border",
+                      done ? "bg-success-line" : "bg-border",
                     )}
                     aria-hidden
                   />
@@ -271,93 +366,139 @@ export function RphEditor({ docId }: { docId?: string }) {
         </ol>
 
         <CardContent className="py-5">
-          {/* Autosave status — always visible, never a Save button that can fail */}
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
-                Langkah {step + 1} · {STEPS[step]?.title}
-              </h2>
-              <p className="text-[12.5px] text-ink-3">
-                {live.subjectName} · {live.className} ·{" "}
-                <span className="num">
-                  {longDate(live.planDate)} · {live.slotTime}
-                </span>
-              </p>
+          {/* One scroll target for "jump to the gap" when a section has no
+              single field to focus. */}
+          <div ref={formRef}>
+            {/* Autosave status — always visible, never a Save button that can fail */}
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
+                  Langkah {step + 1} · {STEPS[step]?.title}
+                </h2>
+                <p className="text-[12.5px] text-ink-3">
+                  {live.subjectName} · {live.className} ·{" "}
+                  <span className="num">
+                    {longDate(live.planDate)} · {live.slotTime}
+                  </span>
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-3">
+                <span
+                  className={cn(
+                    "h-1.75 w-1.75 rounded-full",
+                    saving ? "bg-warning" : "bg-success",
+                  )}
+                  aria-hidden
+                />
+                {saving ? "Menyimpan…" : `${ms.status.saving} · ${ms.status.online}`}
+              </span>
             </div>
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3">
-              <span
-                className={cn(
-                  "h-1.75 w-1.75 rounded-full",
-                  saving ? "bg-warning" : "bg-success",
-                )}
-                aria-hidden
-              />
-              {saving ? "Menyimpan…" : `${ms.status.saving} · ${ms.status.online}`}
-            </span>
-          </div>
 
-          {/* Completeness meter */}
-          <div className="mb-5 flex items-center gap-3 rounded-[11px] border border-border bg-surface-2 p-3">
-            <span className="text-[19px] font-extrabold tracking-[-0.6px] text-primary-ink num">
-              {score}%
-            </span>
-            <div>
-              <p className="mb-1.5 text-[12.5px] font-semibold">
-                {ms.editor.completeness}{" "}
-                <span className="font-normal text-ink-3">
-                  — {Object.values(flags).filter(Boolean).length} daripada 4 bahagian
-                </span>{" "}
+            {/* Completeness — flat, not a box: count, meter, then the exact gaps.
+                Each gap is a link to the field that fixes it (WCAG G139). */}
+            <div className="mb-5">
+              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-[13.5px] font-semibold">{ms.editor.completeness}</span>
+                <span className="num text-[12.5px] text-ink-3">
+                  — {doneCount} daripada 4 bahagian · {score}%
+                </span>
                 <HelpHint label="Keluargaan dokumen">
                   Empat bahagian wajib mengikut Garis Panduan e-RPH KPM: (1) Standard Kandungan
                   + Standard Pembelajaran + objektif, (2) sekurang-kurangnya satu aktiviti PdPc,
                   (3) refleksi, (4) intervensi <b>atau</b> elemen EMK. Setiap bahagian = 25%.
                 </HelpHint>
-              </p>
-              <Progress value={score} tone={score === 100 ? "success" : "primary"} />
-            </div>
-            {score < 100 && <Badge variant="warning">Belum lengkap</Badge>}
-            {score === 100 && <Badge variant="success">Sedia dihantar</Badge>}
-          </div>
+                <span className="ml-auto">
+                  <Badge variant={ready ? "success" : "warning"}>
+                    {ready ? ms.editor.ready : ms.editor.notReady}
+                  </Badge>
+                </span>
+              </div>
 
-          {step === 0 && <StepProfil doc={live} onPatch={update} />}
-          {step === 1 && <StepDskp payload={payload} onPatch={updatePayload} />}
-          {step === 2 && <StepPdPc payload={payload} onPatch={updatePayload} />}
-          {step === 3 && <StepRefleksi payload={payload} onPatch={updatePayload} />}
+              <Progress value={score} tone={ready ? "success" : "primary"} />
+
+              {allNotes.length > 0 && (
+                <ul
+                  className="mt-2 flex flex-col gap-0.5"
+                  aria-label={ms.editor.attentionLabel}
+                >
+                  {allNotes.map((n) => (
+                    <li key={n.text}>
+                      <button
+                        type="button"
+                        onClick={() => goTo(n.section, n.field)}
+                        className={cn(
+                          "group flex w-full items-baseline gap-2 rounded-md py-1 text-left transition-colors hover:text-primary-ink",
+                          n.blocking ? "text-ink-2" : "text-ink-3",
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className={n.blocking ? "text-warning-ink" : "text-ink-4"}
+                        >
+                          •
+                        </span>
+                        <span className="text-[12.5px]">{n.text}</span>
+                        <span className="ml-auto shrink-0 text-[11.5px] text-ink-4 group-hover:text-primary-ink">
+                          {STEPS[n.section]?.title} →
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {step === 0 && <StepProfil doc={live} onPatch={update} />}
+            {step === 1 && <StepDskp payload={payload} onPatch={updatePayload} />}
+            {step === 2 && <StepPdPc payload={payload} onPatch={updatePayload} />}
+            {step === 3 && <StepRefleksi payload={payload} onPatch={updatePayload} />}
+          </div>
         </CardContent>
 
         {/* §4.2(9) "sticky primary action": keeps the wizard controls reachable
-            on long forms, and `bottom-14` lifts it clear of the mobile nav. */}
-        <div className="sticky bottom-14 z-10 flex items-center gap-2.5 border-t border-border bg-surface-2 px-4 py-3 lg:bottom-0 lg:rounded-b-[14px]">
+            on long forms, and `bottom-14` lifts it clear of the mobile nav.
+            `flex-wrap` is load-bearing — on a 375px phone the row cannot hold
+            Kembali + counter + CTA on one line. */}
+        <div className="sticky bottom-14 z-10 flex flex-wrap items-center gap-2.5 rounded-b-[13px] border-t border-border bg-surface-2 px-4 py-3 lg:bottom-0">
           <Button
             variant="secondary"
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
           >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Kembali
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.back}
           </Button>
-          <Button variant="ghost" onClick={() => toast("Draf disimpan pada peranti & awan")}>
-            Simpan draf
-          </Button>
-          <span className="ml-auto num text-[12.5px] text-ink-3">
-            Langkah {step + 1} daripada {STEPS.length}
-          </span>
-          {step < STEPS.length - 1 ? (
-            <Button onClick={() => setStep((s) => s + 1)}>Seterusnya →</Button>
-          ) : (
-            <Button onClick={() => void onSubmit(false)} disabled={!canSubmit}>
-              <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Hantar
-            </Button>
-          )}
+          {/* No "Simpan draf" button: autosave is the save. A second affordance
+              that can only toast would contradict the header's live status. */}
+          <div className="ml-auto flex items-center gap-2.5">
+            <span className="num hidden text-[12.5px] text-ink-3 sm:inline">
+              Langkah {step + 1} daripada {STEPS.length}
+            </span>
+            {step < STEPS.length - 1 ? (
+              <Button onClick={() => setStep((s) => s + 1)}>{ms.editor.next} →</Button>
+            ) : (
+              /* Deliberately always enabled: `onSubmit(false)` opens the gate
+                 dialog when the plan is short of 100%, and that dialog is the
+                 only route to "Hantar sebagai draf". Disabling the button made
+                 both of them dead code in local mode. */
+              <Button onClick={() => void onSubmit(false)}>
+                <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
 
-      {/* ══ Right: preview + actions ════════════════════════════════════ */}
-      <div className="self-start">
-        <div className="mb-3 flex gap-2">
+      {/* ══ Right: the document. Actions on this side are document actions
+          (PDF/DOCX); workflow actions stay in the form's sticky bar. ══ */}
+      <div className="min-w-0 self-start">
+        <div className="mb-3 flex items-center gap-1.5">
+          <span className="text-[12.5px] font-bold tracking-[0.6px] text-ink-4 uppercase">
+            {ms.editor.preview}
+          </span>
+          <span className="h-px flex-1 bg-border" aria-hidden />
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
-            className="flex-1"
             onClick={() => {
               // Browser print → "Save as PDF". Works offline, and RphPaper is
               // styled at KPM proportions (§4.2(8) print/PDF fidelity).
@@ -368,83 +509,74 @@ export function RphEditor({ docId }: { docId?: string }) {
             <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden />
             PDF
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="flex-1"
-            onClick={() => void exportDocx(live)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => void exportDocx(live)}>
             <FileDown className="h-4 w-4" strokeWidth={1.9} aria-hidden />
             DOCX
           </Button>
-          <Button size="sm" className="flex-1" onClick={() => void onSubmit(false)}>
-            <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-            {ms.editor.submit}
-          </Button>
         </div>
 
-        <p className="mb-2 flex items-center gap-2 text-[12px] font-bold tracking-[0.6px] text-ink-4 uppercase">
-          <span className="h-px flex-1 bg-border" />
-          {ms.editor.preview}
-          <span className="h-px flex-1 bg-border" />
-        </p>
-
         <RphPaper payload={payload} session={SESSION} />
-
-        {!canSubmit && (
-          <div className="mt-3 flex gap-2.5 rounded-[10px] border border-warning-line bg-warning-soft p-3 text-[12.5px] leading-[1.55] text-warning-ink">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
-            <div>{ms.editor.missingReflection}</div>
-          </div>
-        )}
       </div>
 
       {/* ══ Submit gate dialog ══════════════════════════════════════════ */}
       <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-        <DialogHeader>
-          <DialogTitle>Hantar RPH untuk semakan?</DialogTitle>
-          <DialogDescription>
-            {live.className} · {live.subjectName} · {longDate(live.planDate)}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody>
-          <dl className="text-[13px]">
-            <Row
-              k="Bahagian lengkap"
-              v={`${Object.values(flags).filter(Boolean).length} / 4`}
-            />
-            <Row
-              k="Refleksi & Intervensi"
-              v={flags.refleksi ? "Lengkap" : "Belum diisi"}
-              tone={flags.refleksi ? "ok" : "bad"}
-            />
-            <Row k="Penyemak" v="Zulkifli · GPK Pentadbiran" />
-            <Row k="Kesiapan" v={`${score}%`} tone={score === 100 ? "ok" : "warn"} />
-          </dl>
-          <div className="mt-3.5 flex gap-2.5 rounded-[10px] border border-warning-line bg-warning-soft p-3 text-[12.5px] leading-[1.55] text-warning-ink">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
-            <div>
-              Bahagian Refleksi belum diisi. Dokumen boleh dihantar sebagai{" "}
-              <b>draf tidak lengkap</b>, tetapi GPK mungkin mengembalikannya (gred 0).
-            </div>
-          </div>
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => setSubmitOpen(false)}>
-            Batal
-          </Button>
-          <Button variant="danger" onClick={() => void onSubmit(true)}>
-            Hantar sebagai draf
-          </Button>
-          <Button
-            onClick={() => {
-              setSubmitOpen(false);
-              setStep(3);
-            }}
-          >
-            Lengkapkan sekarang
-          </Button>
-        </DialogFooter>
+        {/* <DialogContent> is not optional decoration: Dialog is Radix's Root,
+            which renders its children inline. Without the Portal/Overlay wrapper
+            these three blocks were landing in the page grid as a phantom
+            "Hantar RPH untuk semakan?" section. */}
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hantar RPH untuk semakan?</DialogTitle>
+            <DialogDescription>
+              {live.className} · {live.subjectName} · {longDate(live.planDate)}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <dl className="text-[13.5px]">
+              <Row k="Bahagian lengkap" v={`${doneCount} / 4`} />
+              <Row k="Penyemak" v="Zulkifli · GPK Pentadbiran" />
+              <Row k="Kesiapan" v={`${score}%`} tone={ready ? "ok" : "warn"} />
+            </dl>
+            {/* Generated from the same list the form shows — the two can never
+              disagree about *what* is missing. */}
+            {blocking.length > 0 && (
+              <div className="mt-3.5 flex gap-2.5 rounded-[10px] border border-warning-line bg-warning-soft p-3 text-[12.5px] leading-[1.55] text-warning-ink">
+                <AlertTriangle
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  strokeWidth={1.9}
+                  aria-hidden
+                />
+                <div>
+                  <p className="font-semibold">
+                    {ms.editor.incompleteHeading(blocking.length)}
+                  </p>
+                  <ul className="mt-1 list-disc pl-4">
+                    {blocking.map((n) => (
+                      <li key={n.text}>{n.text}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1.5">{ms.editor.draftWarning}</p>
+                </div>
+              </div>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setSubmitOpen(false)}>
+              Batal
+            </Button>
+            <Button variant="danger" onClick={() => void onSubmit(true)}>
+              Hantar sebagai draf
+            </Button>
+            <Button
+              onClick={() => {
+                setSubmitOpen(false);
+                setStep(3);
+              }}
+            >
+              Lengkapkan sekarang
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );
@@ -649,13 +781,13 @@ function StepDskp({
                   >
                     <span
                       className={
-                        "min-w-[50px] pt-0.5 text-[10.5px] font-bold tracking-[0.4px] " +
+                        "min-w-[50px] pt-0.5 text-[11.5px] font-bold tracking-[0.4px] " +
                         (selected ? "text-primary-ink" : "text-ink-4")
                       }
                     >
                       SK {d.kodSk}
                     </span>
-                    <span className="text-[13px] leading-[1.45] text-ink-2">
+                    <span className="text-[13.5px] leading-[1.45] text-ink-2">
                       {d.standardKandungan}
                     </span>
                   </button>
@@ -706,7 +838,7 @@ function StepDskp({
               ))}
           </Select>
         ) : (
-          <p className="rounded-[9px] border border-dashed border-border-strong px-3 py-2.5 text-[13px] text-ink-4">
+          <p className="rounded-[9px] border border-dashed border-border-strong px-3 py-2.5 text-[13.5px] text-ink-4">
             Pilih Standard Kandungan dahulu.
           </p>
         )}
@@ -766,20 +898,22 @@ function StepPdPc({
     <div>
       <div className="mb-3 flex items-center justify-between">
         <Label className="mb-0">{ms.editor.activities}</Label>
-        <span className="num text-[12px] text-ink-3">
+        <span className="num text-[12.5px] text-ink-3">
           Jumlah masa aktif: <b className="text-ink">{totalMin} minit</b>
           {totalMin === 50 && " (sesuai 1 masa pengajaran)"}
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-[10px] border border-border">
-        <table className="w-full border-collapse text-[13px]">
+      {/* `overflow-x-auto`, not `hidden`: on a phone the activity table is
+          wider than the card, so it must scroll rather than lose its columns. */}
+      <div className="overflow-x-auto rounded-[10px] border border-border">
+        <table className="w-full border-collapse text-[13.5px]">
           <thead>
             <tr className="bg-surface-2">
               {["Masa", "Aktiviti guru", "Aktiviti murid", ""].map((h) => (
                 <th
                   key={h}
-                  className="border-b border-border px-3 py-2 text-left text-[11px] font-bold tracking-[0.7px] text-ink-4 uppercase"
+                  className="border-b border-border px-3 py-2 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
                 >
                   {h}
                 </th>
@@ -800,6 +934,7 @@ function StepPdPc({
                 </td>
                 <td className="px-2 py-2">
                   <Input
+                    id={`f-aktiviti-${i}-guru`}
                     className="px-2 py-1.5 text-[12.5px]"
                     value={a.aktiviti_guru}
                     onChange={(e) => setAktiviti(i, "aktiviti_guru", e.target.value)}
@@ -808,6 +943,7 @@ function StepPdPc({
                 </td>
                 <td className="px-2 py-2">
                   <Input
+                    id={`f-aktiviti-${i}-murid`}
                     className="px-2 py-1.5 text-[12.5px]"
                     value={a.aktiviti_murid}
                     onChange={(e) => setAktiviti(i, "aktiviti_murid", e.target.value)}
