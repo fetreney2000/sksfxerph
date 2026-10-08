@@ -12,9 +12,9 @@
 --
 -- What gets seeded:
 --   · 1 school            + its school_setting row
---   · 1 account per member_role  (guru_biasa / gpk / guru_besar / pentadbir /
---     ppd / jpn, plus an inactive `system` row used as a stable actor id for
---     automated rows — it cannot log in: is_active = false)
+--   · 1 account per member_role  (guru_biasa / gpk / guru_besar / pentadbir,
+--     plus an inactive `system` row used as a stable actor id for automated
+--     rows — it cannot log in: is_active = false)
 --   · a school_member row per account, mirroring the account role
 --   · 3 subjects + 3 classes  — the FK targets a plan cannot be created without
 --   · 1 submitted lesson plan so the reviewer screens have something to grade
@@ -62,10 +62,6 @@ values
   ('zulkifli.rahman', 'scrypt$16384$8$1$nsx95Xm9eeThntZEU7ikrQ$RGd4agBkKXyGetTZc48kGbQPWASaw7KlhH3pIVUa0dBw69Ygz_CizEi18_6hw0nFdz60Lbxrd3iIUX35eqDsrQ', 'Zulkifli bin Rahman', 'zulkifli.rahman@sk0000.local', 'guru_besar', true),
   -- username: pentadbir.sk       password: pentadbir2026
   ('pentadbir.sk', 'scrypt$16384$8$1$sBZJbXJZGtDoXYVtM_r_MA$_Q_vvOJhHbPEbvKonOnd-ktpbXbn0axcvfihN6Gvw3QbzfzfEWoXvyhHi8rFcWaxKqNtYn9iUxIlQYOTgGmVGg', 'Pentadbir eRPH', 'pentadbir@sk0000.local', 'pentadbir', true),
-  -- username: ppd.petaling       password: ppd2026
-  ('ppd.petaling', 'scrypt$16384$8$1$nSyY2Y-MbOw0rKiaGP1TEQ$TTDMPuUdIB6o-u1W8E7F-b6x3GXbTr-rcbErmO_9JhbMhaBqzZen6UMZwjTVP5nQWkSBCu16ECezy_dSpqSKsw', 'PPD Petaling', 'ppd@ppdpetaling.moe.gov.my', 'ppd', true),
-  -- username: jpn.selangor       password: jpn2026
-  ('jpn.selangor', 'scrypt$16384$8$1$H02m4LvAKJXAzLpqFv5IJQ$CwYgTXWmt-dSp9KJ_zoCRYat9tZmbmfHIY4uCpnP7pRw_o_66kfB2yjkDdyXOgUsKSPFdXSXZV-0G-ktfssiAQ', 'JPN Selangor', 'jpn@jnselangor.moe.gov.my', 'jpn', true),
   -- Service account: not a person. Kept inactive so it can never be used to
   -- log in; exists so automated rows have a stable actor to reference.
   ('sistem.erph', '!not-a-password', 'Sistem eRPH', null, 'system', false)
@@ -76,7 +72,7 @@ insert into erph.school_member (school_id, user_id, role)
 select s.id, u.id, u.role
 from erph.school s
 join erph.user u
-  on u.username in ('nurul.aisyah', 'ramlan.yusof', 'zulkifli.rahman', 'pentadbir.sk', 'ppd.petaling', 'jpn.selangor')
+  on u.username in ('nurul.aisyah', 'ramlan.yusof', 'zulkifli.rahman', 'pentadbir.sk')
 where s.kod_sekolah = 'SK0000'
 on conflict do nothing;
 

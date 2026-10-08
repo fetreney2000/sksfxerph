@@ -40,21 +40,13 @@ describe("seeded accounts", () => {
   const passwords = documentedPasswords();
 
   it("parses every seeded account", () => {
-    expect(users.length).toBe(7);
-    expect(Object.keys(passwords).length).toBe(6);
+    expect(users.length).toBe(5);
+    expect(Object.keys(passwords).length).toBe(4);
   });
 
   it("covers every member_role exactly once", () => {
     const roles = users.map((u) => u.role).sort();
-    expect(roles).toEqual([
-      "gpk",
-      "guru_besar",
-      "guru_biasa",
-      "jpn",
-      "pentadbir",
-      "ppd",
-      "system",
-    ]);
+    expect(roles).toEqual(["gpk", "guru_besar", "guru_biasa", "pentadbir", "system"]);
   });
 
   it("every documented password verifies against its stored hash", async () => {

@@ -2,23 +2,27 @@ import type { RphPayload } from "@/lib/schemas/rph";
 
 /* ── Mirrors of the enum types in db/schema.sql ────────────────────────────── */
 
-export const MEMBER_ROLES = [
-  "guru_biasa",
-  "gpk",
-  "guru_besar",
-  "pentadbir",
-  "ppd",
-  "jpn",
-  "system",
-] as const;
+export const MEMBER_ROLES = ["guru_biasa", "gpk", "guru_besar", "pentadbir", "system"] as const;
 export type MemberRole = (typeof MEMBER_ROLES)[number];
 
-export const RPH_STATUSES = ["draft", "submitted", "approved", "returned"] as const;
+export const RPH_STATUSES = [
+  "draft",
+  "submitted",
+  "forwarded",
+  "approved",
+  "returned",
+] as const;
 export type RphStatus = (typeof RPH_STATUSES)[number];
 
 export type Curriculum = "KSSR" | "KSSM" | "PRASEKOLAH";
 export type TemplateVisibility = "private" | "school" | "system";
-export type NotificationType = "deadline" | "returned" | "approved" | "reminder" | "system";
+export type NotificationType =
+  | "deadline"
+  | "forwarded"
+  | "returned"
+  | "approved"
+  | "reminder"
+  | "system";
 
 /* ── Local (Dexie) records ─────────────────────────────────────────────────── */
 

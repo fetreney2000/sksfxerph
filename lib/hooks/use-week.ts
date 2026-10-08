@@ -32,14 +32,18 @@ export function useWeek(): WeekSummary {
     const documents = await documentsForWeek(LOCAL_OWNER_ID, SESSION, WEEK);
     const total = documents.length || 0;
     const count = (s: RphDocument["status"]) => documents.filter((d) => d.status === s).length;
+    // "Left the teacher" and "still awaiting a decision" are the same set at
+    // either rung: a plan is with the GPK (`submitted`) or with the Guru Besar
+    // (`forwarded`) until it is approved or returned.
+    const outForDecision = count("submitted") + count("forwarded");
 
     return {
       weekNo: WEEK,
       days: schoolDays(WEEK),
       documents,
       total,
-      submitted: count("submitted"),
-      waiting: count("submitted"),
+      submitted: outForDecision,
+      waiting: outForDecision,
       returned: count("returned"),
       drafts: count("draft"),
       completenessPct:

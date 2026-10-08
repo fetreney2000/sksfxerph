@@ -6,8 +6,6 @@ const ACCOUNTS = [
   { username: "nurul.aisyah", password: "guru2026" },
   { username: "ramlan.yusof", password: "penyelaras2026" },
   { username: "zulkifli.rahman", password: "admin2026" },
-  { username: "ppd.petaling", password: "ppd2026" },
-  { username: "jpn.selangor", password: "jpn2026" },
   { username: "pentadbir.sk", password: "pentadbir2026" },
 ];
 

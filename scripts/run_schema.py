@@ -248,7 +248,7 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    check("16 functions in erph", n_funcs == 16, f"found {n_funcs}")
+    check("17 functions in erph", n_funcs == 17, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -274,7 +274,7 @@ def main() -> int:
     roles = enums.get("member_role", [])
     check(
         "member_role values intact",
-        roles == ["guru_biasa", "gpk", "guru_besar", "pentadbir", "ppd", "jpn", "system"],
+        roles == ["guru_biasa", "gpk", "guru_besar", "pentadbir", "system"],
         f"got {roles}",
     )
 
@@ -401,6 +401,84 @@ def main() -> int:
         print(f"  [FAIL] erph.actor(): {str(e).splitlines()[0][:160]}")
         errors += 1
 
+    # ── two-stage chain: Guru Biasa → GPK semak → Guru Besar lulus ────────
+    # Each rung may only move a plan out of the stage it owns, so this asserts
+    # the refusals as well as the happy path. `actor()` is fed through
+    # `request.jwt.claims` — the unprivileged path it trusts.
+    SK = "(select id from erph.school where kod_sekolah='SKTEST')"
+    DOC = f"(select id from erph.rph_document where school_id = {SK})"
+
+    def act_as(username: str) -> None:
+        r.q(
+            "select set_config('request.jwt.claims', "
+            f"(select json_build_object('sub', id)::text from erph.user "
+            f" where username = '{username}'), false)"
+        )
+        conn.commit()
+
+    def refused(sql: str) -> str:
+        try:
+            r.q(sql)
+            conn.commit()
+            return ""
+        except Exception as e:  # noqa: BLE001
+            conn.rollback()
+            return str(e).splitlines()[0]
+
+    try:
+        r.q(
+            f"""
+            insert into erph.user (username, password_hash, full_name, role)
+            values ('gpk.uji', 'scrypt$x', 'GPK Ujian', 'gpk'),
+                   ('gb.uji',  'scrypt$x', 'GB Ujian',  'guru_besar');
+            insert into erph.school_member (school_id, user_id, role)
+            select s.id, u.id, u.role from erph.school s, erph.user u
+            where s.kod_sekolah = 'SKTEST'
+              and u.username in ('gpk.uji', 'gb.uji');
+            """
+        )
+        conn.commit()
+
+        act_as("uji")
+        r.q(f"select erph.submit_rph({DOC}, true)")
+        conn.commit()
+
+        stage: list[tuple[str, bool]] = []
+
+        # `1::smallint`: an unadorned literal is `integer`, and int4→int2 is an
+        # assignment cast, so the call would not resolve at all.
+        msg = refused(f"select erph.semak_rph({DOC}, 1::smallint)")
+        stage.append(("Guru Biasa cannot semak", "Guru Penolong Kanan" in msg))
+
+        act_as("gpk.uji")
+        r.q(f"select erph.semak_rph({DOC}, 1::smallint)")
+        conn.commit()
+        status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
+        stage.append(("GPK semak -> forwarded", status == "forwarded"))
+
+        msg = refused(f"select erph.lulus_rph({DOC}, 1::smallint)")
+        stage.append(("GPK cannot lulus", "Guru Besar" in msg))
+
+        msg = refused(f"select erph.semak_rph({DOC}, 1::smallint)")
+        stage.append(("GPK cannot re-semak", "peringkat semakan GPK" in msg))
+
+        act_as("gb.uji")
+        msg = refused(f"select erph.semak_rph({DOC}, 1::smallint)")
+        stage.append(("Guru Besar cannot semak", "Guru Penolong Kanan" in msg))
+
+        r.q(f"select erph.lulus_rph({DOC}, 1::smallint)")
+        conn.commit()
+        status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
+        stage.append(("Guru Besar lulus -> approved", status == "approved"))
+
+        for label, ok in stage:
+            print(f"  [{'OK ' if ok else 'FAIL'}] {label}")
+            errors += 0 if ok else 1
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        print(f"  [FAIL] two-stage chain: {str(e).splitlines()[0][:160]}")
+        errors += 1
+
     # ── clean up EVERYTHING the behaviour tests created, before seeding ────
     # Order matters: rph_document.school_id has no ON DELETE (deliberate — a
     # statutory record must not vanish with its school), so the document has to
@@ -409,16 +487,20 @@ def main() -> int:
     try:
         r.q(
             """
+            -- rph_revision is append-only: only a purge may delete from it.
+            select set_config('app.purge', '1', false);
             delete from erph.rph_document
              where school_id = (select id from erph.school where kod_sekolah='SKTEST');
             delete from erph.school where kod_sekolah='SKTEST';  -- cascades member/class/setting
-            delete from erph.user where username = 'uji';
+            delete from erph.user where username in ('uji', 'gpk.uji', 'gb.uji');
             delete from erph.subject where code = 'MAT';
+            select set_config('app.purge', '0', false);
             """
         )
         conn.commit()
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         conn.rollback()
+        print(f"  [cleanup] {str(e).splitlines()[0][:160]}")
 
     # ── layer 4: seed data ────────────────────────────────────────────────
     # The seed is SQL too, so it gets executed and asserted on rather than
@@ -454,13 +536,11 @@ def main() -> int:
                 "gpk",
                 "guru_besar",
                 "pentadbir",
-                "ppd",
-                "jpn",
                 "system",
             }
             scheck(
                 "one account per member_role",
-                n_users == 7 and roles == expected_roles,
+                n_users == 5 and roles == expected_roles,
                 f"{n_users} accounts, roles={sorted(roles)}",
             )
 

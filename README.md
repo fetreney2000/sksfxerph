@@ -63,12 +63,15 @@ Run `db/seed.sql` after `db/schema.sql` (Supabase SQL editor) and log in as:
 
 | Role | Username | Password | Can |
 |---|---|---|---|
-| `teacher` | `nurul.aisyah` | `guru2026` | write, submit, export own RPH |
-| `coordinator` | `ramlan.yusof` | `penyelaras2026` | review + school dashboard |
-| `admin` | `zulkifli.rahman` | `admin2026` | full review & monitoring |
-| `ppd` | `ppd.petaling` | `ppd2026` | district read-only (future) |
-| `jpn` | `jpn.selangor` | `jpn2026` | state read-only (future) |
+| `guru_biasa` | `nurul.aisyah` | `guru2026` | write, submit and export own RPH |
+| `gpk` | `ramlan.yusof` | `penyelaras2026` | review → forward to Guru Besar, or return; school dashboard, reports |
+| `guru_besar` | `zulkifli.rahman` | `admin2026` | approve what the GPK forwards, or return; school dashboard, reports, audit log |
+| `pentadbir` | `pentadbir.sk` | `pentadbir2026` | set up and manage the app |
 | `system` | `sistem.erph` | — *cannot log in* | service actor for automated rows |
+
+In local mode (no Supabase) the login screen names `cikgu` / `cikgu123`
+(Guru Besar). A second account, `guru.biasa` / `biasa123`, exists so role
+separation can be exercised and tested — a single superuser proves nothing.
 
 The seed also creates the school (`SK0000` — must match `NEXT_PUBLIC_SCHOOL_CODE`),
 its settings, 3 subjects, 3 classes, and **one complete submitted lesson plan**

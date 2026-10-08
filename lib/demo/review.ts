@@ -116,8 +116,8 @@ export const QUEUE: QueueItem[] = [
     subjectName: "Bahasa Melayu",
     planDate: "2026-10-07",
     slotTime: "09:15",
-    status: "submitted",
-    ageLabel: "Dihantar 40 minit lalu",
+    status: "forwarded",
+    ageLabel: "Disemak GPK 40 minit lalu",
     payload: suhaila,
   },
   {
@@ -129,8 +129,8 @@ export const QUEUE: QueueItem[] = [
     subjectName: "Sains",
     planDate: "2026-10-06",
     slotTime: "11:00",
-    status: "submitted",
-    ageLabel: "Dihantar 2 jam lalu",
+    status: "forwarded",
+    ageLabel: "Disemak GPK 2 jam lalu",
     payload: aizuddin,
   },
 ];

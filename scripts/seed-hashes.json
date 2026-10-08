@@ -11,14 +11,6 @@
     "password": "admin2026",
     "hash": "scrypt$16384$8$1$nsx95Xm9eeThntZEU7ikrQ$RGd4agBkKXyGetTZc48kGbQPWASaw7KlhH3pIVUa0dBw69Ygz_CizEi18_6hw0nFdz60Lbxrd3iIUX35eqDsrQ"
   },
-  "ppd.petaling": {
-    "password": "ppd2026",
-    "hash": "scrypt$16384$8$1$nSyY2Y-MbOw0rKiaGP1TEQ$TTDMPuUdIB6o-u1W8E7F-b6x3GXbTr-rcbErmO_9JhbMhaBqzZen6UMZwjTVP5nQWkSBCu16ECezy_dSpqSKsw"
-  },
-  "jpn.selangor": {
-    "password": "jpn2026",
-    "hash": "scrypt$16384$8$1$H02m4LvAKJXAzLpqFv5IJQ$CwYgTXWmt-dSp9KJ_zoCRYat9tZmbmfHIY4uCpnP7pRw_o_66kfB2yjkDdyXOgUsKSPFdXSXZV-0G-ktfssiAQ"
-  },
   "pentadbir.sk": {
     "password": "pentadbir2026",
     "hash": "scrypt$16384$8$1$sBZJbXJZGtDoXYVtM_r_MA$_Q_vvOJhHbPEbvKonOnd-ktpbXbn0axcvfihN6Gvw3QbzfzfEWoXvyhHi8rFcWaxKqNtYn9iUxIlQYOTgGmVGg"

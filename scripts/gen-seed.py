@@ -19,8 +19,6 @@ ACCOUNTS = [
     ("ramlan.yusof", "gpk", "Ramlan bin Yusof", "ramlan.yusof@sk0000.local"),
     ("zulkifli.rahman", "guru_besar", "Zulkifli bin Rahman", "zulkifli.rahman@sk0000.local"),
     ("pentadbir.sk", "pentadbir", "Pentadbir eRPH", "pentadbir@sk0000.local"),
-    ("ppd.petaling", "ppd", "PPD Petaling", "ppd@ppdpetaling.moe.gov.my"),
-    ("jpn.selangor", "jpn", "JPN Selangor", "jpn@jnselangor.moe.gov.my"),
 ]
 
 rows = []
@@ -48,9 +46,9 @@ SQL = f"""-- ===================================================================
 --
 -- What gets seeded:
 --   · 1 school            + its school_setting row
---   · 1 account per member_role  (guru_biasa / gpk / guru_besar / pentadbir /
---     ppd / jpn, plus an inactive `system` row used as a stable actor id for
---     automated rows — it cannot log in: is_active = false)
+--   · 1 account per member_role  (guru_biasa / gpk / guru_besar / pentadbir,
+--     plus an inactive `system` row used as a stable actor id for automated
+--     rows — it cannot log in: is_active = false)
 --   · a school_member row per account, mirroring the account role
 --   · 3 subjects + 3 classes  — the FK targets a plan cannot be created without
 --   · 1 submitted lesson plan so the reviewer screens have something to grade

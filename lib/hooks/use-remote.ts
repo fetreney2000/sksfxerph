@@ -42,10 +42,20 @@ interface WeekStatsRow {
   compliance: number | null;
 }
 
-/** Plans awaiting a grade (reviewers only; teachers get 403 and we show none). */
-export function useReviewQueueData(): { items: QueueItem[]; loading: boolean } {
+/**
+ * Plans awaiting a grade for one reviewer's stage.
+ *
+ * `stage` is the rung this user owns — `submitted` for a GPK, `forwarded` for
+ * a Guru Besar — so the same hook serves both without the component having to
+ * know which. Passing it in rather than reading the role here keeps `lib/`
+ * from reaching into `components/`.
+ */
+export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
+  items: QueueItem[];
+  loading: boolean;
+} {
   const remote = useQuery<{ items: QueueItem[] }>({
-    queryKey: ["review-queue", schoolCode, SESSION],
+    queryKey: ["review-queue", schoolCode, SESSION, stage],
     queryFn: async () => {
       const res = await fetch("/api/queue", { credentials: "same-origin" });
       // Expired session: leave rather than fall back to demo data — a reviewer
@@ -66,7 +76,11 @@ export function useReviewQueueData(): { items: QueueItem[]; loading: boolean } {
     staleTime: 30_000,
   });
 
-  if (!supabaseConfigured) return { items: QUEUE, loading: false };
+  // Bundled dataset, filtered to this reviewer's stage so the demo matches
+  // what the server would have returned.
+  if (!supabaseConfigured) {
+    return { items: stage ? QUEUE.filter((q) => q.status === stage) : [], loading: false };
+  }
   if (remote.isLoading) return { items: [], loading: true };
   return { items: remote.data?.items ?? [], loading: false };
 }

@@ -18,8 +18,6 @@ export const ms = {
     gpk: "Guru Penolong Kanan",
     guru_besar: "Guru Besar",
     pentadbir: "Administrator",
-    ppd: "PPD",
-    jpn: "JPN",
     system: "Sistem",
   },
 
@@ -52,7 +50,8 @@ export const ms = {
 
   status: {
     draft: "Draf",
-    submitted: "Menunggu",
+    submitted: "Menunggu GPK",
+    forwarded: "Menunggu Guru Besar",
     approved: "Lengkap (1)",
     returned: "Dikembalikan",
     scheduled: "Dijadualkan",
@@ -120,7 +119,12 @@ export const ms = {
 
   review: {
     queue: "Baris gilir",
+    // Stage 2 (Guru Besar): accepting ends the chain.
     approve: "Lulus · Lengkap (1)",
+    approveHint: "lulus",
+    // Stage 1 (GPK): accepting only passes the plan up.
+    forward: "Hantar ke Guru Besar · (1)",
+    forwardHint: "hantar",
     return: "Kembalikan · Tidak lengkap (0)",
     saveAndContinue: "Simpan & teruskan",
     comment: "Komen sulit",
@@ -129,8 +133,10 @@ export const ms = {
     pending: "Belum disemak",
     all: "Semua",
     keyboardHint: "navigasi",
-    grade1: "lulus",
     grade0: "kembalikan",
+    gpkNote:
+      "Gred 1 meneruskan rancangan ke Guru Besar untuk kelulusan; gred 0 mengembalikannya terus kepada guru.",
+    gbNote: "Gred 1 ialah kelulusan akhir; gred 0 mengembalikannya terus kepada guru.",
   },
 
   a11y: {

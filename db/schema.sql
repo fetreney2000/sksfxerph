@@ -53,21 +53,22 @@ create type erph.member_role as enum (
   -- can never review, monitor or read the audit log.
   'guru_biasa',   -- Guru Mata Pelajaran; writes and submits own RPH
   'gpk',          -- Guru Penolong Kanan; reviews and monitors
-  'guru_besar',   -- PGB; reviewer with the same reach as GPK
+  'guru_besar',   -- PGB; approves what the GPK forwards
   'pentadbir',    -- Administrator; set-up and manage the app only
-  'ppd',          -- future: district read-only
-  'jpn',          -- future: state read-only
   'system'        -- seeded/service accounts
 );
 
-create type erph.rph_status as enum ('draft','submitted','approved','returned');
+-- Two-stage approval: Guru Biasa submits -> GPK semak (forwarded) -> Guru Besar
+-- lulus. `forwarded` is the plan sitting with the Guru Besar.
+create type erph.rph_status as enum
+  ('draft','submitted','forwarded','approved','returned');
 
 create type erph.curriculum as enum ('KSSR','KSSM','PRASEKOLAH');
 
 create type erph.template_visibility as enum ('private','school','system');
 
 create type erph.notification_type as enum
-  ('deadline','returned','approved','reminder','system');
+  ('deadline','forwarded','returned','approved','reminder','system');
 
 -- ── 3 · HELPERS (SQL functions used by triggers & policies) ──────────────────
 create or replace function erph.set_updated_at()
@@ -102,7 +103,7 @@ begin
      and coalesce(current_setting('app.rpc', true), '0') <> '1'
      and coalesce(current_setting('app.allow_review', true), '0') <> '1'
   then
-    raise exception 'Tukar status semakan melalui submit_rph()/review_rph() sahaja';
+    raise exception 'Tukar status semakan melalui submit_rph()/semak_rph()/lulus_rph() sahaja';
   end if;
   return new;
 end $$;
@@ -603,6 +604,8 @@ begin
      and not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[])
   then raise exception 'Tidak dibenarkan'; end if;
   if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
+  -- With the Guru Besar already: only the reviewer rung may move it from here.
+  if v_doc.status = 'forwarded' then raise exception 'Sedang dalam kelulusan Guru Besar'; end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
   if v_pct < 100 and not p_force then
@@ -630,11 +633,14 @@ begin
 end $$;
 
 -- REVIEW ─ KPM Lampiran 7: 1 = lengkap, 0 = tidak lengkap
-create or replace function erph.review_rph(p_document uuid, p_grade smallint,
-                                             p_comment text default null)
+-- STAGE 1 — GPK semak. Accepting passes the plan up to the Guru Besar rather
+-- than approving it; returning sends it straight back to the teacher.
+create or replace function erph.semak_rph(p_document uuid, p_grade smallint,
+                                          p_comment text default null)
 returns jsonb language plpgsql security definer set search_path = erph, public as $$
 declare
   v_doc erph.rph_document%rowtype;
+  v_next erph.rph_status;
 begin
   if p_grade not in (0,1) then raise exception 'Gred mesti 0 atau 1'; end if;
   perform set_config('app.rpc', '1', true);
@@ -642,17 +648,74 @@ begin
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH tidak dijumpai'; end if;
-  if not erph.has_role(v_doc.school_id, array['guru_besar','gpk']::erph.member_role[]) then
-    raise exception 'Peranan penyemak diperlukan';
+  if not erph.has_role(v_doc.school_id, array['gpk']::erph.member_role[]) then
+    raise exception 'Peranan Guru Penolong Kanan diperlukan';
   end if;
+  if v_doc.status <> 'submitted' then
+    raise exception 'RPH tidak dalam peringkat semakan GPK';
+  end if;
+
+  v_next := case when p_grade = 1 then 'forwarded'::erph.rph_status
+                 else 'returned'::erph.rph_status end;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
   values (v_doc.id, v_doc.version, erph.actor(), p_grade, p_comment,
-          jsonb_build_object('completeness', erph.rph_completeness(v_doc.payload)));
+          jsonb_build_object('stage', 'gpk',
+                             'completeness', erph.rph_completeness(v_doc.payload)));
 
   update erph.rph_document
-     set status = case when p_grade = 1 then 'approved'::erph.rph_status
-                       else 'returned'::erph.rph_status end,
+     set status = v_next,
+         grade = p_grade, reviewed_by = erph.actor(), reviewed_at = now(),
+         version = version + 1
+   where id = p_document;
+
+  insert into erph.notification (school_id, user_id, type, title, body, link_view)
+  values (v_doc.school_id, v_doc.owner_id,
+          case when p_grade = 1 then 'forwarded'::erph.notification_type
+               else 'returned'::erph.notification_type end,
+          case when p_grade = 1 then 'RPH dihantar ke Guru Besar'
+               else 'RPH perlu dibaiki' end,
+          coalesce(p_comment, ''), 'dashboard');
+
+  insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'semak',
+          jsonb_build_object('grade', p_grade, 'status', v_next, 'comment', p_comment));
+
+  return jsonb_build_object('ok', true, 'grade', p_grade, 'status', v_next);
+end $$;
+
+-- STAGE 2 — Guru Besar lulus. Approves what the GPK forwarded, or returns it
+-- to the teacher; a GPK cannot approve its own forwarding.
+create or replace function erph.lulus_rph(p_document uuid, p_grade smallint,
+                                          p_comment text default null)
+returns jsonb language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_doc erph.rph_document%rowtype;
+  v_next erph.rph_status;
+begin
+  if p_grade not in (0,1) then raise exception 'Gred mesti 0 atau 1'; end if;
+  perform set_config('app.rpc', '1', true);
+
+  select * into v_doc from erph.rph_document
+   where id = p_document and deleted_at is null for update;
+  if not found then raise exception 'RPH tidak dijumpai'; end if;
+  if not erph.has_role(v_doc.school_id, array['guru_besar']::erph.member_role[]) then
+    raise exception 'Peranan Guru Besar diperlukan';
+  end if;
+  if v_doc.status <> 'forwarded' then
+    raise exception 'RPH belum disemak oleh Guru Penolong Kanan';
+  end if;
+
+  v_next := case when p_grade = 1 then 'approved'::erph.rph_status
+                 else 'returned'::erph.rph_status end;
+
+  insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
+  values (v_doc.id, v_doc.version, erph.actor(), p_grade, p_comment,
+          jsonb_build_object('stage', 'guru_besar',
+                             'completeness', erph.rph_completeness(v_doc.payload)));
+
+  update erph.rph_document
+     set status = v_next,
          grade = p_grade, reviewed_by = erph.actor(), reviewed_at = now(),
          version = version + 1
    where id = p_document;
@@ -661,16 +724,15 @@ begin
   values (v_doc.school_id, v_doc.owner_id,
           case when p_grade = 1 then 'approved'::erph.notification_type
                else 'returned'::erph.notification_type end,
-          case when p_grade = 1 then 'RPH disahkan lengkap'
+          case when p_grade = 1 then 'RPH diluluskan Guru Besar'
                else 'RPH perlu dibaiki' end,
           coalesce(p_comment, ''), 'dashboard');
 
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
-  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'review',
-          jsonb_build_object('grade', p_grade, 'comment', p_comment));
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'lulus',
+          jsonb_build_object('grade', p_grade, 'status', v_next, 'comment', p_comment));
 
-  return jsonb_build_object('ok', true, 'grade', p_grade,
-    'status', case when p_grade = 1 then 'approved' else 'returned' end);
+  return jsonb_build_object('ok', true, 'grade', p_grade, 'status', v_next);
 end $$;
 
 -- SYNC ─ batch, idempotent, offline-friendly; returns authoritative versions.
@@ -958,7 +1020,7 @@ create policy rph_owner_update on erph.rph_document
   );
 create policy rph_reviewer_read on erph.rph_document
   for select using (deleted_at is null
-                    and erph.has_role(school_id, array['guru_besar','gpk','ppd','jpn']::erph.member_role[]));
+                    and erph.has_role(school_id, array['guru_besar','gpk']::erph.member_role[]));
 
 -- history tables: SELECT only → writes happen inside SECURITY DEFINER RPCs
 create policy rph_revision_read on erph.rph_revision
@@ -1044,7 +1106,9 @@ create view erph.v_teacher_week
 with (security_invoker = true) as
 select d.school_id, d.owner_id, d.session, d.week_no,
        count(*) filter (where d.status = 'draft')     as drafts,
-       count(*) filter (where d.status = 'submitted') as submitted,
+       -- 'submitted' means "has left the teacher", including the stage with the
+       -- Guru Besar; only `approved` counts as done.
+       count(*) filter (where d.status in ('submitted','forwarded')) as submitted,
        count(*) filter (where d.status = 'approved')  as approved,
        count(*) filter (where d.status = 'returned')  as returned,
        round(avg(d.completeness), 1)                  as avg_completeness
@@ -1056,10 +1120,12 @@ create view erph.v_school_compliance
 with (security_invoker = true) as
 select d.school_id, d.session, d.week_no,
        count(*)                                as total_docs,
-       count(*) filter (where d.grade = 1)     as approved,
-       count(*) filter (where d.grade = 0)     as rejected,
-       count(*) filter (where d.status = 'submitted') as pending,
-       round(100.0 * count(*) filter (where d.grade = 1)
+       -- keyed on status, not `grade`: a GPK's grade-1 "accepted" sits at
+       -- `forwarded` and is not an approval until the Guru Besar signs it.
+       count(*) filter (where d.status = 'approved')                as approved,
+       count(*) filter (where d.status = 'returned')                as rejected,
+       count(*) filter (where d.status in ('submitted','forwarded')) as pending,
+       round(100.0 * count(*) filter (where d.status = 'approved')
              / nullif(count(distinct d.owner_id), 0), 1) as compliance_pct
 from erph.rph_document d
 where d.deleted_at is null

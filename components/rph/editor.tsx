@@ -504,7 +504,7 @@ export function RphEditor({ docId }: { docId?: string }) {
 
     await update({ status: "submitted", submittedAt: Date.now(), grade: undefined });
     setSubmitOpen(false);
-    toast.success("Dihantar untuk semakan · status: Menunggu");
+    toast.success(`Dihantar untuk semakan · status: ${ms.status.submitted}`);
     router.push("/minggu");
   };
 

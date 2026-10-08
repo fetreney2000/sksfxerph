@@ -4,12 +4,14 @@ import { Check, Info, MessageSquare, Undo2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import { RphPaper } from "@/components/rph/rph-paper";
+import { useUser } from "@/components/shell/user-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, Textarea } from "@/components/ui/field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { reviewStageFor } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
 import { SESSION, supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
@@ -25,16 +27,20 @@ import { completeness, stepStatus } from "@/lib/schemas/rph";
  * move and `1`/`0` to decide (the exact grades from Lampiran 7 of the KPM
  * Garis Panduan) is the difference between a 5-minute job and a 30-minute one.
  */
-/** The exact message shown after a Lampiran 7 grade. */
-function gradeMessage(grade: 0 | 1): string {
-  return grade === 1
-    ? "Gred 1 · Lengkap — guru dimaklumkan, dokumen direkodkan"
-    : "Gred 0 · Tidak lengkap — dikembalikan kepada guru";
+/** The message shown after a Lampiran 7 grade — the wording depends on the rung. */
+function gradeMessage(grade: 0 | 1, isGpk: boolean): string {
+  if (grade === 0) return "Gred 0 · Tidak lengkap — dikembalikan kepada guru";
+  return isGpk
+    ? "Gred 1 · Lengkap — dihantar ke Guru Besar untuk kelulusan"
+    : "Gred 1 · Lengkap — diluluskan, guru dimaklumkan";
 }
 
 export default function SemakanPage() {
   // Remote when configured, bundled demo otherwise — same shape either way.
-  const { items: QUEUE } = useReviewQueueData();
+  const { role } = useUser();
+  const stage = reviewStageFor(role);
+  const isGpk = stage?.rpc === "semak_rph";
+  const { items: QUEUE } = useReviewQueueData(stage?.status ?? null);
   const stats = useSchoolStats();
   const [selected, setSelected] = React.useState<string | undefined>(QUEUE[0]?.id);
   const [graded, setGraded] = React.useState<Record<string, 0 | 1>>({});
@@ -58,19 +64,19 @@ export default function SemakanPage() {
     (grade: 0 | 1) => {
       if (!item) return;
 
-      // Server owns the decision when configured: review_rph writes the grade,
-      // the private comment, the notification to the teacher and the audit row
-      // atomically (backend §6). Local mode updates the demo queue only.
+      // Server owns the decision when configured: semak_rph / lulus_rph write
+      // the grade, the private comment, the notification to the teacher and the
+      // audit row atomically (backend §6). Local mode updates the demo queue only.
       if (supabaseConfigured) {
         void reviewRph(item.id, grade, comment || undefined)
-          .then(() => toast.success(gradeMessage(grade)))
+          .then(() => toast.success(gradeMessage(grade, isGpk)))
           .catch((err: unknown) =>
             toast.error(
               `Gagal menyemak: ${err instanceof Error ? err.message : "ralat rangkaian"}`,
             ),
           );
       } else {
-        toast.success(gradeMessage(grade));
+        toast.success(gradeMessage(grade, isGpk));
       }
 
       setGraded((g) => ({ ...g, [item.id]: grade }));
@@ -79,7 +85,7 @@ export default function SemakanPage() {
       const next = QUEUE.find((q) => !(q.id in graded) && q.id !== item.id);
       if (next) setSelected(next.id);
     },
-    [item, graded, comment, QUEUE],
+    [item, graded, comment, QUEUE, isGpk],
   );
 
   React.useEffect(() => {
@@ -159,7 +165,7 @@ export default function SemakanPage() {
               <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
                 1
               </kbd>
-              {ms.review.grade1}
+              {isGpk ? ms.review.forwardHint : ms.review.approveHint}
               <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
                 0
               </kbd>
@@ -325,7 +331,7 @@ export default function SemakanPage() {
                 <div className="grid gap-2">
                   <Button size="lg" variant="success" onClick={() => decide(1)}>
                     <Check className="h-4 w-4" strokeWidth={2.4} aria-hidden />
-                    {ms.review.approve}
+                    {isGpk ? ms.review.forward : ms.review.approve}
                     <kbd className="rounded border border-white/25 bg-white/20 px-1.5 font-mono text-[11px]">
                       1
                     </kbd>
@@ -351,6 +357,8 @@ export default function SemakanPage() {
                   <div>
                     Gred 1/0 selaras <b>Lampiran 7</b> Garis Panduan e-RPH KPM: 1 = lengkap, 0 =
                     tidak lengkap.
+                    <br />
+                    {isGpk ? ms.review.gpkNote : ms.review.gbNote}
                   </div>
                 </div>
               </div>

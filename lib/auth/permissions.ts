@@ -39,10 +39,7 @@ const MATRIX: Record<MemberRole, readonly Permission[]> = {
   // Administrator sets the app up. Deliberately outside `is_staff` in SQL, so
   // it can never grade a plan, read whole-school compliance or open the log.
   pentadbir: ["rph", "pentadbir"],
-  // District/state officers have no view of their own yet; keep the shell
-  // usable for them rather than showing an empty app.
-  ppd: ["rph"],
-  jpn: ["rph"],
+  // District/state officers were removed: this app is internal to one school.
   system: [],
 };
 
@@ -57,3 +54,27 @@ export function permissionsFor(role: string | null | undefined): readonly Permis
 
 /** Roles allowed to grade — SQL mirrors this as `erph.is_staff`. */
 export const REVIEWER_ROLES: readonly MemberRole[] = ["gpk", "guru_besar"];
+
+/**
+ * The rung each reviewer owns.
+ *
+ * The chain is Guru Biasa → GPK → Guru Besar, and each reviewer only ever sees
+ * its own stage and calls its own RPC. Deriving both from one table is what
+ * stops the two drifting — a GPK that could call `lulus_rph` would be able to
+ * approve the very plan it just forwarded.
+ */
+export interface ReviewStage {
+  /** The status this reviewer's queue holds. */
+  status: "submitted" | "forwarded";
+  /** The SECURITY DEFINER function that moves a plan out of that stage. */
+  rpc: "semak_rph" | "lulus_rph";
+}
+
+const REVIEWERS: Partial<Record<MemberRole, ReviewStage>> = {
+  gpk: { status: "submitted", rpc: "semak_rph" },
+  guru_besar: { status: "forwarded", rpc: "lulus_rph" },
+};
+
+export function reviewStageFor(role: string | null | undefined): ReviewStage | null {
+  return REVIEWERS[role as MemberRole] ?? null;
+}

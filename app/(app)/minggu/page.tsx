@@ -246,7 +246,9 @@ export default function MingguPage() {
                           ? "mengesahkan"
                           : d.status === "returned"
                             ? "mengembalikan"
-                            : "menerima"}{" "}
+                            : d.status === "forwarded"
+                              ? "meneruskan kepada Guru Besar"
+                              : "menerima"}{" "}
                         <b className="text-ink">
                           RPH {d.className} · {d.subjectName}
                         </b>{" "}
@@ -262,10 +264,12 @@ export default function MingguPage() {
                           }}
                         >
                           {d.status === "approved"
-                            ? "Lengkap (1)"
+                            ? ms.status.approved
                             : d.status === "returned"
                               ? "Tidak lengkap (0)"
-                              : "Menunggu"}
+                              : d.status === "forwarded"
+                                ? ms.status.forwarded
+                                : ms.status.submitted}
                         </span>
                       </p>
                       <p className="mt-0.5 text-[11px] text-ink-4">

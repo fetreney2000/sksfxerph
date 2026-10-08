@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { reviewStageFor } from "@/lib/auth/permissions";
 import { SESSION } from "@/lib/config";
 import type { QueueItem } from "@/lib/demo/review";
 import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
@@ -14,6 +15,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const gate = await requireReviewer(request);
   if ("error" in gate) return gate.error;
 
+  const stage = reviewStageFor(gate.user.role);
+  if (!stage) return NextResponse.json({ items: [] as QueueItem[] }, { status: 403 });
+
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) {
     return NextResponse.json({ items: [] as QueueItem[] });
@@ -27,7 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
     .eq("school_id", schoolId)
     .eq("session", SESSION)
-    .eq("status", "submitted")
+    .eq("status", stage.status)
     .order("submitted_at", { ascending: true })
     .limit(50);
 

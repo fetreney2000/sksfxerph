@@ -14,6 +14,7 @@ const MAP: Record<
 > = {
   draft: { label: ms.status.draft, variant: "neutral" },
   submitted: { label: ms.status.submitted, variant: "info" },
+  forwarded: { label: ms.status.forwarded, variant: "info" },
   approved: { label: ms.status.approved, variant: "success" },
   returned: { label: ms.status.returned, variant: "danger" },
 };

@@ -37,7 +37,7 @@ describe("permissions", () => {
 
   it("only GPK and Guru Besar are reviewers", () => {
     expect(REVIEWER_ROLES).toEqual(["gpk", "guru_besar"]);
-    for (const role of ["guru_biasa", "pentadbir", "ppd", "jpn", "system"]) {
+    for (const role of ["guru_biasa", "pentadbir", "system"]) {
       expect(can(role, "semak"), `${role} must not grade`).toBe(false);
     }
   });
