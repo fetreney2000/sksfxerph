@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  ChevronDown,
   Download,
   FileDown,
   Plus,
@@ -168,9 +169,20 @@ export function RphEditor({ docId }: { docId?: string }) {
 
   const live = found?.state === "ok" ? found.doc : undefined;
 
-  const [step, setStep] = React.useState(0);
   const [submitOpen, setSubmitOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+
+  // ── Tier B: the gated wizard became four collapsible sections ────────────
+  /** Which tab owns the narrow layout; ignored at `xl` where both columns dock. */
+  const [tab, setTab] = React.useState<"form" | "preview">("form");
+  /** Docked preview visibility on wide screens (persisted). */
+  const [dockOpen, setDockOpen] = React.useState(true);
+  /** Which section the nav marks as current. */
+  const [active, setActive] = React.useState(0);
+  /** `null` = no choice yet, so we open the first section that still needs work. */
+  const [openSet, setOpenSet] = React.useState<ReadonlySet<number> | null>(null);
+  /** Height of the app topbar — content-driven, so it cannot be a magic number. */
+  const [topInset, setTopInset] = React.useState(64);
 
   const update = React.useCallback(
     async (patch: Partial<RphDocument>) => {
@@ -195,27 +207,81 @@ export function RphEditor({ docId }: { docId?: string }) {
     [live, update],
   );
 
-  const formRef = React.useRef<HTMLDivElement>(null);
+  // Park the section nav flush under the topbar. Measured rather than assumed:
+  // the breadcrumb makes the topbar much taller on a phone.
+  React.useEffect(() => {
+    const bar = document.querySelector<HTMLElement>("header.sticky");
+    if (!bar) return;
+    const apply = () => setTopInset(Math.ceil(bar.getBoundingClientRect().height));
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(bar);
+    window.addEventListener("resize", apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
+
+  // Restore the docked-preview preference. Written only from the toggle so
+  // mount-time effects cannot clobber it before they read it.
+  React.useEffect(() => {
+    if (window.localStorage.getItem("erph-preview") === "0") setDockOpen(false);
+  }, []);
+
+  const toggleDock = React.useCallback(() => {
+    setDockOpen((wasOpen) => {
+      const next = !wasOpen;
+      window.localStorage.setItem("erph-preview", next ? "1" : "0");
+      return next;
+    });
+  }, []);
+
+  // Open the first section with outstanding work until the teacher chooses.
+  React.useEffect(() => {
+    if (!live || openSet !== null) return;
+    const f = stepStatus(live.payload ?? emptyPayload());
+    const flags = [f.profil, f.dskp, f.pdpc, f.refleksi];
+    const i = flags.findIndex((done) => !done);
+    const start = i === -1 ? 0 : i;
+    setActive(start);
+    setOpenSet(new Set([start]));
+  }, [live, openSet]);
+
+  const toggleSection = React.useCallback((i: number) => {
+    setActive(i);
+    setOpenSet((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  }, []);
 
   /**
-   * Jump to the section that holds a gap — the whole point of listing them.
+   * Reveal a section (and optionally focus one field in it), then scroll to it.
    *
-   * The target section only mounts after the step switch, so the focus runs a
-   * frame later. Reduced-motion users get an instant jump, not a glide.
+   * The target only exists once React has committed the reveal, so the scroll
+   * runs a frame later. Reduced-motion users get an instant jump.
    */
   const goTo = React.useCallback((section: number, field?: string) => {
-    setStep(section);
+    setActive(section);
+    setOpenSet((prev) => {
+      const next = new Set(prev ?? []);
+      next.add(section);
+      return next;
+    });
     const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.requestAnimationFrame(() => {
-      const target = field
-        ? (document.getElementById(field) as HTMLElement | null)
-        : formRef.current;
-      const scroll = (el: HTMLElement, block: ScrollLogicalPosition) =>
-        el.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block });
-      if (target) {
-        scroll(target, field ? "center" : "start");
-        if (field) target.focus({ preventScroll: true });
-      }
+      const target =
+        (field ? document.getElementById(field) : null) ??
+        document.getElementById(`bahagian-${section}`);
+      if (!target) return;
+      target.scrollIntoView({
+        behavior: smooth ? "smooth" : "auto",
+        block: field ? "center" : "start",
+      });
+      if (field) target.focus({ preventScroll: true });
     });
   }, []);
 
@@ -294,228 +360,257 @@ export function RphEditor({ docId }: { docId?: string }) {
     router.push("/minggu");
   };
 
+  const open = openSet ?? new Set<number>();
+  // One boolean drives both layouts: below xl it is the active tab, at xl it
+  // is the docked column. Resolved with class precedence rather than a
+  // media-query hook, so the first paint is already correct on both.
+  const previewCls = !dockOpen
+    ? tab === "preview"
+      ? "block"
+      : "hidden"
+    : tab === "form"
+      ? "hidden xl:block"
+      : "block";
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
-      {/* ══ Left: the wizard ════════════════════════════════════════════ */}
-      {/* `min-w-0` is load-bearing: grid items default to `min-width: auto`,
-          so the stepper's nowrap labels would blow the track out to ~760px and
-          the whole page would scroll sideways (it did, at 390/1280/1440).
-          With it, the track respects the container and the stepper's own
-          `overflow-x-auto` handles the overflow instead. */}
-      <Card className="self-start min-w-0">
-        {/* Stepper — takes the card's top radius (14px outer − 1px border). */}
-        <ol className="flex gap-0.5 overflow-x-auto rounded-t-[13px] border-b border-border bg-surface-2 px-4 py-3.5">
-          {STEPS.map((s, i) => {
-            // Completion, not "have you visited this yet" — a section the
-            // teacher already filled must read as done wherever they are.
-            const done = stepDone[i];
-            const current = i === step;
-            return (
-              <li key={s.key} className="relative min-w-[150px] flex-1">
-                <button
-                  type="button"
-                  onClick={() => setStep(i)}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-1 py-1 text-left"
-                  aria-current={current ? "step" : undefined}
-                >
-                  <span
-                    className={cn(
-                      "z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors",
-                      done
-                        ? "border-success bg-success text-white"
-                        : current
-                          ? "border-primary bg-primary text-white shadow-[0_0_0_4.5px_var(--color-primary-soft)]"
-                          : "border-border-strong bg-surface text-ink-3",
-                    )}
-                  >
-                    {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : i + 1}
-                  </span>
-                  {/* Opaque + raised so the absolutely-positioned connector below
-                      passes *behind* the label instead of striking through it. */}
-                  <span className="relative z-10 -mx-2 min-w-0 bg-surface-2 px-2">
-                    <span
-                      className={cn(
-                        "block truncate text-[13.5px] font-semibold",
-                        current ? "text-primary-ink" : done ? "text-ink-2" : "text-ink-3",
-                      )}
-                    >
-                      {s.title}
-                    </span>
-                    <span
-                      className={cn(
-                        "block truncate text-[11.5px]",
-                        current ? "text-primary-ink" : "text-ink-4",
-                      )}
-                    >
-                      {s.sub}
-                    </span>
-                  </span>
-                </button>
-                {i < STEPS.length - 1 && (
-                  <span
-                    className={cn(
-                      "absolute top-4 right-0 left-9 h-0.5",
-                      done ? "bg-success-line" : "bg-border",
-                    )}
-                    aria-hidden
-                  />
-                )}
-              </li>
-            );
-          })}
-        </ol>
-
-        <CardContent className="py-5">
-          {/* One scroll target for "jump to the gap" when a section has no
-              single field to focus. */}
-          <div ref={formRef}>
-            {/* Autosave status — always visible, never a Save button that can fail */}
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
-                  Langkah {step + 1} · {STEPS[step]?.title}
-                </h2>
-                <p className="text-[12.5px] text-ink-3">
-                  {live.subjectName} · {live.className} ·{" "}
-                  <span className="num">
-                    {longDate(live.planDate)} · {live.slotTime}
-                  </span>
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-3">
-                <span
-                  className={cn(
-                    "h-1.75 w-1.75 rounded-full",
-                    saving ? "bg-warning" : "bg-success",
-                  )}
-                  aria-hidden
-                />
-                {saving ? "Menyimpan…" : `${ms.status.saving} · ${ms.status.online}`}
-              </span>
-            </div>
-
-            {/* Completeness — flat, not a box: count, meter, then the exact gaps.
-                Each gap is a link to the field that fixes it (WCAG G139). */}
-            <div className="mb-5">
-              <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-[13.5px] font-semibold">{ms.editor.completeness}</span>
-                <span className="num text-[12.5px] text-ink-3">
-                  — {doneCount} daripada 4 bahagian · {score}%
-                </span>
-                <HelpHint label="Keluargaan dokumen">
-                  Empat bahagian wajib mengikut Garis Panduan e-RPH KPM: (1) Standard Kandungan
-                  + Standard Pembelajaran + objektif, (2) sekurang-kurangnya satu aktiviti PdPc,
-                  (3) refleksi, (4) intervensi <b>atau</b> elemen EMK. Setiap bahagian = 25%.
-                </HelpHint>
-                <span className="ml-auto">
-                  <Badge variant={ready ? "success" : "warning"}>
-                    {ready ? ms.editor.ready : ms.editor.notReady}
-                  </Badge>
-                </span>
-              </div>
-
-              <Progress value={score} tone={ready ? "success" : "primary"} />
-
-              {allNotes.length > 0 && (
-                <ul
-                  className="mt-2 flex flex-col gap-0.5"
-                  aria-label={ms.editor.attentionLabel}
-                >
-                  {allNotes.map((n) => (
-                    <li key={n.text}>
-                      <button
-                        type="button"
-                        onClick={() => goTo(n.section, n.field)}
-                        className={cn(
-                          "group flex w-full items-baseline gap-2 rounded-md py-1 text-left transition-colors hover:text-primary-ink",
-                          n.blocking ? "text-ink-2" : "text-ink-3",
-                        )}
-                      >
-                        <span
-                          aria-hidden
-                          className={n.blocking ? "text-warning-ink" : "text-ink-4"}
-                        >
-                          •
-                        </span>
-                        <span className="text-[12.5px]">{n.text}</span>
-                        <span className="ml-auto shrink-0 text-[11.5px] text-ink-4 group-hover:text-primary-ink">
-                          {STEPS[n.section]?.title} →
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+    <>
+      {/* ══ Sticky section nav ════════════════════════════════════════════
+          Replaces the horizontal stepper: chips stay reachable from anywhere
+          on the page, and `topInset` parks them flush under the (content-
+          driven) topbar instead of guessing its height. */}
+      <nav
+        aria-label={ms.editor.sectionNav}
+        className="sticky z-20 mb-4 flex items-center gap-1.5 overflow-x-auto rounded-[14px] border border-border bg-surface/95 px-2 py-2 shadow-xs backdrop-blur-md"
+        style={{ top: topInset }}
+      >
+        {STEPS.map((s, i) => {
+          const done = stepDone[i];
+          const current = active === i;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => goTo(i)}
+              aria-current={current ? "step" : undefined}
+              className={cn(
+                "flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors",
+                current
+                  ? "border-primary-soft-2 bg-primary-soft text-primary-ink"
+                  : "border-border bg-surface text-ink-3 hover:border-border-strong hover:text-ink-2",
               )}
+            >
+              <span
+                className={cn(
+                  "grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10.5px] font-bold",
+                  done
+                    ? "bg-success text-white"
+                    : current
+                      ? "bg-primary text-white"
+                      : "bg-surface-3 text-ink-4",
+                )}
+              >
+                {done ? <Check className="h-3 w-3" strokeWidth={3} aria-hidden /> : i + 1}
+              </span>
+              {s.title}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={toggleDock}
+          className="ml-auto hidden shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-[12.5px] font-semibold text-ink-3 transition-colors hover:border-border-strong hover:text-ink-2 xl:flex"
+        >
+          {dockOpen ? ms.editor.hidePreview : ms.editor.showPreview}
+        </button>
+      </nav>
+
+      <div className={cn("grid gap-6", dockOpen && "xl:grid-cols-[1fr_390px]")}>
+        {/* `min-w-0` is load-bearing: grid items default to `min-width: auto`,
+            so nowrap content would blow the track out and scroll the whole page
+            sideways (it did, at 390/1280/1440). */}
+        <div
+          className={cn("flex min-w-0 flex-col gap-3", tab === "preview" && "hidden xl:flex")}
+        >
+          {/* Below xl the preview can never sit beside the form, so it becomes
+              a tab instead of stacking thousands of pixels below the fields it
+              is meant to preview. `xl:hidden` keeps this out of the docked
+              layout without a media-query hook (and thus without hydration
+              churn on first paint). */}
+          <div className="flex gap-2 xl:hidden">
+            {(
+              [
+                ["form", ms.editor.tabForm],
+                ["preview", ms.editor.tabPreview],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                aria-pressed={tab === key}
+                className={cn(
+                  "flex-1 rounded-[10px] border px-3 py-2 text-[13px] font-semibold transition-colors",
+                  tab === key
+                    ? "border-primary-soft-2 bg-primary-soft text-primary-ink"
+                    : "border-border bg-surface text-ink-3 hover:border-border-strong",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Document identity + completeness: one card, nothing nested. */}
+          <section className="rounded-[14px] border border-border bg-surface px-4 py-4 shadow-sm">
+            <div className="min-w-0">
+              <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
+                {live.className} · {live.subjectName}
+              </h2>
+              <p className="text-[12.5px] text-ink-3">
+                <span className="num">
+                  {longDate(live.planDate)} · {live.slotTime}
+                </span>
+              </p>
             </div>
+            <div className="mt-3.5 border-t border-dashed border-border pt-3.5">
+              {/* Completeness — flat, not a box: count, meter, then the exact gaps.
+                Each gap is a link to the field that fixes it (WCAG G139). */}
+              <div className="mb-0">
+                <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-[13.5px] font-semibold">{ms.editor.completeness}</span>
+                  <span className="num text-[12.5px] text-ink-3">
+                    — {doneCount} daripada 4 bahagian · {score}%
+                  </span>
+                  <HelpHint label="Keluargaan dokumen">
+                    Empat bahagian wajib mengikut Garis Panduan e-RPH KPM: (1) Standard
+                    Kandungan + Standard Pembelajaran + objektif, (2) sekurang-kurangnya satu
+                    aktiviti PdPc, (3) refleksi, (4) intervensi <b>atau</b> elemen EMK. Setiap
+                    bahagian = 25%.
+                  </HelpHint>
+                  <span className="ml-auto">
+                    <Badge variant={ready ? "success" : "warning"}>
+                      {ready ? ms.editor.ready : ms.editor.notReady}
+                    </Badge>
+                  </span>
+                </div>
 
-            {step === 0 && <StepProfil doc={live} onPatch={update} />}
-            {step === 1 && <StepDskp payload={payload} onPatch={updatePayload} />}
-            {step === 2 && <StepPdPc payload={payload} onPatch={updatePayload} />}
-            {step === 3 && <StepRefleksi payload={payload} onPatch={updatePayload} />}
-          </div>
-        </CardContent>
+                <Progress value={score} tone={ready ? "success" : "primary"} />
 
-        {/* §4.2(9) "sticky primary action": keeps the wizard controls reachable
-            on long forms, and `bottom-14` lifts it clear of the mobile nav.
-            `flex-wrap` is load-bearing — on a 375px phone the row cannot hold
-            Kembali + counter + CTA on one line. */}
-        <div className="sticky bottom-14 z-10 flex flex-wrap items-center gap-2.5 rounded-b-[13px] border-t border-border bg-surface-2 px-4 py-3 lg:bottom-0">
-          <Button
-            variant="secondary"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
+                {allNotes.length > 0 && (
+                  <ul
+                    className="mt-2 flex flex-col gap-0.5"
+                    aria-label={ms.editor.attentionLabel}
+                  >
+                    {allNotes.map((n) => (
+                      <li key={n.text}>
+                        <button
+                          type="button"
+                          onClick={() => goTo(n.section, n.field)}
+                          className={cn(
+                            "group flex w-full items-baseline gap-2 rounded-md py-1 text-left transition-colors hover:text-primary-ink",
+                            n.blocking ? "text-ink-2" : "text-ink-3",
+                          )}
+                        >
+                          <span
+                            aria-hidden
+                            className={n.blocking ? "text-warning-ink" : "text-ink-4"}
+                          >
+                            •
+                          </span>
+                          <span className="text-[12.5px]">{n.text}</span>
+                          <span className="ml-auto shrink-0 text-[11.5px] text-ink-4 group-hover:text-primary-ink">
+                            {STEPS[n.section]?.title} →
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* The four sections. Only the open ones mount their fields, so a
+              collapsed section costs nothing and the whole document structure
+              stays on screen at once. */}
+          {STEPS.map((s, i) => (
+            <SectionCard
+              key={s.key}
+              index={i}
+              title={s.title}
+              sub={s.sub}
+              done={stepDone[i] ?? false}
+              open={open.has(i)}
+              onToggle={() => toggleSection(i)}
+              scrollMarginTop={topInset + 56}
+            >
+              {i === 0 && <StepProfil doc={live} onPatch={update} />}
+              {i === 1 && <StepDskp payload={payload} onPatch={updatePayload} />}
+              {i === 2 && <StepPdPc payload={payload} onPatch={updatePayload} />}
+              {i === 3 && <StepRefleksi payload={payload} onPatch={updatePayload} />}
+            </SectionCard>
+          ))}
+        </div>
+
+        <div className={cn("min-w-0 self-start", previewCls)}>
+          {/* The tab bar lives in the *form* column, so this is the only way
+              back once the preview takes over on a phone. `xl:hidden` keeps it
+              out of the docked layout. */}
+          <button
+            type="button"
+            onClick={() => setTab("form")}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-[13px] font-semibold text-ink-2 shadow-xs transition-colors hover:bg-surface-3 xl:hidden"
           >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.back}
-          </Button>
-          {/* No "Simpan draf" button: autosave is the save. A second affordance
-              that can only toast would contradict the header's live status. */}
-          <div className="ml-auto flex items-center gap-2.5">
-            <span className="num hidden text-[12.5px] text-ink-3 sm:inline">
-              Langkah {step + 1} daripada {STEPS.length}
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+            {ms.editor.backToForm}
+          </button>
+
+          <div className="mb-3 flex items-center gap-1.5">
+            <span className="text-[12.5px] font-bold tracking-[0.6px] text-ink-4 uppercase">
+              {ms.editor.preview}
             </span>
-            {step < STEPS.length - 1 ? (
-              <Button onClick={() => setStep((s) => s + 1)}>{ms.editor.next} →</Button>
-            ) : (
-              /* Deliberately always enabled: `onSubmit(false)` opens the gate
-                 dialog when the plan is short of 100%, and that dialog is the
-                 only route to "Hantar sebagai draf". Disabling the button made
-                 both of them dead code in local mode. */
-              <Button onClick={() => void onSubmit(false)}>
-                <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
-              </Button>
-            )}
+            <span className="h-px flex-1 bg-border" aria-hidden />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // Browser print → "Save as PDF". Works offline, and RphPaper is
+                // styled at KPM proportions (§4.2(8) print/PDF fidelity).
+                toast.info("Pilih “Simpan sebagai PDF” dalam dialog cetak");
+                window.print();
+              }}
+            >
+              <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              PDF
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void exportDocx(live)}>
+              <FileDown className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              DOCX
+            </Button>
           </div>
-        </div>
-      </Card>
 
-      {/* ══ Right: the document. Actions on this side are document actions
-          (PDF/DOCX); workflow actions stay in the form's sticky bar. ══ */}
-      <div className="min-w-0 self-start">
-        <div className="mb-3 flex items-center gap-1.5">
-          <span className="text-[12.5px] font-bold tracking-[0.6px] text-ink-4 uppercase">
-            {ms.editor.preview}
-          </span>
-          <span className="h-px flex-1 bg-border" aria-hidden />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              // Browser print → "Save as PDF". Works offline, and RphPaper is
-              // styled at KPM proportions (§4.2(8) print/PDF fidelity).
-              toast.info("Pilih “Simpan sebagai PDF” dalam dialog cetak");
-              window.print();
-            }}
-          >
-            <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-            PDF
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => void exportDocx(live)}>
-            <FileDown className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-            DOCX
-          </Button>
+          <RphPaper payload={payload} session={SESSION} />
         </div>
+      </div>
 
-        <RphPaper payload={payload} session={SESSION} />
+      {/* ══ Single sticky action bar ═════════════════════════════════════
+          Save state lives here (not 300px up in the header) next to the one
+          primary action. No Back/Next: the section nav is the navigation, and
+          no "Simpan draf" — autosave is the save. */}
+      <div className="sticky bottom-14 z-10 flex flex-wrap items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 shadow-sm lg:bottom-0">
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-3">
+          <span
+            className={cn("h-1.75 w-1.75 rounded-full", saving ? "bg-warning" : "bg-success")}
+            aria-hidden
+          />
+          {saving ? "Menyimpan…" : `${ms.status.saving} · ${ms.status.online}`}
+        </span>
+        {/* Deliberately always enabled: `onSubmit(false)` opens the gate dialog
+            when the plan is short of 100%, and that dialog is the only route to
+            "Hantar sebagai draf". Disabling the button made both dead code. */}
+        <Button className="ml-auto" onClick={() => void onSubmit(false)}>
+          <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
+        </Button>
       </div>
 
       {/* ══ Submit gate dialog ══════════════════════════════════════════ */}
@@ -570,7 +665,7 @@ export function RphEditor({ docId }: { docId?: string }) {
             <Button
               onClick={() => {
                 setSubmitOpen(false);
-                setStep(3);
+                goTo(3);
               }}
             >
               Lengkapkan sekarang
@@ -578,7 +673,83 @@ export function RphEditor({ docId }: { docId?: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
+  );
+}
+
+/**
+ * One collapsible section of the RPH.
+ *
+ * The header always shows "Langkah n · <name>" plus a status pill, so the
+ * whole document is scannable while collapsed — a teacher should be able to
+ * read what is missing without opening anything. Content only mounts when
+ * open, so a collapsed section costs nothing.
+ */
+function SectionCard({
+  index,
+  title,
+  sub,
+  done,
+  open,
+  onToggle,
+  scrollMarginTop,
+  children,
+}: {
+  index: number;
+  title: string;
+  sub: string;
+  done: boolean;
+  open: boolean;
+  onToggle: () => void;
+  scrollMarginTop: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      id={`bahagian-${index}`}
+      // Clears the topbar + section nav when a note deep-links here.
+      style={{ scrollMarginTop }}
+      className="overflow-hidden rounded-[14px] border border-border bg-surface shadow-sm"
+    >
+      <h3>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-2"
+        >
+          <span
+            className={cn(
+              "grid h-7 w-7 shrink-0 place-items-center rounded-full border text-xs font-bold",
+              done
+                ? "border-success bg-success text-white"
+                : "border-border-strong bg-surface-2 text-ink-3",
+            )}
+            aria-hidden
+          >
+            {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : index + 1}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14.5px] font-bold tracking-[-0.15px]">
+              Langkah {index + 1} · {title}
+            </span>
+            <span className="block truncate text-[11.5px] text-ink-4">{sub}</span>
+          </span>
+          <Badge variant={done ? "success" : "warning"} dot={false}>
+            {done ? ms.editor.sectionDone : ms.editor.notReady}
+          </Badge>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-ink-4 transition-transform",
+              open && "rotate-180",
+            )}
+            strokeWidth={2}
+            aria-hidden
+          />
+        </button>
+      </h3>
+      {open && <div className="border-t border-border px-4 py-4">{children}</div>}
+    </section>
   );
 }
 
