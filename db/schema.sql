@@ -894,9 +894,10 @@ returns table (expected int, submitted int, approved int, returned_t int,
                drafts int, compliance numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
 begin
-  -- Staff only (GPK / Guru Besar). The old `is_member OR is_staff` made the
-  -- disjunction a no-op, so any Guru Biasa could read whole-school compliance.
-  if not erph.is_staff(p_school) then
+  -- Any member: this returns counts and a percentage and never a name, so a
+  -- Guru Biasa can see how the school is doing without seeing who is behind
+  -- it. The per-teacher view lives behind `pantau` and is not served here.
+  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
     raise exception 'Tidak dibenarkan';
   end if;
   return query

@@ -30,9 +30,11 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { createBlankRph, reuseLastWeek } from "@/lib/actions/plans";
+import { can } from "@/lib/auth/permissions";
 import { currentWeek, weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel } from "@/lib/date";
 import { CLASSES } from "@/lib/demo/seed";
+import { useSchoolStats } from "@/lib/hooks/use-remote";
 import { useWeek } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
 import type { RphDocument } from "@/lib/types";
@@ -43,6 +45,7 @@ export default function MingguPage() {
   const router = useRouter();
   const me = useUser();
   const week = useWeek();
+  const stats = useSchoolStats();
 
   const deadline = weekDeadline(WEEK);
   const approved = week.documents.filter((d) => d.status === "approved").length;
@@ -160,13 +163,42 @@ export default function MingguPage() {
         />
         <StatCard
           label={ms.dashboard.onTime}
-          value="96"
-          sub="%"
+          value={week.onTimePct === null ? "—" : String(week.onTimePct)}
+          sub={week.onTimePct === null ? "" : "%"}
           icon={<Target className="h-4 w-4" strokeWidth={2} />}
-          tone="ok"
-          spark={[55, 72, 66, 84, 100, 78, 90]}
+          tone={week.onTimePct === null || week.onTimePct >= 80 ? "ok" : "bad"}
         />
       </div>
+
+      {/* ── School totals ─────────────────────────────────────────────────
+          Aggregates only — `school_week_stats` returns counts, never names.
+          Every role may see this; the per-teacher table, the reminders and
+          the exports live behind `/sekolah`, which needs `pantau`. */}
+      <Card className="mb-4">
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 py-3.5">
+          <div className="min-w-[176px]">
+            <p className="text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase">
+              Sekolah · Minggu {WEEK}
+            </p>
+            <p className="mt-0.5 text-[13.5px] text-ink-2">
+              <b className="num text-ink">{stats.submitted}</b>
+              <span className="text-ink-4"> / {stats.totalExpected}</span> RPH dihantar
+            </p>
+          </div>
+          <div className="min-w-[180px] flex-1">
+            <p className="mb-1.5 text-[12.5px] text-ink-3">
+              <b className="num text-ink">{stats.compliancePct}%</b> pematuhan sekolah
+            </p>
+            <Progress value={stats.compliancePct} tone="success" />
+          </div>
+          {can(me.role, "pantau") && (
+            <Button variant="secondary" size="sm" onClick={() => router.push("/sekolah")}>
+              Paparan Sekolah
+              <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Weekly schedule ──────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap items-center gap-3">

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek, SESSION } from "@/lib/config";
-import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
+import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
 
 /**
  * GET /api/stats — school compliance for the current week.
@@ -11,8 +11,18 @@ import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
  *
  * 503 in local mode — the caller falls back to the bundled demo figures.
  */
+/**
+ * GET /api/stats — whole-school aggregates for the week.
+ *
+ * Any member may call this: `school_week_stats` returns counts and a
+ * compliance percentage and never a name, so a Guru Biasa can see how the
+ * school is doing without seeing who is behind it. The per-teacher table, the
+ * reminders and the school exports live on `/sekolah`, which is gated on
+ * `pantau` — and there is no endpoint that returns names to anyone but a
+ * reviewer (`/api/queue` is the only one, and it is reviewer-only).
+ */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const gate = await requireReviewer(request);
+  const gate = await requireDbUser(request);
   if ("error" in gate) return gate.error;
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { currentWeek, SESSION, schoolCode } from "@/lib/config";
+import { currentWeek, SESSION, schoolCode, weekDeadline } from "@/lib/config";
 import { schoolDays } from "@/lib/date";
 import { db, documentsForWeek } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
@@ -19,6 +19,8 @@ export interface WeekSummary {
   drafts: number;
   total: number;
   completenessPct: number;
+  /** Share of this teacher's submitted plans that beat the Friday deadline. */
+  onTimePct: number | null;
   loading: boolean;
 }
 
@@ -37,6 +39,13 @@ export function useWeek(): WeekSummary {
     // (`forwarded`) until it is approved or returned.
     const outForDecision = count("submitted") + count("forwarded");
 
+    // Punctuality, computed rather than asserted: of the plans that have been
+    // handed in, how many arrived before Friday 16:00. Nothing submitted yet
+    // is `null`, not 0 — "no data" and "all late" are different answers.
+    const deadline = weekDeadline(WEEK).getTime();
+    const handed = documents.filter((d) => d.submittedAt !== undefined);
+    const onTime = handed.filter((d) => (d.submittedAt ?? 0) <= deadline).length;
+
     return {
       weekNo: WEEK,
       days: schoolDays(WEEK),
@@ -50,6 +59,7 @@ export function useWeek(): WeekSummary {
         total === 0
           ? 0
           : Math.round((documents.filter((d) => d.status === "approved").length / total) * 100),
+      onTimePct: handed.length === 0 ? null : Math.round((onTime / handed.length) * 100),
     };
   }, []);
 
@@ -63,6 +73,7 @@ export function useWeek(): WeekSummary {
     drafts: summary?.drafts ?? 0,
     total: summary?.total ?? 0,
     completenessPct: summary?.completenessPct ?? 0,
+    onTimePct: summary?.onTimePct ?? null,
     loading: summary === undefined,
   };
 }

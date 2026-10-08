@@ -19,7 +19,12 @@ export type Permission =
   | "rph"
   /** Grade plans — the review queue. */
   | "semak"
-  /** Whole-school monitoring. */
+  /**
+   * Whole-school monitoring — the `/sekolah` page: per-teacher rows, reminders
+   * and exports. The aggregate counts behind it are deliberately *not* behind
+   * this (see `/api/stats`), so a Guru Biasa still sees how the school is doing
+   * without seeing who is behind it.
+   */
   | "pantau"
   /** School-wide reports and exports. */
   | "laporan"
