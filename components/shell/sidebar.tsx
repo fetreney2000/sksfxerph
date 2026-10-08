@@ -13,7 +13,11 @@ import type { MemberRole } from "@/lib/types";
 
 const WEEK = currentWeek();
 
-export function Sidebar({ user }: { user: { fullName: string; role: MemberRole } }) {
+export function Sidebar({
+  user,
+}: {
+  user: { id: string; fullName: string; role: MemberRole };
+}) {
   const pathname = usePathname();
   const initials =
     user.fullName

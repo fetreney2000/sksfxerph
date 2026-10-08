@@ -74,7 +74,7 @@ for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
     )
     guarded = any(
         g in src
-        for g in ("requireUser(", "requireDbUser(", "requireReviewer(")
+        for g in ("requireUser(", "requireDbUser(", "requireReviewer(", "requireAdministrator(")
     )
     if is_public:
         label = "public (intended)"

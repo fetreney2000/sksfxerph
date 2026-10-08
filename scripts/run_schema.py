@@ -248,7 +248,7 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    check("17 functions in erph", n_funcs == 17, f"found {n_funcs}")
+    check("20 functions in erph", n_funcs == 20, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.

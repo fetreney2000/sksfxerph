@@ -4,6 +4,7 @@ import * as React from "react";
 import type { MemberRole } from "@/lib/types";
 
 export interface ShellUser {
+  id: string;
   fullName: string;
   role: MemberRole;
 }
@@ -33,7 +34,7 @@ export function useUser(): ShellUser {
   if (!ctx) {
     // Rendered outside the provider would mean the layout gate was bypassed —
     // fall back rather than crash the tree.
-    return { fullName: "", role: "guru_biasa" };
+    return { id: "", fullName: "", role: "guru_biasa" };
   }
   return ctx;
 }

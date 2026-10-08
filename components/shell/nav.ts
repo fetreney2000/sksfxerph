@@ -8,6 +8,7 @@ import {
   PenLine,
   School,
   ScrollText,
+  Settings2,
 } from "lucide-react";
 import { can, type Permission } from "@/lib/auth/permissions";
 import { ms } from "@/lib/i18n/ms";
@@ -60,6 +61,7 @@ export const NAV: NavGroup[] = [
       },
       { href: "/sekolah", label: ms.nav.sekolah, icon: School, perm: "pantau" },
       { href: "/laporan", label: "Laporan & Eksport", icon: FileText, perm: "laporan" },
+      { href: "/pentadbiran", label: ms.nav.urus, icon: Settings2, perm: "pentadbir" },
     ],
   },
 ];
@@ -80,6 +82,7 @@ export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/semakan": { title: ms.nav.semakan, crumb: "Mod pentadbir" },
   "/sekolah": { title: ms.nav.sekolah, crumb: "Pemantauan sekolah" },
   "/laporan": { title: "Laporan & Eksport", crumb: "Eksport rasmi" },
+  "/pentadbiran": { title: ms.nav.urus, crumb: "Pentadbiran" },
 };
 
 export { Clock3 };

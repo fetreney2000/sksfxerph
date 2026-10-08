@@ -5,20 +5,13 @@ import { CommandPalette } from "@/components/shell/command-palette";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
-import { UserProvider } from "@/components/shell/user-context";
-import type { MemberRole } from "@/lib/types";
+import { type ShellUser, UserProvider } from "@/components/shell/user-context";
 
 /**
  * Client chrome: holds the command-palette open state so ⌘K works anywhere and
  * the topbar's search button has something to talk to.
  */
-export function AppShell({
-  children,
-  user,
-}: {
-  children: React.ReactNode;
-  user: { fullName: string; role: MemberRole };
-}) {
+export function AppShell({ children, user }: { children: React.ReactNode; user: ShellUser }) {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
   React.useEffect(() => {

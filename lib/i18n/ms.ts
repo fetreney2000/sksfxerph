@@ -30,6 +30,7 @@ export const ms = {
     sekolah: "Paparan Sekolah",
     guru: "Guru",
     pentadbiran: "Pentadbiran",
+    urus: "Urus eRPH",
     rujukan: "Rujukan rasmi",
   },
 

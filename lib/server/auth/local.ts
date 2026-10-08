@@ -14,6 +14,7 @@ import type { MemberRole } from "@/lib/types";
  *
  *   cikgu       / cikgu123  → Guru Besar   (review, monitoring, reports)
  *   guru.biasa  / biasa123  → Guru Biasa   (own RPH only)
+ *   pentadbir  / pentadbir123 → Administrator (app set-up)
  *
  * `password_changed_at` is epoch 0 so any session cookie is accepted (there is
  * nothing to invalidate against).
@@ -50,7 +51,17 @@ const GURU_BIASA: LocalAccount = {
   email: "suhaila@sktamanharmoni.local",
 };
 
-export const LOCAL_ACCOUNTS: readonly LocalAccount[] = [GURU_BESAR, GURU_BIASA];
+const PENTADBIR: LocalAccount = {
+  id: "00000000-0000-4000-8000-000000000003",
+  username: "pentadbir",
+  password_hash:
+    "scrypt$16384$8$1$GkcP7bIHlkHdk-LFqfeGjQ$t1oTucpYxXOV1HRf4iERjlowH0oy29ZZ7gIDLZSlt2NgU0mKgPy0OCh_j0jAKz9UANSjJf4HTfXSyGb36Hgy2w",
+  role: "pentadbir",
+  full_name: "Faridah binti Salleh",
+  email: "faridah@sktamanharmoni.local",
+};
+
+export const LOCAL_ACCOUNTS: readonly LocalAccount[] = [GURU_BESAR, GURU_BIASA, PENTADBIR];
 
 /** The account the login screen names in local mode. */
 export const LOCAL_ACCOUNT: LocalAccount = GURU_BESAR;

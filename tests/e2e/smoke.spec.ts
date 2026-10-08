@@ -16,6 +16,9 @@ const DEMO_PASS = "cikgu123";
 /** Local-mode account with no supervisory permission (lib/server/auth/local.ts). */
 const GURU_BIASA_USER = "guru.biasa";
 const GURU_BIASA_PASS = "biasa123";
+/** Local-mode Administrator — the only role that may open /pentadbiran. */
+const PENTADBIR_USER = "pentadbir";
+const PENTADBIR_PASS = "pentadbir123";
 
 /** Collect anything React/Next would surface to a real user as a broken page. */
 function collectErrors(page: Page): string[] {
@@ -91,6 +94,29 @@ test.describe("authentication", () => {
 
     // 3. Their own surfaces still work.
     await expect(page.getByRole("heading", { name: /Selamat pagi/ })).toBeVisible();
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("/pentadbiran is the Administrator's alone", async ({ page }) => {
+    // A Guru Besar supervises but does not run the app — answer to "does the
+    // Guru Besar get the setup page" was none.
+    const errors = collectErrors(page);
+    await login(page);
+    await expect(page.getByRole("link", { name: /Urus eRPH/ })).toHaveCount(0);
+    await page.goto("/pentadbiran");
+    await expect(page).toHaveURL(/\/minggu/, { timeout: 15_000 });
+
+    // Sign out properly: /login redirects an authenticated user to /minggu.
+    await page.getByRole("button", { name: "Log keluar" }).click();
+    await page.waitForURL(/\/login/, { timeout: 15_000 });
+
+    // The Administrator reaches it, and in local mode is told why it is empty.
+    await login(page, PENTADBIR_USER, PENTADBIR_PASS);
+    await expect(page.getByRole("link", { name: /Urus eRPH/ })).toHaveCount(1);
+    await page.goto("/pentadbiran");
+    await expect(page).toHaveURL(/\/pentadbiran/, { timeout: 15_000 });
+    await expect(page.getByText(/Pentadbiran memerlukan mod disegerakkan/)).toBeVisible();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });

@@ -919,7 +919,64 @@ begin
           / nullif((select n from t), 0), 1);
 end $$;
 
--- ── 10 · TRIGGERS ────────────────────────────────────────────────────────────
+-- ── 10 · ADMIN (app set-up) ───────────────────────────────────────────────────
+-- Every handler runs as the secret-key role and therefore bypasses RLS, so
+-- without these nothing below a DBA could ever change a role or a setting.
+-- Putting the rules here keeps them auditable, and each refuses anyone who is
+-- not the school's `pentadbir` before touching a row.
+
+create or replace function erph.admin_list_members(p_school uuid)
+returns table (user_id uuid, username text, full_name text, email text,
+               role erph.member_role, is_active boolean)
+language sql stable security definer set search_path = erph, public as $$
+  select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active
+    from erph.school_member m
+    join erph.user u on u.id = m.user_id
+   where m.school_id = p_school and erph.has_role(p_school, array['pentadbir']::erph.member_role[])
+   order by m.role, u.username;
+$$;
+
+-- Sets the role and the active flag together. The role is duplicated on
+-- `erph.user` (what the route guard reads) and `erph.school_member` (what SQL
+-- reads) with nothing keeping them in step, so updating one alone would let a
+-- demoted account keep its privileges through whichever layer it reached.
+create or replace function erph.admin_set_member(p_school uuid, p_user uuid,
+                                                 p_role erph.member_role,
+                                                 p_active boolean)
+returns void language plpgsql security definer set search_path = erph, public as $$
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if p_role = 'system' then
+    raise exception 'Peranan sistem tidak boleh diberikan kepada akaun';
+  end if;
+  if not exists (select 1 from erph.school_member
+                 where school_id = p_school and user_id = p_user) then
+    raise exception 'Akaun bukan ahli sekolah ini';
+  end if;
+  update erph.school_member set role = p_role
+   where school_id = p_school and user_id = p_user;
+  update erph.user set is_active = p_active where id = p_user;
+end $$;
+
+create or replace function erph.admin_set_setting(p_school uuid, p_weekday smallint,
+                                                  p_time time,
+                                                  p_require_complete boolean)
+returns void language plpgsql security definer set search_path = erph, public as $$
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if p_weekday not between 1 and 7 then raise exception 'Hari mesti antara 1 dan 7'; end if;
+  update erph.school_setting
+     set submit_weekday = p_weekday,
+         submit_time = p_time,
+         require_complete = p_require_complete
+   where school_id = p_school;
+end $$;
+
+-- ── 11 · TRIGGERS ────────────────────────────────────────────────────────────
 create trigger tr_school_updated   before update on erph.school
   for each row execute function erph.set_updated_at();
 create trigger tr_profile_updated  before update on erph.user
@@ -943,7 +1000,7 @@ create trigger tr_review_appendonly   before update or delete on erph.rph_review
 create trigger tr_audit_appendonly    before update or delete on erph.audit_log
   for each row execute function erph.forbid_mutation();
 
--- ── 11 · ROW LEVEL SECURITY ──────────────────────────────────────────────────
+-- ── 12 · ROW LEVEL SECURITY ──────────────────────────────────────────────────
 -- PostgREST exposes every table in `erph`; an unpoliced table would be
 -- world-readable to anyone holding the publishable key. Pattern: permissive
 -- SELECT policies that call SECURITY DEFINER helpers (never inline subqueries
@@ -1065,7 +1122,7 @@ create policy export_read on erph.export_file
 create policy audit_admin_read on erph.audit_log
   for select using (erph.has_role(erph.audit_log.school_id, array['guru_besar','gpk']::erph.member_role[]));
 
--- ── 12 · STORAGE (private buckets, membership-scoped signed URLs) ────────────
+-- ── 13 · STORAGE (private buckets, membership-scoped signed URLs) ────────────
 insert into storage.buckets (id, name, public) values
   ('rph-exports', 'rph-exports', false),
   ('attachments', 'attachments', false)
@@ -1102,7 +1159,7 @@ create policy storage_upload_attachments on storage.objects
     bucket_id = 'attachments' and (storage.foldername(name))[1] = erph.actor()::text
   );
 
--- ── 13 · VIEWS (security_invoker ⇒ RLS still applies through the view) ───────
+-- ── 14 · VIEWS (security_invoker ⇒ RLS still applies through the view) ───────
 create view erph.v_teacher_week
 with (security_invoker = true) as
 select d.school_id, d.owner_id, d.session, d.week_no,
@@ -1132,7 +1189,7 @@ from erph.rph_document d
 where d.deleted_at is null
 group by 1,2,3;
 
--- ── 14 · pg_cron JOBS (enable after seeding the calendar) ────────────────────
+-- ── 15 · pg_cron JOBS (enable after seeding the calendar) ────────────────────
 -- -- Thursday 20:00: nudge teachers with incomplete drafts
 -- select cron.schedule('erph-deadline-nag', '0 20 * * 4', $$
 --   insert into erph.notification (school_id, user_id, type, title, body, link_view)
@@ -1157,7 +1214,7 @@ group by 1,2,3;
 -- The KEEP-AWAKE heartbeat must come from OUTSIDE (Vercel daily cron →
 -- GET /api/heartbeat → trivial query), because a paused project stops pg_cron too.
 
--- ── 15 · EXPOSE THE SCHEMA TO THE DATA API ─────────────────────────────────
+-- ── 16 · EXPOSE THE SCHEMA TO THE DATA API ─────────────────────────────────
 -- Required by Supabase's "Using custom schemas" guide. PostgREST connects as
 -- `authenticator` and switches to `authenticated`/`anon`; without USAGE on the
 -- schema and privileges on its objects, every request 404s even though RLS
