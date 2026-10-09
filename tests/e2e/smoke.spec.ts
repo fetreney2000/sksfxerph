@@ -315,29 +315,22 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("the template page's create button opens a brand-new blank eRPH", async ({ page }) => {
+  test("the template page's create button opens the template dialog", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/templat");
-    await page.getByRole("button", { name: /Cipta eRPH baharu/ }).click();
 
-    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
-    const first = page.url();
-
-    // "Blank" means blank: none of the four sections has anything in it yet.
-    await expect(page.getByText(/0 daripada 4 bahagian/)).toBeVisible({ timeout: 15_000 });
-
-    // A second tap must not litter the dashboard with another empty plan —
-    // an untouched blank is reused, because the natural key is unique per
-    // lesson and cannot hold two plans for the same class/date anyway.
-    await page.goto("/templat");
-    await page.getByRole("button", { name: /Cipta eRPH baharu/ }).click();
-    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
-    expect(page.url()).toBe(first);
+    // The tile that used to sit here claimed "Cipta templat" and actually
+    // opened a blank eRPH. This button does what it says.
+    await page.getByRole("button", { name: "Cipta templat" }).click();
+    await expect(page.getByRole("heading", { name: "Cipta templat" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByLabel(/^Tajuk/)).toBeVisible();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("RPH baharu creates a blank plan instead of resuming an old one", async ({ page }) => {
+  test("the penyunting opens blank and creates nothing until saved", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/minggu");
     await page
@@ -345,8 +338,26 @@ test.describe("eRPH smoke", () => {
       .first()
       .click();
 
-    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
+    // No id in the URL: nothing has been written. It used to redirect to
+    // /editor/<uuid>, so merely *opening* the penyunting left a draft behind.
+    await expect(page).toHaveURL(/\/editor$/, { timeout: 15_000 });
     await expect(page.getByText(/0 daripada 4 bahagian/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Belum disimpan")).toBeVisible();
+    // With nothing to submit yet, the action bar offers the save instead.
+    await expect(page.getByRole("button", { name: /Simpan rancangan/ })).toBeVisible();
+
+    // Walking away must still have created nothing — no draft on the dashboard.
+    await page.goto("/minggu");
+    await expect(page).toHaveURL(/\/minggu/);
+    await page
+      .getByRole("button", { name: /RPH baharu/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/editor$/, { timeout: 15_000 });
+
+    // Saving is what makes it real, and the URL follows so a refresh lands on it.
+    await page.getByRole("button", { name: /Simpan rancangan/ }).click();
+    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{8}-/, { timeout: 15_000 });
 
     expect(errors, errors.join("\n")).toEqual([]);
   });

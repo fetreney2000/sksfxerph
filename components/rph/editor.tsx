@@ -9,6 +9,7 @@ import {
   Download,
   FileDown,
   Plus,
+  Save,
   Send,
   X,
 } from "lucide-react";
@@ -32,15 +33,17 @@ import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/fiel
 import { HelpHint } from "@/components/ui/help-hint";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/cn";
-import { supabaseConfigured } from "@/lib/config";
+import { currentWeek, mytIso, schoolCode, supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
 import { db } from "@/lib/db";
+import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 import { RpcError, submitRph } from "@/lib/rpc";
 import { completeness, emptyPayload, type RphPayload, stepStatus } from "@/lib/schemas/rph";
+import { currentSession } from "@/lib/session";
 import { commit } from "@/lib/sync/queue";
 import type { RphDocument } from "@/lib/types";
 
@@ -149,6 +152,65 @@ function notes(payload: RphPayload): Note[] {
   return out;
 }
 
+/** What `?template=` and `?reuse=` preload into the plan that does not exist yet. */
+interface SeedSource {
+  payload: RphPayload;
+  subjectCode?: string;
+  subjectName?: string;
+}
+
+/**
+ * Load the source for an unsaved plan, or `null` for a plain blank one.
+ *
+ * Every failure path returns `null` rather than throwing: a template someone
+ * else has since deleted, or a week with nothing in it, should open an empty
+ * editor — not an error page for a convenience feature. Offline, Dexie still
+ * answers for `reuse`, so the command works with no network at all.
+ */
+async function loadSeed(templateId?: string, reuse?: boolean): Promise<SeedSource | null> {
+  if (templateId) {
+    try {
+      const res = await fetch("/api/templates", { credentials: "same-origin" });
+      if (!res.ok) return null;
+      const body = (await res.json()) as {
+        items: { id: string; payload: RphPayload; subject_code: string | null }[];
+      };
+      const template = body.items.find((t) => t.id === templateId);
+      if (!template) return null;
+      return {
+        payload: template.payload,
+        subjectCode: template.subject_code ?? undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  if (reuse) {
+    try {
+      const docs = await db.documents
+        .where("[ownerId+session]")
+        .equals([LOCAL_OWNER_ID, currentSession()])
+        .toArray();
+      // The newest *written* plan from last week — an untouched blank from a
+      // previous "RPH baharu" would seed this one with nothing at all.
+      const source = docs
+        .filter((d) => d.weekNo === currentWeek() - 1 && completeness(d.payload) > 0)
+        .sort((a, b) => (a.planDate < b.planDate ? 1 : -1))[0];
+      if (!source) return null;
+      return {
+        payload: source.payload,
+        subjectCode: source.subjectCode,
+        subjectName: source.subjectName,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 export function RphEditor({ docId }: { docId?: string }) {
   const router = useRouter();
   const params = useParams();
@@ -163,12 +225,79 @@ export function RphEditor({ docId }: { docId?: string }) {
    * bogus "not found" while IndexedDB is warming up is a real bug.
    */
   const found = useLiveQuery(async () => {
-    if (!id) return { state: "no-id" as const };
+    // No id is "not saved yet", not "nothing here". The editor opens blank and
+    // the teacher's first explicit save is what creates the row — opening the
+    // penyunting must never leave a document behind that nobody chose to write.
+    if (!id) return { state: "unsaved" as const };
     const doc = await db.documents.get(id);
     return doc ? { state: "ok" as const, doc } : { state: "missing" as const };
   }, [id]);
 
-  const live = found?.state === "ok" ? found.doc : undefined;
+  const persisted = found?.state === "ok" ? found.doc : undefined;
+
+  const { items: classes } = useSchoolClasses();
+  const { items: subjects } = useSchoolSubjects();
+
+  /**
+   * A document that exists only in React state — no id in the URL, no row in
+   * Dexie, nothing for the sync queue to send.
+   *
+   * It becomes real when the teacher presses Simpan, and not before. Seeded
+   * once the class list has arrived, because `class_id` is a foreign key the
+   * server checks: inventing a placeholder would produce a plan that looks
+   * saved and is rejected on every flush.
+   */
+  const [pending, setPending] = React.useState<RphDocument | null>(null);
+  const [seeded, setSeeded] = React.useState(false);
+
+  React.useEffect(() => {
+    const cls = classes[0];
+    const subject = subjects[0];
+    if (id || seeded || !cls) return;
+
+    let cancelled = false;
+    void (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const seed = await loadSeed(
+        params.get("template") ?? undefined,
+        params.get("reuse") === "1",
+      );
+      if (cancelled) return;
+
+      const now = Date.now();
+      setPending({
+        id:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `local-${now}`,
+        schoolCode,
+        ownerId: LOCAL_OWNER_ID,
+        classId: cls.id,
+        className: cls.nama,
+        subjectCode: seed?.subjectCode ?? subject?.code ?? "MAT",
+        subjectName: seed?.subjectName ?? subject?.nama ?? "Matematik",
+        session: currentSession(),
+        weekNo: currentWeek(),
+        planDate: mytIso(),
+        slotTime: "07:30",
+        status: "draft",
+        // A template or last week's plan arrives *here*, not in the database —
+        // readable, editable and discardable before anything exists.
+        payload: seed?.payload ?? emptyPayload(),
+        version: 1,
+        clientUpdatedAt: now,
+        createdAt: now,
+      });
+      setSeeded(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, seeded, classes, subjects]);
+
+  /** What is on screen: a stored plan, or one that has not been saved yet. */
+  const live = persisted ?? pending;
   // The school year the preview prints — server-resolved, so the paper shows
   // the same year the plan will be filed under.
   const session = useSession();
@@ -229,6 +358,23 @@ export function RphEditor({ docId }: { docId?: string }) {
   const update = React.useCallback(
     async (patch: Partial<RphDocument>) => {
       if (!live) return;
+
+      const next: RphDocument = {
+        ...live,
+        ...patch,
+        payload: payloadRef.current,
+        clientUpdatedAt: Date.now(),
+      };
+
+      // An unsaved plan is edited in memory only. `commit()` would put a row in
+      // Dexie *and* enqueue a network sync — exactly the write the teacher has
+      // not asked for yet, and the reason opening the penyunting used to leave
+      // a document behind.
+      if (!persisted) {
+        setPending(next);
+        return;
+      }
+
       inFlight.current += 1;
       // A Dexie put lands in about a millisecond — well inside a frame.
       // Toggling the indicator for those would strobe it on every keystroke,
@@ -242,20 +388,40 @@ export function RphEditor({ docId }: { docId?: string }) {
         // queues the network sync in the background. `payload` comes from the
         // ref, never from `patch` — a doc-level patch carrying an older payload
         // would revert whatever was typed after it was built.
-        await commit({
-          ...live,
-          ...patch,
-          payload: payloadRef.current,
-          clientUpdatedAt: Date.now(),
-        });
+        await commit(next);
       } finally {
         inFlight.current -= 1;
         window.clearTimeout(showIfSlow);
         if (inFlight.current === 0) setSaving(false);
       }
     },
-    [live],
+    [live, persisted],
   );
+
+  /**
+   * The one action that turns a blank slate into a document.
+   *
+   * Everything above deliberately does not do this — which is the whole point
+   * of the change. A teacher who opens the penyunting, changes their mind and
+   * navigates away must leave nothing behind: no empty draft in the dashboard,
+   * no orphan row for a reviewer, no queued sync. Pressing Simpan is what says
+   * "this is a plan".
+   */
+  const [creating, setCreating] = React.useState(false);
+  const savePlan = React.useCallback(async () => {
+    if (!pending || persisted || creating) return;
+    setCreating(true);
+    try {
+      await commit({ ...pending, payload: payloadRef.current });
+      // Carry the id into the URL so a refresh, a bookmark or a share lands on
+      // the row that now exists rather than back on the blank editor.
+      router.replace(`/editor/${pending.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan rancangan");
+    } finally {
+      setCreating(false);
+    }
+  }, [pending, persisted, creating, router]);
 
   const updatePayload = React.useCallback(
     (patch: Partial<RphPayload>) => {
@@ -439,18 +605,8 @@ export function RphEditor({ docId }: { docId?: string }) {
     [narrow],
   );
 
-  if (!id) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <p className="mb-4 text-ink-3">Tiada RPH dipilih.</p>
-          <Button onClick={() => router.push("/minggu")}>Kembali ke Minggu Ini</Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (found === undefined) {
+  // A stored plan: still loading, or gone.
+  if (id && found === undefined) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-ink-4">Memuatkan…</CardContent>
@@ -458,12 +614,25 @@ export function RphEditor({ docId }: { docId?: string }) {
     );
   }
 
-  if (found.state !== "ok" || !live) {
+  if (id && found?.state !== "ok") {
     return (
       <Card>
         <CardContent className="py-12 text-center">
           <p className="mb-4 text-ink-3">RPH tidak dijumpai.</p>
           <Button onClick={() => router.push("/minggu")}>Kembali ke Minggu Ini</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // An unsaved plan cannot be built until the class list has arrived: the
+  // document carries a real `class_id`, and a placeholder would produce
+  // something that looks saved and is rejected on every sync.
+  if (!live) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-ink-4">
+          Menyiapkan penyunting…
         </CardContent>
       </Card>
     );
@@ -760,17 +929,31 @@ export function RphEditor({ docId }: { docId?: string }) {
       <div className="sticky bottom-14 z-10 flex flex-wrap items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 shadow-sm lg:bottom-0">
         <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-3">
           <span
-            className={cn("h-1.75 w-1.75 rounded-full", saving ? "bg-warning" : "bg-success")}
+            className={cn(
+              "h-1.75 w-1.75 rounded-full",
+              creating || saving ? "bg-warning" : persisted ? "bg-success" : "bg-ink-4",
+            )}
             aria-hidden
           />
-          {saving ? "Menyimpan…" : `${ms.status.saving} · ${ms.status.online}`}
+          {creating || saving
+            ? "Menyimpan…"
+            : persisted
+              ? `${ms.status.saving} · ${ms.status.online}`
+              : "Belum disimpan"}
         </span>
-        {/* Deliberately always enabled: `onSubmit(false)` opens the gate dialog
-            when the plan is short of 100%, and that dialog is the only route to
-            "Hantar sebagai draf". Disabling the button made both dead code. */}
-        <Button className="ml-auto" onClick={() => void onSubmit(false)}>
-          <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
-        </Button>
+
+        {/* Nothing exists to submit until Simpan creates the row — offering
+            "Hantar" here would send an id that is not in the database. */}
+        {persisted ? (
+          <Button className="ml-auto" onClick={() => void onSubmit(false)}>
+            <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
+          </Button>
+        ) : (
+          <Button className="ml-auto" disabled={creating} onClick={() => void savePlan()}>
+            <Save className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+            {creating ? "Menyimpan…" : "Simpan rancangan"}
+          </Button>
+        )}
       </div>
 
       {/* ══ Submit gate dialog ══════════════════════════════════════════ */}

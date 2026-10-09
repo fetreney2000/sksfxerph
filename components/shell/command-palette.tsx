@@ -5,11 +5,8 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { navFor } from "@/components/shell/nav";
 import { useUser } from "@/components/shell/user-context";
-import { createBlankRph } from "@/lib/actions/plans";
 import { can } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
-import { currentWeek } from "@/lib/config";
-import { useSchoolClasses } from "@/lib/hooks/use-school-data";
 
 interface Cmd {
   id: string;
@@ -29,7 +26,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [q, setQ] = React.useState("");
   const [sel, setSel] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const { items: classes } = useSchoolClasses();
 
   const commands = React.useMemo<Cmd[]>(() => {
     const nav: Cmd[] = navFor(role).flatMap((g) =>
@@ -52,20 +48,19 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             group: "Tindakan",
             label: "RPH baharu untuk kelas",
             hint: "N",
-            // Creates the plan before navigating so the URL names the document —
-            // falling back to /editor, which resolves an unfinished one, if the
-            // store cannot produce a free slot.
-            run: () => {
-              void (async () => {
-                const doc = await createBlankRph(currentWeek(), classes);
-                router.push(doc ? `/editor/${doc.id}` : "/editor");
-              })();
-            },
+            // Navigates rather than creating. The penyunting holds a blank,
+            // unsaved plan in memory, and Simpan is what writes it — so a
+            // mis-tap or a thought abandoned halfway leaves nothing in the
+            // dashboard and nothing queued for the network.
+            run: () => router.push("/editor"),
           },
           {
             id: "reuse",
             group: "Tindakan",
             label: "Guna semula RPH minggu lepas",
+            // The editor loads last week's payload into the unsaved plan, so
+            // it can be read before it exists — which is the whole point of
+            // making saving explicit.
             run: () => router.push("/editor?reuse=1"),
           },
         ]
@@ -87,7 +82,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     ];
 
     return [...nav, ...actions];
-  }, [classes, router, role]);
+  }, [router, role]);
 
   const filtered = React.useMemo(() => {
     const term = q.trim().toLowerCase();

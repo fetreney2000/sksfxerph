@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { createBlankRph, reuseLastWeek } from "@/lib/actions/plans";
+import { reuseLastWeek } from "@/lib/actions/plans";
 import { can } from "@/lib/auth/permissions";
 import { currentWeek, weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel } from "@/lib/date";
@@ -54,12 +54,11 @@ export default function MingguPage() {
   const pct = week.total === 0 ? 0 : Math.round((approved / week.total) * 100);
 
   // "RPH baharu" has to mean *new*: resuming unfinished work is what the
-  // per-row "Sambung" buttons are for. createBlankRph reuses an untouched
-  // blank, so tapping this twice still lands on one empty plan.
-  const onNew = async () => {
-    const doc = await createBlankRph(WEEK, classes);
-    if (doc) router.push(`/editor/${doc.id}`);
-    else toast.error("Tiada slot kosong untuk eRPH baharu");
+  // per-row "Sambung" buttons are for. It now navigates rather than creating —
+  // the penyunting opens blank and the teacher saves when there is something
+  // worth saving, so a mis-tap leaves nothing behind.
+  const onNew = () => {
+    router.push("/editor");
   };
 
   const onReuse = async () => {
