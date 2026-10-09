@@ -667,6 +667,49 @@ begin
   -- *forward* scope changes, which is exactly what the UPDATE above does.
 end $$;
 
+-- Per-teacher monitoring for `/sekolah`.
+--
+-- Counts, never content: what a supervisor is accountable for is whether a
+-- teacher is submitting, not what they wrote. This is the one place the app
+-- names individuals, so it is also the one place where `may_supervise` has to
+-- be applied *inside* the function — SECURITY DEFINER means the caller's RLS
+-- is not consulted, and a handler that fetched school_member and then filtered
+-- in JavaScript would be one careless edit away from showing a GPK their whole
+-- school.
+create or replace function erph.pantau_teachers(p_school uuid, p_session text,
+                                                p_week smallint)
+returns table (user_id uuid, full_name text, role erph.member_role,
+               week_total bigint, week_done bigint,
+               session_total bigint, session_done bigint,
+               last_reviewed_at timestamptz,
+               classes text)
+language sql stable security definer set search_path = erph, public as $$
+  select m.user_id, u.full_name, m.role,
+         count(d.id) filter (where d.week_no = p_week),
+         count(d.id) filter (where d.week_no = p_week and d.status = 'approved'),
+         count(d.id),
+         count(d.id) filter (where d.status = 'approved'),
+         max(d.reviewed_at),
+         string_agg(distinct c.nama, ', ' order by c.nama)
+    from erph.school_member m
+    join erph.user u on u.id = m.user_id
+    left join erph.rph_document d
+           on d.owner_id = m.user_id
+          and d.school_id = m.school_id
+          and d.session = p_session
+          and d.deleted_at is null
+    left join erph.class c on c.id = d.class_id
+   where m.school_id = p_school
+     and m.is_active
+     and m.role in ('guru_biasa','gpk','guru_besar')
+     -- The scope, applied to the *result* rather than to a join: the pentadbir
+     -- passes only for their own row, a GPK for themselves and their assigned
+     -- teachers, a Guru Besar for everyone. `system` never reaches here at all.
+     and erph.may_supervise(p_school, m.user_id)
+   group by m.user_id, u.full_name, m.role
+   order by u.full_name;
+$$;
+
 create or replace function erph.my_schools()
 returns uuid[] language sql stable security definer set search_path = erph, public as $$
   select coalesce(array_agg(school_id) filter (where is_active), '{}')

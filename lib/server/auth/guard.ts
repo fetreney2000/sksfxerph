@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { can } from "@/lib/auth/permissions";
+import { can, type Permission } from "@/lib/auth/permissions";
 import { supabaseConfigured } from "@/lib/config";
 import { type SessionUser, userFromRequest } from "@/lib/server/auth/session";
 import { adminDb } from "@/lib/server/db";
@@ -44,6 +44,30 @@ export async function requireDbUser(
 
   const admin = adminDb(gate.user.id);
   return { user: gate.user, db: admin };
+}
+
+/**
+ * Any role holding `permission`.
+ *
+ * Generic rather than another named guard, because the next route that needs a
+ * permission check should not have to invent its own. The distinction this
+ * exists for is `/sekolah`: the aggregate counts behind it are open to every
+ * member (they cannot name anyone), while the per-teacher rows behind *this*
+ * are not — and a GPK's rows are narrower still, which `erph.pantau_teachers`
+ * enforces independently of whatever this check allows.
+ */
+export async function requirePermission(
+  req: NextRequest,
+  permission: Permission,
+): Promise<{ user: SessionUser; db: ReturnType<typeof adminDb> } | { error: NextResponse }> {
+  const gate = await requireDbUser(req);
+  if ("error" in gate) return gate;
+  if (!can(gate.user.role, permission)) {
+    return {
+      error: NextResponse.json({ error: "Peranan tidak mencukupi" }, { status: 403 }),
+    };
+  }
+  return gate;
 }
 
 /** Graders only — the queue and review routes. Roles come from `permissions`. */

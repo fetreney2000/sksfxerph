@@ -1,7 +1,9 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { Bell, Download, Users } from "lucide-react";
 import { toast } from "sonner";
+import type { TeacherRow } from "@/app/api/pantau/teachers/route";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,18 +16,124 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { currentWeek } from "@/lib/config";
+import { currentWeek, supabaseConfigured } from "@/lib/config";
 import { TEACHER_ROWS } from "@/lib/demo/review";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
+import { ms } from "@/lib/i18n/ms";
+import type { MemberRole } from "@/lib/types";
 
 const WEEK = currentWeek();
 
 const RANGES = ["Minggu 6", "Minggu 5", "4 minggu", "Sepanjang sesi"] as const;
 
+/** What the table renders, whichever source produced it. */
+interface Row {
+  id: string;
+  name: string;
+  initials: string;
+  tone: "blue" | "teal" | "plum";
+  role: string;
+  classes: string;
+  week: "Lengkap" | "Menunggu" | "Lewat" | "Tiada";
+  compliance: number;
+  last: string;
+}
+
+function initialsOf(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .toUpperCase();
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat("ms-MY", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
+/**
+ * Counts into words.
+ *
+ * "Tiada" is deliberately distinct from "Lewat": a teacher who has not started
+ * this week's plan yet and one whose plan is late need different conversations,
+ * and collapsing both into "not submitted" loses the only difference the
+ * supervisor can act on.
+ */
+function weekState(total: number, done: number): Row["week"] {
+  if (total === 0) return "Tiada";
+  if (done >= total) return "Lengkap";
+  if (done === 0) return "Lewat";
+  return "Menunggu";
+}
+
+const WEEK_TONE = {
+  Lengkap: "success",
+  Menunggu: "info",
+  Lewat: "danger",
+  Tiada: "neutral",
+} as const;
+
+function fromApi(r: TeacherRow): Row {
+  return {
+    id: r.userId,
+    name: r.fullName,
+    initials: initialsOf(r.fullName),
+    tone: "blue",
+    role: ms.roles[r.role as MemberRole] ?? r.role,
+    classes: r.classes ?? "—",
+    week: weekState(r.weekTotal, r.weekDone),
+    compliance: r.sessionTotal === 0 ? 0 : Math.round((r.sessionDone / r.sessionTotal) * 100),
+    last: r.lastReviewedAt ? shortDate(r.lastReviewedAt) : "—",
+  };
+}
+
 export default function SekolahPage() {
   // school_week_stats RPC when configured, bundled demo figures otherwise.
   const s = useSchoolStats();
   const maxPct = Math.max(...s.weeks.map((w) => w.pct));
+
+  // Gated on `pantau`, and narrowed again inside erph.pantau_teachers to the
+  // teachers this reviewer actually supervises — so a GPK's table is their
+  // own teachers and nobody else's, while the aggregate cards above stay
+  // school-wide for both roles.
+  const teachers = useQuery<{ items: TeacherRow[] }>({
+    queryKey: ["pantau-teachers"],
+    queryFn: async () => {
+      const res = await fetch("/api/pantau/teachers", { credentials: "same-origin" });
+      if (!res.ok) return { items: [] };
+      return (await res.json()) as { items: TeacherRow[] };
+    },
+    enabled: supabaseConfigured,
+    retry: false,
+  });
+
+  const rows: Row[] = supabaseConfigured
+    ? (teachers.data?.items ?? []).map(fromApi)
+    : TEACHER_ROWS.map((t) => ({
+        id: t.name,
+        name: t.name,
+        initials: t.initials,
+        tone: t.tone,
+        role: t.role,
+        classes: t.panel,
+        week: t.week,
+        compliance: t.compliance,
+        last: t.last,
+      }));
+
+  // Not "not submitted" — "Lewat" means their plan exists but is not approved,
+  // and "Tiada" means this week has nothing at all. Both need a nudge; neither
+  // is the same as a teacher who is simply mid-task, which is Menunggu.
+  const lateCount = rows.filter((r) => r.week === "Lewat" || r.week === "Tiada").length;
 
   return (
     <>
@@ -165,8 +273,14 @@ export default function SekolahPage() {
             <div className="flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
               <Bell className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
               <div>
-                3 guru belum menghantar. Peringatan automatik: <b>Khamis 4:00 petang</b>,
-                ingatan akhir Jumaat 8:00 pagi.
+                {lateCount > 0 ? (
+                  <>
+                    {lateCount} guru belum menghantar. Peringatan automatik:{" "}
+                    <b>Khamis 4:00 petang</b>, ingatan akhir Jumaat 8:00 pagi.
+                  </>
+                ) : (
+                  <>Semua guru dalam bidang anda telah menghantar untuk minggu ini.</>
+                )}
               </div>
             </div>
           </CardContent>
@@ -178,7 +292,7 @@ export default function SekolahPage() {
         <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Prestasi guru</h2>
         <span className="h-px flex-1 bg-border" />
         <span className="num text-xs text-ink-3">
-          Memaparkan {TEACHER_ROWS.length} daripada {s.activeTeachers} guru
+          Memaparkan {rows.length} daripada {s.activeTeachers} guru
         </span>
       </div>
 
@@ -196,8 +310,8 @@ export default function SekolahPage() {
               </tr>
             </THead>
             <TBody>
-              {TEACHER_ROWS.map((t) => (
-                <TR key={t.name}>
+              {rows.map((t) => (
+                <TR key={t.id}>
                   <TD>
                     <div className="flex items-center gap-2.5">
                       <Avatar initials={t.initials} tone={t.tone} small />
@@ -207,19 +321,9 @@ export default function SekolahPage() {
                       </div>
                     </div>
                   </TD>
-                  <TD className="text-ink-3">{t.panel}</TD>
+                  <TD className="text-ink-3">{t.classes}</TD>
                   <TD>
-                    <Badge
-                      variant={
-                        t.week === "Lengkap"
-                          ? "success"
-                          : t.week === "Menunggu"
-                            ? "info"
-                            : "danger"
-                      }
-                    >
-                      {t.week === "Lewat" ? "Lewat 1" : t.week}
-                    </Badge>
+                    <Badge variant={WEEK_TONE[t.week]}>{t.week}</Badge>
                   </TD>
                   <TD>
                     <div className="flex items-center gap-2.5">
@@ -238,13 +342,13 @@ export default function SekolahPage() {
                       variant="ghost"
                       onClick={() =>
                         toast(
-                          t.week === "Lewat"
+                          t.week === "Lewat" || t.week === "Tiada"
                             ? `Peringatan dihantar kepada ${t.name}`
                             : `Memanggil senarai RPH ${t.name}`,
                         )
                       }
                     >
-                      {t.week === "Lewat" ? "Peringat" : "Semak"}
+                      {t.week === "Lewat" || t.week === "Tiada" ? "Peringat" : "Semak"}
                     </Button>
                   </TD>
                 </TR>

@@ -45,6 +45,9 @@ def main() -> int:
     delta4 = (ROOT / "db" / "migrations" / "004_supervision_and_signing.sql").read_text(
         encoding="utf-8"
     )
+    delta5 = (ROOT / "db" / "migrations" / "005_pantau_teachers.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -145,8 +148,9 @@ def main() -> int:
             )
             run(delta3, "003")
             run(delta4, "004")
+            run(delta5, "005")
         print(
-            "  [OK ] migration applied (001a + 001b + 002 + 003 + 004, "
+            "  [OK ] migration applied (001a + 001b + 002 + 003 + 004 + 005, "
             "old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
@@ -174,7 +178,8 @@ def main() -> int:
             "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
             "where n.nspname='erph' and p.proname in "
             "('sahkan_rph','hantar_balik_rph','may_supervise','supervises',"
-            " 'admin_set_supervisor','admin_list_members','admin_set_member',"
+            " 'pantau_teachers','admin_set_supervisor','admin_list_members',"
+            " 'admin_set_member',"
             " 'admin_set_setting','admin_create_member','admin_reset_password',"
             " 'admin_unlock_member','admin_list_classes','admin_set_class',"
             " 'admin_list_subjects','admin_set_subject','admin_create_subject')"
@@ -213,7 +218,7 @@ def main() -> int:
     # survive — a lingering one would still be callable through PostgREST and
     # would restore a flow the app no longer drives.
     check("review_rph / semak_rph / lulus_rph gone", old_fn == 0, f"found {old_fn}")
-    check("16 functions present", new_fns == 16, f"found {new_fns}")
+    check("17 functions present", new_fns == 17, f"found {new_fns}")
     # The exact bug the `drop` in 002 exists to prevent: an added parameter
     # makes Postgres treat the function as a *different* one, so `create or
     # replace` silently leaves the old arity behind — and calls that omit the

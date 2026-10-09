@@ -248,7 +248,7 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    check("32 functions in erph", n_funcs == 32, f"found {n_funcs}")
+    check("33 functions in erph", n_funcs == 33, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -513,6 +513,51 @@ def main() -> int:
             f"select erph.may_supervise(school_id, owner_id) from erph.rph_document where id = {DOC}"
         )[0]
         stage.append(("Guru Besar is in scope without an assignment", scoped is True))
+
+        # Reporting uses the same predicate, so a GPK's table is their own
+        # teachers — not the whole school. `uji` is supervised by gpk.uji, and
+        # gpk.uji counts as supervising themselves.
+        #
+        # `1::smallint`: an unadorned literal is `integer`, and int4→int2 is an
+        # assignment cast, so the call would not resolve at all — it fails with
+        # "function does not exist" rather than anything that names the problem.
+        act_as("gpk.uji")
+        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint)")]
+        stage.append(
+            ("a GPK's report lists only their supervised teachers", seen == ["GPK Ujian", "Guru Ujian"], str(seen))
+        )
+
+        act_as("gb.uji")
+        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint)")]
+        stage.append(
+            ("a Guru Besar's lists the whole school", seen == ["GB Ujian", "GPK Ujian", "Guru Ujian"], str(seen))
+        )
+
+        # Reassigned away, the same GPK loses them again — forward scope, not a
+        # rewrite of anything already signed.
+        r.q(
+            f"""
+            update erph.school_member set supervisor_id = null
+             where user_id = (select id from erph.user where username = 'uji')
+               and school_id = {SK};
+            """
+        )
+        conn.commit()
+        act_as("gpk.uji")
+        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint)")]
+        stage.append(
+            ("and loses them when reassigned away", seen == ["GPK Ujian"], str(seen))
+        )
+        # Put it back — the rest of the fixture assumes the assignment exists.
+        r.q(
+            f"""
+            update erph.school_member
+               set supervisor_id = (select id from erph.user where username = 'gpk.uji')
+             where user_id = (select id from erph.user where username = 'uji')
+               and school_id = {SK};
+            """
+        )
+        conn.commit()
 
         # ── a teacher may not decide their own work ─────────────────────────
         act_as("uji")

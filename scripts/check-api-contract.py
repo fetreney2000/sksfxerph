@@ -72,9 +72,19 @@ for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
     is_public = any(
         k in rel for k in ("auth/login", "auth/logout", "auth/me", "heartbeat")
     )
+    # Substring match against the source, so a route that merely imports a
+    # guard without calling it would still read as protected — the same
+    # looseness every entry here has, and enough to catch the real failure,
+    # which is a route with no guard at all.
     guarded = any(
         g in src
-        for g in ("requireUser(", "requireDbUser(", "requireReviewer(", "requireAdministrator(")
+        for g in (
+            "requireUser(",
+            "requireDbUser(",
+            "requireReviewer(",
+            "requireAdministrator(",
+            "requirePermission(",
+        )
     )
     if is_public:
         label = "public (intended)"
