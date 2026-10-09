@@ -7,8 +7,9 @@ import { NotificationBell } from "@/components/shell/notifications";
 import { SyncChip } from "@/components/shell/sync-chip";
 import { useTheme } from "@/components/shell/theme";
 import { initialsOf, useUser } from "@/components/shell/user-context";
-import { currentWeek, SCHOOL } from "@/lib/config";
+import { currentWeek } from "@/lib/config";
 import { weekRangeLabel } from "@/lib/date";
+import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 
@@ -19,6 +20,7 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
   const { theme, toggle } = useTheme();
   const me = useUser();
   const session = useSession();
+  const school = useSchool();
   const meta = ROUTE_META[pathname] ?? { title: "eRPH", crumb: "" };
 
   return (
@@ -26,7 +28,7 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
       <div className="min-w-0">
         <h1 className="truncate text-[16.5px] font-bold tracking-[-0.35px]">{meta.title}</h1>
         <p className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-3">
-          <span className="truncate">{SCHOOL.name}</span>
+          <span className="truncate">{school.name}</span>
           <Chevron />
           <span>{session}</span>
           <Chevron />

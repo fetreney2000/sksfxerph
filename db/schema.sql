@@ -206,6 +206,13 @@ create table erph.school (
   level       text not null check (level in ('prasekolah','rendah','menengah','kembar')),
   ppd         text,                                    -- district name (kept simple on free tier)
   jpn         text,                                    -- state name
+  -- The two things the school owns about itself. `motto` is printed on the
+  -- login screen; `logo_url` points into the public `school-assets` bucket.
+  -- The crest is *not* stored here: a 166 KB image in a row read on every
+  -- navigation would be paid for by every request, and `next/image` could not
+  -- cache or re-encode it.
+  motto       text,
+  logo_url    text,
   is_active   boolean not null default true,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
@@ -1213,6 +1220,42 @@ begin
   values (p_code, trim(p_nama), p_curriculum, true);
 end $$;
 
+-- The school's own identity — name, district/state, motto, logo.
+--
+-- `kod_sekolah` is deliberately absent: it is the natural key (`school.kod_sekolah`
+-- is UNIQUE) and it also has to match `NEXT_PUBLIC_SCHOOL_CODE`, which is baked
+-- into the build. Letting a form change it would desynchronise the two with no
+-- way back, so it is displayed read-only rather than editable.
+create or replace function erph.admin_set_school(p_school uuid, p_nama text,
+                                                 p_ppd text, p_jpn text,
+                                                 p_motto text, p_logo_url text)
+returns void language plpgsql security definer set search_path = erph, public as $$
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if nullif(trim(p_nama), '') is null then
+    raise exception 'Nama sekolah diperlukan';
+  end if;
+  -- Only a path under our own origin or an explicit URL. A `javascript:` value
+  -- stored here would be rendered as an image `src` across the app.
+  if p_logo_url is not null and p_logo_url !~ '^(/|https?://)' then
+    raise exception 'Logo mesti dalam bentuk URL yang sah';
+  end if;
+
+  update erph.school
+     set nama    = trim(p_nama),
+         ppd     = nullif(trim(p_ppd), ''),
+         jpn     = nullif(trim(p_jpn), ''),
+         motto   = nullif(trim(p_motto), ''),
+         logo_url = p_logo_url
+   where id = p_school;
+
+  if not found then
+    raise exception 'Sekolah tidak dijumpai';
+  end if;
+end $$;
+
 -- ── 11 · TRIGGERS ────────────────────────────────────────────────────────────
 create trigger tr_school_updated   before update on erph.school
   for each row execute function erph.set_updated_at();
@@ -1271,13 +1314,30 @@ create policy school_read on erph.school
 create policy setting_read on erph.school_setting
   for select using (erph.is_member(erph.school_setting.school_id));
 
+-- The Administrator's account belongs to them, not to the staff who work
+-- alongside them. Without the second condition a GPK or Guru Besar can read a
+-- pentadbir's membership and profile through `shares_school_with` / `is_staff`
+-- — which is how "the pentadbir is visible only to a pentadbir" is enforced at
+-- the row level rather than only in the tables a developer remembered to hide
+-- them from. `admin_list_members` is SECURITY DEFINER, so the pentadbir's own
+-- view of the roster is unaffected.
 create policy profile_read on erph.user
-  for select using (id = erph.actor() or erph.shares_school_with(erph.user.id));
+  for select using (
+    id = erph.actor()
+    or (erph.shares_school_with(erph.user.id) and erph.user.role <> 'pentadbir')
+  );
 create policy profile_self_update on erph.user
   for update using (id = erph.actor()) with check (id = erph.actor());
 
+-- Staff may read the roster to monitor it — except the Administrator's own row,
+-- for the same reason as `profile_read` below. A Guru Biasa never sees anyone
+-- but themselves either way, since `is_staff` is false for them.
 create policy member_read on erph.school_member
-  for select using (user_id = erph.actor() or erph.is_staff(erph.school_member.school_id));
+  for select using (
+    user_id = erph.actor()
+    or (erph.is_staff(erph.school_member.school_id)
+        and erph.school_member.role <> 'pentadbir')
+  );
 
 -- reference data: read-only for any signed-in user
 create policy subject_read   on erph.subject         for select to authenticated using (true);
@@ -1359,14 +1419,18 @@ create policy export_read on erph.export_file
 create policy audit_admin_read on erph.audit_log
   for select using (erph.has_role(erph.audit_log.school_id, array['guru_besar','gpk']::erph.member_role[]));
 
--- ── 13 · STORAGE (private buckets, membership-scoped signed URLs) ────────────
+-- ── 13 · STORAGE (private buckets, plus one public crest) ────────────────────
 insert into storage.buckets (id, name, public) values
   ('rph-exports', 'rph-exports', false),
-  ('attachments', 'attachments', false)
+  ('attachments', 'attachments', false),
+  -- Public: the school crest renders on the login screen before any session
+  -- exists, and `next/image` fetches it server-side without a cookie.
+  ('school-assets', 'school-assets', true)
 on conflict (id) do nothing;
 
 -- path convention: rph-exports/<document_id>/<file>.pdf
 --                  attachments/<user_id>/<file>
+--                  school-assets/<school_id>/logo.<ext>
 --
 -- KNOWN DORMANT STATE — read before using these buckets.
 -- These policies call erph.has_role() → erph.actor(), and erph.actor() only
@@ -1395,6 +1459,18 @@ create policy storage_upload_attachments on storage.objects
   for insert to authenticated with check (
     bucket_id = 'attachments' and (storage.foldername(name))[1] = erph.actor()::text
   );
+
+-- The school crest. Public on purpose and *only* public: it is rendered on the
+-- login screen, before anyone has a session, and `next/image` fetches it
+-- server-side without a cookie. Everything else in storage stays behind
+-- `storage_read`.
+--
+-- Dropped first because unlike its neighbours it depends on no `erph.*`
+-- function, so `drop schema erph cascade` does not take it with them — a
+-- second run over the same database would otherwise collide with itself.
+drop policy if exists storage_read_school_logo on storage.objects;
+create policy storage_read_school_logo on storage.objects
+  for select using (bucket_id = 'school-assets');
 
 -- ── 14 · VIEWS (security_invoker ⇒ RLS still applies through the view) ───────
 create view erph.v_teacher_week

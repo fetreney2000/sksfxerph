@@ -1,7 +1,7 @@
 import type * as React from "react";
 import { cn } from "@/lib/cn";
-import { SCHOOL } from "@/lib/config";
 import type { RphPayload } from "@/lib/schemas/rph";
+import { currentSchool } from "@/lib/school";
 
 /**
  * The A4-shaped KPM RPH document.
@@ -15,7 +15,7 @@ export function RphPaper({
   payload,
   className,
   teacherName = "Nurul Aisyah binti Rahim",
-  schoolName = SCHOOL.name,
+  schoolName = currentSchool().name,
   session,
 }: {
   payload: RphPayload;

@@ -2,8 +2,8 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LoginCard } from "@/components/auth/login-card";
 import { homeFor } from "@/lib/auth/permissions";
-import { SCHOOL } from "@/lib/config";
 import { getCurrentUser } from "@/lib/server/auth/session";
+import { resolveSchool } from "@/lib/server/school";
 
 /**
  * Login gate.
@@ -15,10 +15,17 @@ import { getCurrentUser } from "@/lib/server/auth/session";
  * Two panels: the school's own crest, because at 6am on a school laptop this
  * is the one screen a teacher sees before anything else, and recognising it as
  * *their* school's system is worth more than any amount of product branding.
+ *
+ * The identity is read here rather than imported from `lib/config` because
+ * this is the screen *before* authentication — there is no user to resolve a
+ * membership for, and the school's name and logo are exactly the things that
+ * must not need a session to be correct.
  */
 export default async function LoginPage() {
   const user = await getCurrentUser();
   if (user) redirect(homeFor(user.role));
+
+  const { school } = await resolveSchool();
 
   return (
     <div className="grid min-h-dvh bg-bg lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)]">
@@ -37,8 +44,8 @@ export default async function LoginPage() {
         <div className="relative flex flex-1 flex-col items-center justify-center gap-7">
           <div className="rounded-[20px] bg-white p-2.5 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.45)]">
             <Image
-              src={SCHOOL.logo}
-              alt={`Lambang ${SCHOOL.name}`}
+              src={school.logo}
+              alt={`Lambang ${school.name}`}
               width={512}
               height={512}
               priority
@@ -47,11 +54,13 @@ export default async function LoginPage() {
           </div>
 
           <div>
-            <p className="text-[11px] font-bold tracking-[3.5px] text-[#8cc7ff] uppercase">
-              {SCHOOL.place}
-            </p>
+            {school.place && (
+              <p className="text-[11px] font-bold tracking-[3.5px] text-[#8cc7ff] uppercase">
+                {school.place}
+              </p>
+            )}
             <h1 className="mt-2.5 text-[28px] leading-[1.12] font-extrabold tracking-[-0.6px] text-white sm:text-[34px]">
-              {SCHOOL.name}
+              {school.name}
             </h1>
             <p className="mt-2.5 text-[14px] text-[#afbdd1] sm:text-[15px]">
               Rancangan Pengajaran Harian
@@ -59,11 +68,13 @@ export default async function LoginPage() {
           </div>
         </div>
 
-        <footer className="relative flex flex-col items-center gap-4">
-          <span className="inline-flex items-center rounded-full border border-[#ffd60a]/35 bg-[#ffd60a]/10 px-4 py-1.5 text-[12.5px] font-semibold tracking-[0.4px] text-[#ffe066]">
-            {SCHOOL.motto}
-          </span>
-        </footer>
+        {school.motto && (
+          <footer className="relative flex flex-col items-center gap-4">
+            <span className="inline-flex items-center rounded-full border border-[#ffd60a]/35 bg-[#ffd60a]/10 px-4 py-1.5 text-[12.5px] font-semibold tracking-[0.4px] text-[#ffe066]">
+              {school.motto}
+            </span>
+          </footer>
+        )}
       </aside>
 
       {/* ── Sign in ──────────────────────────────────────────────────────── */}

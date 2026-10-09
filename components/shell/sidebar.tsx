@@ -7,9 +7,10 @@ import { usePathname } from "next/navigation";
 import { navFor } from "@/components/shell/nav";
 import { homeFor } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
-import { currentWeek, SCHOOL } from "@/lib/config";
+import { currentWeek } from "@/lib/config";
 import { db } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
+import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 import type { MemberRole } from "@/lib/types";
@@ -44,6 +45,7 @@ export function Sidebar({
   };
 
   const session = useSession();
+  const school = useSchool();
   const counts = useLiveQuery(
     async () => ({
       drafts: await db.documents
@@ -64,7 +66,7 @@ export function Sidebar({
     >
       <Link href={homeFor(user.role)} className="flex items-center gap-2.5 px-4.5 py-4">
         <Image
-          src={SCHOOL.logo}
+          src={school.logo}
           alt=""
           width={512}
           height={512}
@@ -72,7 +74,7 @@ export function Sidebar({
         />
         <span className="min-w-0">
           <span className="block truncate text-[13.5px] leading-tight font-bold text-white">
-            {SCHOOL.name}
+            {school.name}
           </span>
           <span className="block truncate text-[10.5px] text-[#6d7f99]">{ms.appTagline}</span>
         </span>

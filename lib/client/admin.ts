@@ -123,6 +123,45 @@ export const setSubject = (code: string, isActive: boolean) =>
 
 /* ── Settings ─────────────────────────────────────────────────────────────── */
 
+/**
+ * The school's identity — what `/pentadbiran` edits and what the login screen,
+ * sidebar, breadcrumb and printed RPH then show everywhere.
+ *
+ * `PATCH` takes a `FormData`, not JSON, because the crest rides along as a file.
+ * Setting `content-type` here would clobber the multipart boundary the browser
+ * generates, so this one bypasses `request()` rather than reusing it.
+ */
+export const getSchool = () => request<{ school: SchoolIdentity | null }>("/api/admin/school");
+
+export async function setSchool(form: FormData): Promise<{ school: SchoolIdentity | null }> {
+  const res = await fetch("/api/admin/school", {
+    method: "PATCH",
+    credentials: "same-origin",
+    body: form,
+  });
+  if (handleExpiredSession(res.status)) throw new Error("Sesi tamat");
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message =
+      body && typeof body === "object" && "error" in body
+        ? String((body as { error: unknown }).error)
+        : "";
+    throw new Error(message || `Gagal (${res.status})`);
+  }
+  return body as { school: SchoolIdentity | null };
+}
+
+export interface SchoolIdentity {
+  id: string;
+  kod_sekolah: string;
+  nama: string;
+  level: string;
+  ppd: string | null;
+  jpn: string | null;
+  motto: string | null;
+  logo_url: string | null;
+}
+
 export interface SchoolSetting {
   current_session: string;
   submit_weekday: number;
@@ -141,7 +180,6 @@ export interface SchoolInfo {
 
 export const getSettings = () =>
   request<{ setting: SchoolSetting | null; school: SchoolInfo | null }>("/api/admin/settings");
-
 export const setSettings = (body: {
   submitWeekday: number;
   submitTime: string;

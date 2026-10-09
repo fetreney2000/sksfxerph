@@ -10,9 +10,10 @@ import {
 } from "docx";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { SCHOOL, supabaseConfigured } from "@/lib/config";
+import { supabaseConfigured } from "@/lib/config";
 import { rphPayloadSchema } from "@/lib/schemas/rph";
 import { requireUser } from "@/lib/server/auth/guard";
+import { resolveSchool } from "@/lib/server/school";
 import { DB_SCHEMA } from "@/lib/supabase/schema";
 
 /**
@@ -34,7 +35,7 @@ const bodySchema = z.object({
   payload: rphPayloadSchema,
   session: z.string(),
   teacherName: z.string().default("Nurul Aisyah binti Rahim"),
-  schoolName: z.string().default(SCHOOL.name),
+  schoolName: z.string().optional(),
   planDate: z.string().optional(),
   className: z.string().optional(),
   subjectName: z.string().optional(),
@@ -99,8 +100,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { payload, session, teacherName, schoolName, planDate, className, subjectName } =
-    parsed.data;
+  const { payload, session, teacherName, planDate, className, subjectName } = parsed.data;
+  // The school's name on a printed RPH comes from the row the administrator
+  // edits, not from the build — otherwise the document and the screen it was
+  // previewed on could name different schools. Resolved here rather than as a
+  // zod default because a default has to be a constant.
+  const schoolName = parsed.data.schoolName ?? (await resolveSchool()).school.name;
 
   // `document_id` is a claim by the caller, and it is stamped into the
   // statutory export log below. The *payload* is whatever was sent — that is

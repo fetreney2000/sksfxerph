@@ -35,6 +35,7 @@ import { cn } from "@/lib/cn";
 import { supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
 import { db } from "@/lib/db";
+import { useSchool } from "@/lib/hooks/use-school";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
@@ -171,6 +172,7 @@ export function RphEditor({ docId }: { docId?: string }) {
   // The school year the preview prints — server-resolved, so the paper shows
   // the same year the plan will be filed under.
   const session = useSession();
+  const school = useSchool();
 
   const [submitOpen, setSubmitOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -747,7 +749,7 @@ export function RphEditor({ docId }: { docId?: string }) {
             </Button>
           </div>
 
-          <RphPaper payload={deferredPayload} session={session} />
+          <RphPaper payload={deferredPayload} session={session} schoolName={school.name} />
         </div>
       </div>
 

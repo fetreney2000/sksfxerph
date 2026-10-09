@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabaseConfigured } from "@/lib/config";
 import { AccountsTab } from "./accounts-tab";
 import { ClassesTab } from "./classes-tab";
+import { SchoolTab } from "./school-tab";
 import { SettingsTab } from "./settings-tab";
 import { SubjectsTab } from "./subjects-tab";
 
@@ -30,12 +31,13 @@ import { SubjectsTab } from "./subjects-tab";
  * created.
  */
 
-type Tab = "akaun" | "kelas" | "subjek" | "tetapan";
+type Tab = "akaun" | "kelas" | "subjek" | "sekolah" | "tetapan";
 
 const TABS: { value: Tab; label: string }[] = [
   { value: "akaun", label: "Akaun & peranan" },
   { value: "kelas", label: "Kelas" },
   { value: "subjek", label: "Mata pelajaran" },
+  { value: "sekolah", label: "Maklumat sekolah" },
   { value: "tetapan", label: "Sesi & tarikh akhir" },
 ];
 
@@ -84,6 +86,9 @@ export default function PentadbiranPage() {
         </TabsContent>
         <TabsContent value="subjek">
           <SubjectsTab />
+        </TabsContent>
+        <TabsContent value="sekolah">
+          <SchoolTab />
         </TabsContent>
         <TabsContent value="tetapan">
           <SettingsTab />

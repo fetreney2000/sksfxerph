@@ -238,8 +238,8 @@ def main() -> int:
     n_storage = r.one("select count(*) from pg_policies where schemaname='storage'")[0]
     check("24 policies on erph tables", n_policies == 24, f"found {n_policies}")
     check(
-        "2 policies on storage.objects",
-        n_storage == 2,
+        "3 policies on storage.objects",
+        n_storage == 3,
         f"found {n_storage} (only the ones this file creates)",
     )
 
@@ -248,7 +248,7 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    check("28 functions in erph", n_funcs == 28, f"found {n_funcs}")
+    check("29 functions in erph", n_funcs == 29, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -588,7 +588,77 @@ def main() -> int:
         r.q(f"select erph.admin_set_setting({SK}, 5::smallint, '16:00', true, '2026/2027')")
         conn.commit()
 
-        for label, ok in admin:
+        # ── school identity ───────────────────────────────────────────────
+        act_as("uji")
+        msg = refused(
+            f"select erph.admin_set_school({SK}, 'Tidak Sah', null, null, null, '/logo.png')"
+        )
+        admin.append(("Guru Biasa cannot change school info", "pentadbir" in msg))
+
+        act_as("admin.uji")
+        msg = refused(
+            f"select erph.admin_set_school({SK}, 'X', null, null, null, 'javascript:alert(1)')"
+        )
+        admin.append(("malformed logo URL refused", "URL" in msg))
+
+        r.q(
+            f"select erph.admin_set_school({SK}, 'Sekolah Ujian Baharu', 'PPD Ujian', "
+            f"'JPN Ujian', 'Bersatu Kita Teguh', '/logo.png')"
+        )
+        conn.commit()
+        row = r.one(
+            f"select nama, ppd, motto, logo_url from erph.school where kod_sekolah='SKTEST'"
+        )
+        admin.append(
+            (
+                "administrator can set school info",
+                row[0] == "Sekolah Ujian Baharu"
+                and row[1] == "PPD Ujian"
+                and row[2] == "Bersatu Kita Teguh"
+                and row[3] == "/logo.png",
+                str(row),
+            )
+        )
+
+        # ── the Administrator is visible only to a pentadbir ──────────────
+        # Two policies, both of which previously let a GPK read the
+        # Administrator's account through `shares_school_with` / `is_staff`.
+        #
+        # These must run as `authenticated`: this connection owns the tables
+        # and owners bypass RLS entirely, so querying as ourselves would prove
+        # nothing but our own privilege. `SET ROLE` is transactional, so a
+        # rollback restores it along with everything else.
+        def visible_to_gpk(sql: str):
+            """Row count the GPK sees, or `denied` if the grant refused outright."""
+            try:
+                r.q("set role authenticated")
+                value = r.q(sql)[0][0]
+                conn.commit()
+                return value
+            except Exception as e:  # noqa: BLE001
+                conn.rollback()
+                return f"denied: {str(e).splitlines()[0][:60]}"
+
+        act_as("gpk.uji")
+        profiles = visible_to_gpk("select count(*) from erph.user where role = 'pentadbir'")
+        admin.append(
+            ("a GPK cannot read a pentadbir's profile", profiles in (0,) or str(profiles).startswith("denied"), str(profiles))
+        )
+        members = visible_to_gpk(
+            "select count(*) from erph.school_member where role = 'pentadbir'"
+        )
+        admin.append(("a GPK cannot read a pentadbir's membership", members == 0, str(members)))
+        # …but they can still see themselves, or monitoring breaks for exactly
+        # the people who need it.
+        own = visible_to_gpk("select count(*) from erph.school_member where role = 'gpk'")
+        admin.append(("a GPK still reads their own membership", own == 1, str(own)))
+
+        # `SET ROLE` survives a COMMIT (it is reverted by ROLLBACK only), so the
+        # seed below would otherwise run as `authenticated` and hit RLS.
+        r.q("reset role")
+        conn.commit()
+
+        for label, ok, *rest in admin:
             print(f"  [{'OK ' if ok else 'FAIL'}] {label}")
             errors += 0 if ok else 1
     except Exception as e:  # noqa: BLE001

@@ -1,5 +1,24 @@
 import type { NextConfig } from "next";
 
+/**
+ * The school's logo lives in the deployment's own Supabase storage bucket, so
+ * `next/image` has to be allowed to optimise it. The host is per-project, so
+ * it is derived from `NEXT_PUBLIC_SUPABASE_URL` rather than hard-coded — and
+ * narrowed to the public-object path so this cannot become a general
+ * allow-list for whatever else happens to share the host.
+ *
+ * Empty in local mode, where there is no bucket and the crest is `/logo.png`.
+ */
+const storageHost = (() => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return null;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+})();
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
@@ -13,8 +32,15 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
     qualities: [75],
-    // No remote images at all in this app — everything is local icons/SVG.
-    remotePatterns: [],
+    remotePatterns: storageHost
+      ? [
+          {
+            protocol: "https",
+            hostname: storageHost,
+            pathname: "/storage/v1/object/public/**",
+          },
+        ]
+      : [],
   },
 
   // Strict CSP + SW hardening (backend §10, PDPA).

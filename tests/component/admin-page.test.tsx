@@ -149,11 +149,17 @@ function clickTab(name: string) {
 }
 
 describe("pentadbiran", () => {
-  it("offers all four parts of the set-up console", async () => {
+  it("offers every part of the set-up console", async () => {
     vi.stubGlobal("fetch", fakeFetch);
     await mount();
 
-    for (const label of ["Akaun & peranan", "Kelas", "Mata pelajaran", "Sesi & tarikh akhir"]) {
+    for (const label of [
+      "Akaun & peranan",
+      "Kelas",
+      "Mata pelajaran",
+      "Maklumat sekolah",
+      "Sesi & tarikh akhir",
+    ]) {
       expect(screen.getByRole("tab", { name: label })).toBeTruthy();
     }
   });

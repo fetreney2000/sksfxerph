@@ -39,6 +39,9 @@ def main() -> int:
     delta2 = (ROOT / "db" / "migrations" / "002_admin_console.sql").read_text(
         encoding="utf-8"
     )
+    delta3 = (ROOT / "db" / "migrations" / "003_school_identity.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -123,7 +126,8 @@ def main() -> int:
             # *current* definitions — proving the pair works in sequence is the
             # whole point of generating both from one source.
             run(delta2, "002")
-        print("  [OK ] migration applied (001a + 001b + 002)")
+            run(delta3, "003")
+        print("  [OK ] migration applied (001a + 001b + 002 + 003)")
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
         return 1
@@ -294,6 +298,47 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         conn.rollback()
         check("admin_set_setting persists the session", False, str(e).splitlines()[0][:140])
+
+    # ── 003: the school's identity ─────────────────────────────────────────
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select column_name from information_schema.columns "
+                "where table_schema='erph' and table_name='school' "
+                "and column_name in ('motto','logo_url')"
+            )
+            cols = {r[0] for r in cur.fetchall()}
+            check(
+                "erph.school gained motto + logo_url",
+                cols == {"motto", "logo_url"},
+                str(sorted(cols)),
+            )
+
+            cur.execute(
+                "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='erph' and p.proname='admin_set_school'"
+            )
+            check("admin_set_school exists", cur.fetchone()[0] == 1)
+
+            # The whole point of the policy change: the tightened definitions
+            # must actually be the installed ones, not the pre-003 copies.
+            cur.execute(
+                "select count(*) from pg_policies where schemaname='erph' "
+                "and policyname in ('profile_read','member_read') "
+                "and qual like '%pentadbir%'"
+            )
+            check(
+                "profile_read/member_read exclude the pentadbir",
+                cur.fetchone()[0] == 2,
+                "policies still lack the pentadbir condition",
+            )
+
+            cur.execute(
+                "select count(*) from storage.buckets where id='school-assets' and public"
+            )
+            check("public school-assets bucket", cur.fetchone()[0] == 1)
+    except Exception as e:  # noqa: BLE001
+        check("003 school identity", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

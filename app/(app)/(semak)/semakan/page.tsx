@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 import { supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
 import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
+import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 import { reviewRph } from "@/lib/rpc";
@@ -40,6 +41,7 @@ export default function SemakanPage() {
   // Remote when configured, bundled demo otherwise — same shape either way.
   const { role } = useUser();
   const session = useSession();
+  const school = useSchool();
   const stage = reviewStageFor(role);
   const isGpk = stage?.rpc === "semak_rph";
   const { items: QUEUE } = useReviewQueueData(stage?.status ?? null);
@@ -255,6 +257,7 @@ export default function SemakanPage() {
               <RphPaper
                 payload={item.payload}
                 session={session}
+                schoolName={school.name}
                 teacherName={item.teacherName}
               />
 
