@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as React from "react";
-import { currentWeek } from "@/lib/config";
+import { currentWeek, supabaseConfigured } from "@/lib/config";
 import { seedLocalData } from "@/lib/demo/seed";
 import { flushQueue, isOnline } from "@/lib/sync/queue";
 
@@ -29,7 +29,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   React.useEffect(() => {
-    void seedLocalData(currentWeek());
+    // Local mode only. The fixtures carry class ids like `c-5a`, which are not
+    // UUIDs — `sync_rph` casts `class_id`, so writing them into a synced
+    // deployment would leave a dashboard full of demo plans that can never
+    // reach the server, each one failing on every flush. The comment on this
+    // function has always said "(local mode)"; the call is what forgot.
+    if (!supabaseConfigured) void seedLocalData(currentWeek());
 
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
       navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err: unknown) => {
