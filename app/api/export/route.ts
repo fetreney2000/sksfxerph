@@ -39,6 +39,18 @@ const bodySchema = z.object({
   planDate: z.string().optional(),
   className: z.string().optional(),
   subjectName: z.string().optional(),
+  /**
+   * The seal, carried through to the printed document.
+   *
+   * Sent by a client that has already verified it in the browser, so the
+   * export is a rendering of a checked signature rather than a claim. An
+   * export with no signature simply prints the blank reviewer line it always
+   * did — an unapproved plan must not look sealed.
+   */
+  signerName: z.string().optional(),
+  signedAt: z.string().optional(),
+  signatureAlg: z.string().optional(),
+  signatureKey: z.string().optional(),
 });
 
 async function supabaseAdmin() {
@@ -222,15 +234,52 @@ export async function POST(request: NextRequest) {
           ...section("Refleksi", payload.refleksi, nonEmpty(payload.refleksi)),
           ...section("Intervensi", payload.intervensi, nonEmpty(payload.intervensi)),
 
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: "Tandatangan Guru: ____________________        Semakan Pentadbir: ____________________",
-                size: 20,
-              }),
-            ],
-            spacing: { before: 400 },
-          }),
+          // The reviewer's line is a blank to sign when nothing has been sealed.
+          // Once something has, the seal takes its place and carries the name,
+          // the moment and the material needed to check it — because a document
+          // that prints "Semakan Pentadbir: ____________" over an approval that
+          // already happened is a document that understates what was done.
+          ...(parsed.data.signerName
+            ? [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Disahkan secara digital oleh ${parsed.data.signerName}`,
+                      bold: true,
+                      size: 20,
+                    }),
+                  ],
+                  spacing: { before: 400 },
+                }),
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: [
+                        parsed.data.signedAt ?? "",
+                        parsed.data.signatureAlg ?? "",
+                        parsed.data.signatureKey
+                          ? `kunci ${parsed.data.signatureKey.slice(0, 16)}…`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join("  ·  "),
+                      size: 16,
+                      color: "667085",
+                    }),
+                  ],
+                }),
+              ]
+            : [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: "Tandatangan Guru: ____________________        Semakan Pentadbir: ____________________",
+                      size: 20,
+                    }),
+                  ],
+                  spacing: { before: 400 },
+                }),
+              ]),
         ],
       },
     ],

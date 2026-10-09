@@ -16,6 +16,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { RphPaper } from "@/components/rph/rph-paper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,10 +41,12 @@ import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSession } from "@/lib/hooks/use-session";
+import { useSignature } from "@/lib/hooks/use-signature";
 import { ms } from "@/lib/i18n/ms";
 import { RpcError, submitRph } from "@/lib/rpc";
 import { completeness, emptyPayload, type RphPayload, stepStatus } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
+import { payloadHash, verifySignature } from "@/lib/signature";
 import { commit } from "@/lib/sync/queue";
 import type { RphDocument } from "@/lib/types";
 
@@ -54,8 +57,42 @@ import type { RphDocument } from "@/lib/types";
  * involved. On any failure we fall back to the browser print dialog, which
  * also produces a PDF, so an export is never a dead end.
  */
+/**
+ * The seal for an exported plan, or null.
+ *
+ * Verified here rather than passed through. The exported file is the artefact
+ * most likely to reach someone who cannot ask the app about it, so the printed
+ * signature has to be one this process actually checked — and an unverifiable
+ * one is dropped rather than rendered, since a seal that cannot be confirmed
+ * must not appear to confirm anything.
+ */
+async function loadSeal(documentId: string, payload: unknown) {
+  try {
+    const res = await fetch(`/api/rph/${documentId}/signature`, {
+      credentials: "same-origin",
+    });
+    if (!res.ok) return null;
+    const { signature } = (await res.json()) as { signature: SignaturePayload | null };
+    if (!signature) return null;
+
+    const envelope = signature.envelope as { hash?: unknown };
+    const matches = envelope.hash === (await payloadHash(payload));
+    const verified = await verifySignature(
+      signature.publicKey,
+      signature.envelope,
+      signature.signature,
+    );
+    return matches && verified ? signature : null;
+  } catch {
+    // No seal is better than a failed export: the document is still correct,
+    // it simply prints the blank reviewer line.
+    return null;
+  }
+}
+
 async function exportDocx(doc: RphDocument): Promise<void> {
   try {
+    const seal = await loadSeal(doc.id, doc.payload);
     const res = await fetch("/api/export", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -66,6 +103,10 @@ async function exportDocx(doc: RphDocument): Promise<void> {
         planDate: doc.planDate,
         className: doc.className,
         subjectName: doc.subjectName,
+        signerName: seal?.signerName ?? undefined,
+        signedAt: seal?.signedAt ?? undefined,
+        signatureAlg: seal?.alg ?? undefined,
+        signatureKey: seal?.publicKey ?? undefined,
       }),
       signal: AbortSignal.timeout(20_000),
     });
@@ -298,6 +339,7 @@ export function RphEditor({ docId }: { docId?: string }) {
 
   /** What is on screen: a stored plan, or one that has not been saved yet. */
   const live = persisted ?? pending;
+
   // The school year the preview prints — server-resolved, so the paper shows
   // the same year the plan will be filed under.
   const session = useSession();
@@ -341,6 +383,16 @@ export function RphEditor({ docId }: { docId?: string }) {
   /** The newest payload, readable from callbacks without a stale closure. */
   const payloadRef = React.useRef(payload);
   payloadRef.current = payload;
+
+  /**
+   * The seal, if this plan has one.
+   *
+   * Keyed on the *persisted* id: an unsaved plan cannot have been sealed by
+   * anyone, so asking would be a request for a document that does not exist.
+   * `payload` rather than `deferredPayload` so the verification compares
+   * against what is actually on screen, not what React has caught up to.
+   */
+  const signature = useSignature(persisted?.id, payload);
 
   /**
    * The A4 preview is a couple of hundred nodes; deferring it lets React paint
@@ -918,7 +970,13 @@ export function RphEditor({ docId }: { docId?: string }) {
             </Button>
           </div>
 
-          <RphPaper payload={deferredPayload} session={session} schoolName={school.name} />
+          <RphPaper
+            payload={deferredPayload}
+            session={session}
+            schoolName={school.name}
+            signature={signature.signature}
+            signatureState={signature.state}
+          />
         </div>
       </div>
 

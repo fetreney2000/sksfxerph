@@ -37,6 +37,8 @@ const ME: Member = {
   locked_until: null,
   failed_logins: 0,
   password_changed_at: "2026-03-01T00:00:00Z",
+  supervisor_id: null,
+  supervisor_name: null,
 };
 
 const MEMBERS: Member[] = [
@@ -53,6 +55,23 @@ const MEMBERS: Member[] = [
     locked_until: "2099-01-01T00:00:00Z",
     failed_logins: 5,
     password_changed_at: null,
+    supervisor_id: null,
+    supervisor_name: null,
+  },
+  {
+    user_id: "00000000-0000-4000-8000-000000000003",
+    username: "siti.rahmah",
+    full_name: "Siti Rahmah binti Ali",
+    email: null,
+    role: "guru_biasa",
+    is_active: true,
+    last_login_at: null,
+    locked_until: null,
+    failed_logins: 0,
+    password_changed_at: null,
+    // Supervised, so the select has a value rather than being blank.
+    supervisor_id: "00000000-0000-4000-8000-000000000002",
+    supervisor_name: "Ramlan bin Yusof",
   },
 ];
 
@@ -198,10 +217,42 @@ describe("pentadbiran", () => {
     expect(screen.getByText("5 percubaan gagal")).toBeTruthy();
     expect(screen.getByText("Buka kunci")).toBeTruthy();
 
-    // One control per account, and both rows offer a password reset.
-    expect(screen.getAllByLabelText(/^Peranan /).length).toBe(2);
-    expect(screen.getAllByText("Tetap semula kata laluan")).toHaveLength(2);
-    expect(screen.getByText("Aktif")).toBeTruthy();
+    // One control per account, and every row offers a password reset.
+    expect(screen.getAllByLabelText(/^Peranan /).length).toBe(3);
+    expect(screen.getAllByText("Tetap semula kata laluan")).toHaveLength(3);
+    // Two of the three are active; the third is locked, not merely inactive.
+    expect(screen.getAllByText("Aktif")).toHaveLength(2);
+    expect(screen.getByText("Dikunci")).toBeTruthy();
+  });
+
+  it("offers the supervision assignment, and only to teachers", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mount();
+
+    await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
+
+    // Two Guru Biasa rows get a picker; the GPK does not — a GPK's scope is
+    // the Guru Besar, so there is nothing to choose for them.
+    expect(screen.getAllByLabelText(/^Penyelia /)).toHaveLength(2);
+    expect(screen.queryByLabelText("Penyelia Ramlan bin Yusof")).toBeNull();
+
+    // Unassigned is a real state, not a missing value, so it reads as blank.
+    // (`toHaveValue` is jest-dom's; this project registers no setup file, so
+    // the matcher simply is not there — plain assertions instead.)
+    expect(
+      (screen.getByLabelText("Penyelia Nurul Aisyah binti Rahim") as HTMLSelectElement).value,
+    ).toBe("");
+    expect(
+      (screen.getByLabelText("Penyelia Siti Rahmah binti Ali") as HTMLSelectElement).value,
+    ).toBe("00000000-0000-4000-8000-000000000002");
+
+    // Only a GPK or the Guru Besar may supervise, so the GPK is offered and a
+    // third Guru Biasa in the list is not.
+    const offered = screen.getAllByRole("option", {
+      name: /Ramlan bin Yusof · Guru Penolong Kanan/,
+    });
+    expect(offered.length).toBe(2);
+    expect(screen.queryByRole("option", { name: /Siti Rahmah .*Guru Biasa/ })).toBeNull();
   });
 
   it("lists classes with plan counts, archived ones included", async () => {

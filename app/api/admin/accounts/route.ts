@@ -34,9 +34,13 @@ const postSchema = z.object({
 });
 
 /**
- * Three distinct actions in one PATCH. `password` and `unlock` are separate
+ * Four distinct actions in one PATCH. `password` and `unlock` are separate
  * from `role`/`isActive` because they hit different RPCs — and resetting a
  * password already clears the lockout, so the two are never sent together.
+ * `supervisorId` is separate again: it is the scope assignment that decides
+ * which plans a GPK can reach, and it has its own validation in SQL (a
+ * supervisor must be an active GPK or Guru Besar, and nobody supervises
+ * themselves).
  */
 const patchSchema = z
   .object({
@@ -45,11 +49,14 @@ const patchSchema = z
     isActive: z.boolean().optional(),
     password: z.string().min(8, "Kata laluan: sekurang-kurangnya 8 aksara").max(128).optional(),
     unlock: z.literal(true).optional(),
+    /** null clears it — the teacher falls back to Guru-Besar-only visibility. */
+    supervisorId: z.string().uuid().nullable().optional(),
   })
   .refine(
     (d) =>
       d.password !== undefined ||
       d.unlock !== undefined ||
+      d.supervisorId !== undefined ||
       (d.role !== undefined && d.isActive !== undefined),
     { message: "Tiada perubahan diminta" },
   );
@@ -170,6 +177,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   } else if (body.unlock) {
     rpc = "admin_unlock_member";
     args = { p_school: schoolId, p_user: body.userId };
+  } else if (body.supervisorId !== undefined) {
+    rpc = "admin_set_supervisor";
+    args = {
+      p_school: schoolId,
+      p_member: body.userId,
+      p_supervisor: body.supervisorId,
+    };
   } else {
     rpc = "admin_set_member";
     args = {

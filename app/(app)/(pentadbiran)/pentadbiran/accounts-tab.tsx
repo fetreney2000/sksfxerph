@@ -29,6 +29,7 @@ import {
   type Member,
   resetPassword,
   setMember,
+  setSupervisor,
   unlockMember,
 } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
@@ -130,14 +131,16 @@ export function AccountsTab() {
             <table className="w-full border-collapse text-[13px]">
               <thead>
                 <tr className="bg-surface-2">
-                  {["Nama", "Peranan", "Status", "Log masuk terakhir", ""].map((h) => (
-                    <th
-                      key={h}
-                      className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  {["Nama", "Peranan", "Penyelia", "Status", "Log masuk terakhir", ""].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -159,6 +162,21 @@ export function AccountsTab() {
                       m.is_active
                         ? `${m.full_name} dinyahaktifkan`
                         : `${m.full_name} diaktifkan`,
+                      () => void accounts.refetch(),
+                    );
+
+                  // Only a GPK or the Guru Besar may supervise, so the list is
+                  // the members who are one — not every account on the roster.
+                  const supervisors = items.filter(
+                    (s) => s.role === "gpk" || s.role === "guru_besar",
+                  );
+
+                  const changeSupervisor = (supervisorId: string | null) =>
+                    save(
+                      () => setSupervisor(m.user_id, supervisorId),
+                      supervisorId
+                        ? `Penyelia ${m.full_name} dikemas kini`
+                        : `${m.full_name} kini hanya kelihatan kepada Guru Besar`,
                       () => void accounts.refetch(),
                     );
 
@@ -186,6 +204,36 @@ export function AccountsTab() {
                             </option>
                           ))}
                         </Select>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {/* Scope, not decoration: this decides whose plans the
+                            GPK above them can open. A GPK's own scope is the
+                            Guru Besar, so the column is blank for anyone who
+                            is not a Guru Biasa. */}
+                        {m.role === "guru_biasa" ? (
+                          supervisors.length === 0 ? (
+                            <span className="text-[12px] text-ink-4">
+                              Tiada GPK — hanya Guru Besar
+                            </span>
+                          ) : (
+                            <Select
+                              aria-label={`Penyelia ${m.full_name}`}
+                              value={m.supervisor_id ?? ""}
+                              className="w-[190px] py-1.5 text-[12.5px]"
+                              disabled={busy}
+                              onChange={(e) => changeSupervisor(e.target.value || null)}
+                            >
+                              <option value="">— Guru Besar sahaja —</option>
+                              {supervisors.map((s) => (
+                                <option key={s.user_id} value={s.user_id}>
+                                  {s.full_name} · {ms.roles[s.role]}
+                                </option>
+                              ))}
+                            </Select>
+                          )
+                        ) : (
+                          <span className="text-[12.5px] text-ink-4">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5">
                         <Badge variant={status.variant}>{status.label}</Badge>

@@ -1,5 +1,8 @@
 import type * as React from "react";
+import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
+import { SignatureSeal } from "@/components/rph/signature-seal";
 import { cn } from "@/lib/cn";
+import type { SignatureState } from "@/lib/hooks/use-signature";
 import type { RphPayload } from "@/lib/schemas/rph";
 import { currentSchool } from "@/lib/school";
 
@@ -10,6 +13,11 @@ import { currentSchool } from "@/lib/school";
  * a teacher sees on screen is byte-identical to what prints and what the
  * reviewer grades. This is what has to survive inspection under Peraturan 8,
  * Akta Pendidikan 1996.
+ *
+ * The signature is passed in rather than fetched here: this component is also
+ * rendered on the export path, where the caller has already verified it, and a
+ * second round trip would be a second failure mode for something that has to be
+ * on the page.
  */
 export function RphPaper({
   payload,
@@ -17,12 +25,17 @@ export function RphPaper({
   teacherName = "Nurul Aisyah binti Rahim",
   schoolName = currentSchool().name,
   session,
+  signature,
+  signatureState = "none",
 }: {
   payload: RphPayload;
   className?: string;
   teacherName?: string;
   schoolName?: string;
   session: string;
+  /** Verified material, or null when the plan carries no seal. */
+  signature?: SignaturePayload | null;
+  signatureState?: SignatureState;
 }) {
   return (
     <article
@@ -86,10 +99,22 @@ export function RphPaper({
         <span className="flex-1 border-t-[1.5px] border-dashed border-[#d7dce5] pt-1.5 text-center text-[11px] text-[#98a2b3]">
           Tandatangan Guru
         </span>
-        <span className="flex-1 border-t-[1.5px] border-dashed border-[#d7dce5] pt-1.5 text-center text-[11px] text-[#98a2b3]">
-          Semakan Pentadbir
-        </span>
+        {/* The reviewer's line is a placeholder until someone seals the plan.
+            Once they have, the seal replaces it — carrying the name, the moment
+            and the key fingerprint a reader needs to check it against. */}
+        {!signature && (
+          <span className="flex-1 border-t-[1.5px] border-dashed border-[#d7dce5] pt-1.5 text-center text-[11px] text-[#98a2b3]">
+            Semakan Pentadbir
+          </span>
+        )}
       </div>
+
+      <SignatureSeal
+        signature={signature ?? null}
+        state={signatureState}
+        variant="print"
+        className="mt-2"
+      />
     </article>
   );
 }

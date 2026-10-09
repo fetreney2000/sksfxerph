@@ -53,6 +53,15 @@ export interface Member {
   locked_until: string | null;
   failed_logins: number;
   password_changed_at: string | null;
+  /**
+   * Who supervises this member's plans, and their name for display.
+   *
+   * `null` is a real state, not "not loaded": a teacher with no supervisor is
+   * visible only to a Guru Besar, and the accounts screen has to say so rather
+   * than look like the field simply did not arrive.
+   */
+  supervisor_id: string | null;
+  supervisor_name: string | null;
 }
 
 export interface NewAccount {
@@ -77,6 +86,16 @@ export const resetPassword = (userId: string, password: string) =>
 
 export const unlockMember = (userId: string) =>
   request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, unlock: true }));
+
+/**
+ * Assign the GPK who supervises a teacher, or clear the assignment.
+ *
+ * This is the switch that decides which plans that GPK can see, so SQL has the
+ * last word: a supervisor must be an active GPK or Guru Besar, and nobody
+ * supervises themselves. Errors from those checks surface through the toast.
+ */
+export const setSupervisor = (userId: string, supervisorId: string | null) =>
+  request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, supervisorId }));
 
 /* ── Classes ──────────────────────────────────────────────────────────────── */
 
