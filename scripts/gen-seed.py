@@ -57,7 +57,10 @@ SQL = f"""-- ===================================================================
 -- EXISTS guard, so re-running is safe.
 -- ============================================================================
 
--- ── 1 · school (kod_sekolah must match NEXT_PUBLIC_SCHOOL_CODE) ──────────────
+-- ── 1 · school ───────────────────────────────────────────────────────────────
+-- `SK0000` is only a starting value: nothing keys off it, and an administrator
+-- can change it from /pentadbiran once the deployment is live. `resolveSchool()`
+-- reads the active row, not this code, so a rename cannot strand the branding.
 insert into erph.school (kod_sekolah, nama, level, ppd, jpn)
 values ('SK0000', 'SK St. Francis Xavier', 'rendah', 'PPD Keningau', 'JPN Sabah')
 on conflict (kod_sekolah) do nothing;

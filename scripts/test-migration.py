@@ -126,8 +126,22 @@ def main() -> int:
             # *current* definitions — proving the pair works in sequence is the
             # whole point of generating both from one source.
             run(delta2, "002")
+            # 003 changed `admin_set_school`'s signature when the school code
+            # became editable. `create or replace` does **not** replace across
+            # an arity change — it quietly adds a second function, and PostgREST
+            # then resolves the RPC by argument count rather than by intent,
+            # which the callers would only ever notice as a function that
+            # stopped validating. Install the pre-003 form first so the drop
+            # inside 003 has to prove itself; the "exactly one signature"
+            # assertion below is what notices if it does not.
+            cur.execute(
+                "create function erph.admin_set_school("
+                "p_school uuid, p_nama text, p_ppd text, p_jpn text, "
+                "p_motto text, p_logo_url text) "
+                "returns void language plpgsql as $stub$ begin return; end $stub$"
+            )
             run(delta3, "003")
-        print("  [OK ] migration applied (001a + 001b + 002 + 003)")
+        print("  [OK ] migration applied (001a + 001b + 002 + 003, old signature pre-installed)")
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
         return 1
@@ -314,11 +328,28 @@ def main() -> int:
                 str(sorted(cols)),
             )
 
+            # `create or replace` does *not* replace on a signature change — it
+            # quietly adds a second function. `admin_set_school` gained the
+            # school code, so if the drop of the old arity were ever missing
+            # this counts 2 and PostgREST would resolve the RPC by arity rather
+            # than by intent. Same trap `admin_set_setting` was checked for in 002.
             cur.execute(
-                "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+                "select count(*), max(pg_get_function_identity_arguments(p.oid)) "
+                "from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
                 "where n.nspname='erph' and p.proname='admin_set_school'"
             )
-            check("admin_set_school exists", cur.fetchone()[0] == 1)
+            n_funcs, args = cur.fetchone()
+            arity = len(args.split(",")) if args else 0
+            check(
+                "admin_set_school has exactly one signature",
+                n_funcs == 1,
+                f"found {n_funcs} overloads",
+            )
+            check(
+                "admin_set_school takes the school code",
+                arity == 7,
+                f"{arity} params: {args}",
+            )
 
             # The whole point of the policy change: the tightened definitions
             # must actually be the installed ones, not the pre-003 copies.

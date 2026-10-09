@@ -1220,19 +1220,37 @@ begin
   values (p_code, trim(p_nama), p_curriculum, true);
 end $$;
 
--- The school's own identity — name, district/state, motto, logo.
+-- The school's own identity — code, name, district/state, motto, logo.
 --
--- `kod_sekolah` is deliberately absent: it is the natural key (`school.kod_sekolah`
--- is UNIQUE) and it also has to match `NEXT_PUBLIC_SCHOOL_CODE`, which is baked
--- into the build. Letting a form change it would desynchronise the two with no
--- way back, so it is displayed read-only rather than editable.
-create or replace function erph.admin_set_school(p_school uuid, p_nama text,
+-- `kod_sekolah` travels with the rest of the identity rather than being locked
+-- to the build. It used to be excluded on the grounds that it had to match
+-- `NEXT_PUBLIC_SCHOOL_CODE`, but that constant turned out to be load-bearing
+-- only for `resolveSchool()`, which no longer looks the row up by it: nothing
+-- in the database references the code (`school_id` is the foreign key
+-- everywhere), so changing it cannot orphan a document, a class or a membership.
+--
+-- It stays UNIQUE and it is still the natural key the *seed* uses, so it gets
+-- the same non-empty check as the name rather than no check at all.
+create or replace function erph.admin_set_school(p_school uuid, p_kod_sekolah text,
+                                                 p_nama text,
                                                  p_ppd text, p_jpn text,
                                                  p_motto text, p_logo_url text)
 returns void language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_kod   text := nullif(trim(p_kod_sekolah), '');
+  v_rows  integer;
 begin
   if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if v_kod is null then
+    raise exception 'Kod sekolah diperlukan';
+  end if;
+  -- KPM codes are alphanumeric (BBA4039); the seed's SK0000 and a hyphen are
+  -- allowed. Length is capped by the column's own use as a natural key rather
+  -- than left to the form.
+  if v_kod !~ '^[A-Za-z0-9][A-Za-z0-9._-]{2,23}$' then
+    raise exception 'Kod sekolah 3-24 aksara: huruf, nombor, titik, - atau _ sahaja';
   end if;
   if nullif(trim(p_nama), '') is null then
     raise exception 'Nama sekolah diperlukan';
@@ -1243,15 +1261,27 @@ begin
     raise exception 'Logo mesti dalam bentuk URL yang sah';
   end if;
 
-  update erph.school
-     set nama    = trim(p_nama),
-         ppd     = nullif(trim(p_ppd), ''),
-         jpn     = nullif(trim(p_jpn), ''),
-         motto   = nullif(trim(p_motto), ''),
-         logo_url = p_logo_url
-   where id = p_school;
+  begin
+    update erph.school
+       set kod_sekolah = v_kod,
+           nama    = trim(p_nama),
+           ppd     = nullif(trim(p_ppd), ''),
+           jpn     = nullif(trim(p_jpn), ''),
+           motto   = nullif(trim(p_motto), ''),
+           logo_url = p_logo_url
+     where id = p_school;
+    -- Captured here rather than read as FOUND afterwards: the row-count lives
+    -- inside a block whose whole purpose is to intercept an exception, and
+    -- relying on FOUND to survive that boundary is a guess this file should
+    -- not have to make.
+    get diagnostics v_rows = row_count;
+  exception when unique_violation then
+    -- Never surfaces as Postgres' "duplicate key value … school_kod_sekolah_key":
+    -- the API passes this text straight through to the form.
+    raise exception 'Kod sekolah itu sudah digunakan';
+  end;
 
-  if not found then
+  if v_rows = 0 then
     raise exception 'Sekolah tidak dijumpai';
   end if;
 end $$;

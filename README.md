@@ -91,7 +91,9 @@ inside a transaction block, and a value added inside one cannot be used until
 it commits — which 001b immediately does, in `admin_list_members` and the
 views. Pasting 001a in one go fails, which is why it is not in 001b.
 
-The seed also creates the school (`SK0000` — must match `NEXT_PUBLIC_SCHOOL_CODE`),
+The seed also creates the school (`SK0000` — a starting value only; an
+administrator can change the school's code from **Urus eRPH → Maklumat
+sekolah**, and nothing keys off it),
 its settings, 3 subjects, 3 classes, and **one complete submitted lesson plan**
 so the reviewer screens have something to grade on a fresh database.
 

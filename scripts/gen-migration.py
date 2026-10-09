@@ -272,13 +272,20 @@ def buckets() -> str:
 
 
 # ── 003: the school's own identity ───────────────────────────────────────────
-# Adds the two columns the administrator edits, the function that writes them,
-# the public bucket the crest lives in, and the two policies that stop staff
-# reading the Administrator's account. Idempotent: `if not exists`, `drop … if
-# exists` then `create`, and `on conflict do nothing`.
+# Adds the columns the administrator edits, the function that writes them, the
+# public bucket the crest lives in, and the two policies that stop staff reading
+# the Administrator's account. Idempotent: `if not exists`, `drop … if exists`
+# then `create`, and `on conflict do nothing`.
 OUT3 = DIR / "003_school_identity.sql"
 
 SCHOOL_POLICIES = ["profile_read", "member_read", "storage_read_school_logo"]
+
+# `admin_set_school` gained a parameter when the school code became editable.
+# `create or replace` does not replace on a *signature change* — it silently
+# creates a second function — so the six-argument form has to go first,
+# otherwise a database that already ran the earlier 003 keeps both and the RPC
+# is resolved by arity rather than by intent. No-op if it was never created.
+OLD_SET_SCHOOL = "drop function if exists erph.admin_set_school(uuid, text, text, text, text, text);"
 
 body3 = f"""-- ============================================================================
 -- eRPH · MIGRATION 003 — the school's own identity
@@ -288,7 +295,8 @@ body3 = f"""-- =================================================================
 --   · erph.school gains `motto` and `logo_url` — what the administrator edits
 --     from /pentadbiran and what the login screen, sidebar and printed RPH
 --     then show everywhere.
---   · erph.admin_set_school writes them (pentadbir-only, checked in SQL).
+--   · erph.admin_set_school writes those *and* `kod_sekolah`, which became
+--     editable in the same release (see the comment on the function).
 --   · the public `school-assets` bucket the crest is served from.
 --   · profile_read / member_read stop a GPK or Guru Besar reading the
 --     Administrator's account through `shares_school_with` / `is_staff`.
@@ -313,6 +321,7 @@ alter table erph.school add column if not exists logo_url text;
 
 {chr(10).join(policy(n) + chr(10) for n in SCHOOL_POLICIES)}
 -- ── 4 · the administrator's editor ─────────────────────────────────────────
+{OLD_SET_SCHOOL}
 {function("admin_set_school")}
 """
 

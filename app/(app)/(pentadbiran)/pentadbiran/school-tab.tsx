@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { ImageUp, Save, School as SchoolIcon } from "lucide-react";
 import Image from "next/image";
 import * as React from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,7 +18,7 @@ import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import { setSchool as adoptSchool, placeFrom } from "@/lib/school";
 
 /**
- * Tab 5 — the school's own identity: name, district/state, motto, crest.
+ * Tab 5 — the school's own identity: code, name, district/state, motto, crest.
  *
  * Everything on this form is what the login screen, sidebar, breadcrumb, ⌘K,
  * the live preview and the printed RPH all read — so the preview on the right
@@ -27,14 +26,17 @@ import { setSchool as adoptSchool, placeFrom } from "@/lib/school";
  * button in the user's mind: seeing it in place, in the same lockup the app
  * will use, is what makes the change deliberate rather than a leap of faith.
  *
- * `kod_sekolah` is shown but not editable, and that is a constraint rather
- * than an omission: it is `school`'s natural key and it also has to equal
- * `NEXT_PUBLIC_SCHOOL_CODE`, which is compiled into the build. Editing one
- * without the other would leave the deployment identifying itself as a school
- * it is no longer.
+ * The code is editable, which it was not for a while. `school.kod_sekolah` is
+ * UNIQUE, so it reads like the field that must stay fixed — but nothing in the
+ * database references it (`school_id` is the foreign key everywhere) and the
+ * one code-keyed lookup, `resolveSchool()`, now reads the active row instead.
+ * The lock is removable precisely because nothing else was ever holding on.
+ *
+ * It is *not* shown as a badge any more: it is a value an administrator may
+ * change to match KPM's actual code, so it belongs in an input like the rest.
  */
-
 interface Form {
+  kod: string;
   nama: string;
   ppd: string;
   jpn: string;
@@ -43,6 +45,7 @@ interface Form {
 }
 
 const toForm = (s: SchoolIdentity): Form => ({
+  kod: s.kod_sekolah,
   nama: s.nama,
   ppd: s.ppd ?? "",
   jpn: s.jpn ?? "",
@@ -86,10 +89,22 @@ export function SchoolTab() {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  const active = form ?? { nama: "", ppd: "", jpn: "", motto: "", logo_url: null };
+  const active = form ?? { kod: "", nama: "", ppd: "", jpn: "", motto: "", logo_url: null };
   const logoSrc = preview ?? active.logo_url ?? "/logo.png";
 
   const submit = () => {
+    const kod = active.kod.trim();
+    // Same pattern, same words as `erph.admin_set_school` and the API schema —
+    // so a bad code is answered here without a round trip, rather than after
+    // the crest has already been uploaded.
+    if (!kod) {
+      setError("Kod sekolah diperlukan.");
+      return;
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{2,23}$/.test(kod)) {
+      setError("Kod sekolah 3-24 aksara: huruf, nombor, titik, - atau _ sahaja.");
+      return;
+    }
     if (!active.nama.trim()) {
       setError("Nama sekolah diperlukan.");
       return;
@@ -97,6 +112,7 @@ export function SchoolTab() {
     setError(null);
 
     const data = new FormData();
+    data.set("kod_sekolah", kod);
     data.set("nama", active.nama.trim());
     data.set("ppd", active.ppd.trim());
     data.set("jpn", active.jpn.trim());
@@ -158,13 +174,29 @@ export function SchoolTab() {
               Dipaparkan pada skrin log masuk, navigasi, pratonton dan dokumen RPH yang dicetak.
             </CardDescription>
           </div>
-          <Badge className="ml-auto" variant="neutral">
-            {stored.kod_sekolah}
-          </Badge>
         </CardHeader>
 
         <CardContent className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label htmlFor="sch-code" required>
+                Kod sekolah
+              </Label>
+              <Input
+                id="sch-code"
+                value={active.kod}
+                maxLength={24}
+                autoCapitalize="characters"
+                spellCheck={false}
+                className="max-w-[260px] font-mono"
+                onChange={(e) => setForm({ ...active, kod: e.target.value })}
+              />
+              <p className="mt-1.5 text-[11.5px] text-ink-4">
+                Kod KPM sekolah (cth. <span className="font-mono">BBA4039</span>). Kunci unik
+                bagi rekod sekolah sahaja — tiada rancangan, kelas atau ahli bergantung padanya,
+                jadi mengubahnya tidak mengubah apa-apa yang sudah tersimpan.
+              </p>
+            </div>
             <div className="sm:col-span-2">
               <Label htmlFor="sch-name" required>
                 Nama sekolah

@@ -22,6 +22,20 @@ export const supabaseConfigured =
   typeof anonKey === "string" &&
   anonKey.length > 0;
 
+/**
+ * The school code this deployment was *built* with.
+ *
+ * A label, not a key — and it is worth being explicit about why, because it
+ * looks like it should be an identifier. Nothing joins on it: every table
+ * references `school(id)`, `schoolIdFor()` walks `school_member`, `sync_rph`
+ * derives the school from `class_id`, and `resolveSchool()` reads the active
+ * row rather than matching this string. That is exactly what lets an
+ * administrator change `kod_sekolah` from /pentadbiran without editing `.env`
+ * and redeploying.
+ *
+ * What it still does: the local-mode value (no database to read one from) and
+ * a cache key, where any stable string will do.
+ */
 export const schoolCode = process.env.NEXT_PUBLIC_SCHOOL_CODE ?? "SK0000";
 
 /**

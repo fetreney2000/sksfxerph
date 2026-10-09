@@ -10,12 +10,13 @@ import type { Member } from "@/lib/client/admin";
  *
  * `/pentadbiran` cannot be reached by e2e: local mode stops at "Pentadbiran
  * memerlukan mod disegerakkan" by design, and the synced deployment this is
- * built against has no usable service key in CI. So the four tabs — which are
+ * built against has no usable service key in CI. So the five tabs — which are
  * the entire deliverable — would otherwise ship with no test ever having drawn
  * them. These assert the things a regression would silently break: that each
- * tab exists, that the rows actually arrive, that the session field is
- * *editable* (it was read-only for the whole life of this page), and that the
- * consequence of changing it is stated before the write rather than after.
+ * tab exists, that the rows actually arrive, that the session and the school
+ * code are *editable* (both were read-only for the whole life of this page),
+ * and that the consequence of changing them is stated before the write rather
+ * than after.
  */
 
 // The page gates on `supabaseConfigured`, which is false in this test
@@ -101,14 +102,34 @@ const SETTINGS = {
   },
 };
 
-async function fakeFetch(input: RequestInfo | URL): Promise<Response> {
+const SCHOOL_INFO = {
+  id: "33333333-3333-4333-8333-333333333333",
+  kod_sekolah: "SK0000",
+  nama: "SK St. Francis Xavier",
+  level: "rendah",
+  ppd: "PPD Keningau",
+  jpn: "JPN Sabah",
+  motto: "Bersatu Kita Teguh",
+  logo_url: null,
+};
+
+/** The last PATCH to /api/admin/school, so a test can inspect what was sent. */
+let lastPatch: FormData | null = null;
+
+async function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? input : input.toString();
+  const method = (init?.method ?? "GET").toUpperCase();
   const json = (body: unknown) =>
     new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
 
+  if (url.includes("/api/admin/school") && method === "PATCH") {
+    lastPatch = (init?.body as FormData) ?? null;
+    return json({ school: { ...SCHOOL_INFO, kod_sekolah: lastPatch?.get("kod_sekolah") } });
+  }
+  if (url.includes("/api/admin/school")) return json({ school: SCHOOL_INFO });
   if (url.includes("/api/admin/accounts")) return json({ items: MEMBERS });
   if (url.includes("/api/admin/classes")) return json(CLASSES);
   if (url.includes("/api/admin/subjects")) return json(SUBJECTS);
@@ -119,6 +140,7 @@ async function fakeFetch(input: RequestInfo | URL): Promise<Response> {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  lastPatch = null;
 });
 
 /** Mount the page with a fresh QueryClient — each test gets an empty cache. */
@@ -219,5 +241,42 @@ describe("pentadbiran", () => {
     // discover that every teacher's dashboard just emptied.
     await waitFor(() => expect(screen.getByText(/menjejaskan semua guru/)).toBeTruthy());
     expect(screen.getByText(/Tiada data dipadam/)).toBeTruthy();
+  });
+
+  it("makes the school code editable — and actually sends it", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mount();
+
+    clickTab("Maklumat sekolah");
+
+    // It used to be a Badge: readable, immutable, and the one field on this
+    // form that had to be changed in `.env` and redeployed to take effect.
+    const code = (await screen.findByLabelText(/Kod sekolah/)) as HTMLInputElement;
+    expect(code.readOnly).toBe(false);
+    expect(code.value).toBe("SK0000");
+
+    fireEvent.change(code, { target: { value: "BBA4039" } });
+    fireEvent.click(screen.getByRole("button", { name: /Simpan maklumat sekolah/ }));
+
+    // The value has to reach the API, not merely look editable.
+    await waitFor(() => expect(lastPatch).toBeTruthy());
+    expect(lastPatch?.get("kod_sekolah")).toBe("BBA4039");
+    // …alongside everything else the form owns, since it is one multipart save.
+    expect(lastPatch?.get("nama")).toBe("SK St. Francis Xavier");
+  });
+
+  it("refuses a malformed school code before anything is sent", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mount();
+
+    clickTab("Maklumat sekolah");
+
+    const code = (await screen.findByLabelText(/Kod sekolah/)) as HTMLInputElement;
+    fireEvent.change(code, { target: { value: "bad code!" } });
+    fireEvent.click(screen.getByRole("button", { name: /Simpan maklumat sekolah/ }));
+
+    // Same sentence the SQL function would raise — and no round trip to learn it.
+    await screen.findByText(/3-24 aksara/);
+    expect(lastPatch).toBeNull();
   });
 });

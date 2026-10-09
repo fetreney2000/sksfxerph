@@ -405,7 +405,15 @@ def main() -> int:
     # Each rung may only move a plan out of the stage it owns, so this asserts
     # the refusals as well as the happy path. `actor()` is fed through
     # `request.jwt.claims` — the unprivileged path it trusts.
-    SK = "(select id from erph.school where kod_sekolah='SKTEST')"
+    # Resolved once to the row's **id**, not to a subquery on `kod_sekolah`.
+    # The school-identity test below deliberately changes that code — which is
+    # the whole point of the feature — and everything after it has to keep
+    # finding this same row: the restore, the policy checks, and the DELETE
+    # that reaps the fixture. Keying on a value the test is allowed to move is
+    # how a single failed assertion turned into leaked fixtures and three
+    # unrelated seed failures.
+    fixture_school_id = r.one("select id from erph.school where kod_sekolah='SKTEST'")[0]
+    SK = f"'{fixture_school_id}'"
     DOC = f"(select id from erph.rph_document where school_id = {SK})"
 
     def act_as(username: str) -> None:
@@ -591,34 +599,65 @@ def main() -> int:
         # ── school identity ───────────────────────────────────────────────
         act_as("uji")
         msg = refused(
-            f"select erph.admin_set_school({SK}, 'Tidak Sah', null, null, null, '/logo.png')"
+            f"select erph.admin_set_school({SK}, 'SKTEST', 'Tidak Sah', null, null, null, '/logo.png')"
         )
         admin.append(("Guru Biasa cannot change school info", "pentadbir" in msg))
 
         act_as("admin.uji")
         msg = refused(
-            f"select erph.admin_set_school({SK}, 'X', null, null, null, 'javascript:alert(1)')"
+            f"select erph.admin_set_school({SK}, 'SKTEST', 'X', null, null, null, 'javascript:alert(1)')"
         )
         admin.append(("malformed logo URL refused", "URL" in msg))
 
+        # The code is checked before anything is written, so a malformed one
+        # changes nothing at all — and the message is a sentence a person can
+        # act on rather than Postgres naming a constraint.
+        msg = refused(
+            f"select erph.admin_set_school({SK}, 'bad code!', 'X', null, null, null, '/logo.png')"
+        )
+        admin.append(("malformed school code refused", "3-24 aksara" in msg, msg))
+        admin.append(
+            (
+                "a refused write leaves the code alone",
+                r.one(f"select kod_sekolah from erph.school where id = {SK}")[0] == "SKTEST",
+            )
+        )
+
+        # The code is a label, not a foreign key — nothing joins on it — so
+        # changing it has to be possible for a pentadbir. It is changed here
+        # and put straight back: every fixture below resolves this school
+        # through `kod_sekolah='SKTEST'`, so leaving it as SK9999 would make
+        # the assertions (and the cleanup) silently see no rows at all.
         r.q(
-            f"select erph.admin_set_school({SK}, 'Sekolah Ujian Baharu', 'PPD Ujian', "
+            f"select erph.admin_set_school({SK}, 'SK9999', 'Sekolah Ujian Baharu', 'PPD Ujian', "
             f"'JPN Ujian', 'Bersatu Kita Teguh', '/logo.png')"
         )
         conn.commit()
         row = r.one(
-            f"select nama, ppd, motto, logo_url from erph.school where kod_sekolah='SKTEST'"
+            f"select kod_sekolah, nama, ppd, motto, logo_url from erph.school where id = {SK}"
         )
         admin.append(
             (
-                "administrator can set school info",
-                row[0] == "Sekolah Ujian Baharu"
-                and row[1] == "PPD Ujian"
-                and row[2] == "Bersatu Kita Teguh"
-                and row[3] == "/logo.png",
+                "administrator can set school info and its code",
+                row
+                == (
+                    "SK9999",
+                    "Sekolah Ujian Baharu",
+                    "PPD Ujian",
+                    "Bersatu Kita Teguh",
+                    "/logo.png",
+                ),
                 str(row),
             )
         )
+
+        # Restore the fixture's own code — `SK` is a subquery on it, and so is
+        # the DELETE that reaps this fixture.
+        r.q(
+            f"select erph.admin_set_school({SK}, 'SKTEST', 'Sekolah Ujian Baharu', 'PPD Ujian', "
+            f"'JPN Ujian', null, null)"
+        )
+        conn.commit()
 
         # ── the Administrator is visible only to a pentadbir ──────────────
         # Two policies, both of which previously let a GPK read the
@@ -673,12 +712,11 @@ def main() -> int:
     # fixture rows (this is exactly how the seed assertions first "failed").
     try:
         r.q(
-            """
+            f"""
             -- rph_revision is append-only: only a purge may delete from it.
             select set_config('app.purge', '1', false);
-            delete from erph.rph_document
-             where school_id = (select id from erph.school where kod_sekolah='SKTEST');
-            delete from erph.school where kod_sekolah='SKTEST';  -- cascades member/class/setting
+            delete from erph.rph_document where school_id = {SK};
+            delete from erph.school where id = {SK};  -- cascades member/class/setting
             delete from erph.user where username in
               ('uji', 'gpk.uji', 'gb.uji', 'admin.uji', 'guru.baru');
             delete from erph.subject where code = 'MAT';

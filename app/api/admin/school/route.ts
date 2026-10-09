@@ -6,19 +6,28 @@ import type { adminDb } from "@/lib/server/db";
 /**
  * GET / PATCH /api/admin/school — the school's own identity.
  *
- * One multipart PATCH rather than two endpoints: the name, district, motto and
- * crest are a single form in the UI, and splitting them would leave a window
- * where the new name had saved but the new logo had not — or vice versa —
- * giving the sidebar one school and the login screen another.
+ * One multipart PATCH rather than two endpoints: the code, name, district,
+ * motto and crest are a single form in the UI, and splitting them would leave a
+ * window where the new name had saved but the new crest had not — or vice
+ * versa — giving the sidebar one school and the login screen another.
  *
  * Written through `erph.admin_set_school`, which re-checks
  * `has_role(..., 'pentadbir')` inside the function: this handler holds the
  * secret key, so RLS would not stop it on its own.
  *
- * `kod_sekolah` is read-only here by design. It is `school`'s natural key and
- * it also has to equal `NEXT_PUBLIC_SCHOOL_CODE`, which is baked into the
- * build — letting a form change it would desynchronise the two with no way
- * back.
+ * ## Why the school code is writable
+ *
+ * It is `school`'s UNIQUE natural key, so it looks like the one field that must
+ * not move. It isn't: nothing in the database references it — `school_id` is
+ * the foreign key on `rph_document`, `class`, `school_member` and every other
+ * table — and `sync_rph` derives the school from `class_id`. The single place
+ * that ever looked a school up *by* its code was `resolveSchool()`, and that
+ * now reads the active row instead, precisely so this field can be edited
+ * without stranding the branding on a code no row has any more.
+ *
+ * Validation is duplicated here rather than left to SQL so the common case —
+ * an admin typing a code with a space in it — is answered in the form, without
+ * a round trip, in the same message the server would have given.
  */
 
 /** What the tab renders. */
@@ -51,6 +60,18 @@ const EXT: Record<string, string> = {
 };
 
 const textSchema = z.object({
+  // Trimming happens before validation so a stray space is corrected rather
+  // than rejected — but a code that is *only* whitespace still has to fail.
+  kod_sekolah: z
+    .string()
+    .min(1, "Kod sekolah diperlukan")
+    .max(24, "Kod sekolah terlalu panjang (maksimum 24 aksara)")
+    // Mirrors the check in `erph.admin_set_school` — same pattern, same words,
+    // so the form and the server can never disagree about what is allowed.
+    .regex(
+      /^[A-Za-z0-9][A-Za-z0-9._-]*$/,
+      "Kod sekolah: huruf, nombor, titik, - atau _ sahaja",
+    ),
   nama: z.string().min(1, "Nama sekolah diperlukan").max(160),
   ppd: z.string().max(120).nullable(),
   jpn: z.string().max(120).nullable(),
@@ -58,6 +79,34 @@ const textSchema = z.object({
   /** Explicit "keep the current crest" when no file was sent. */
   logo_url: z.string().max(600).nullable(),
 });
+
+/**
+ * Postgres' and PostgREST's error text describes the schema — table names,
+ * constraints, function signatures — and none of it means anything to a person
+ * filling in a form. Every message `admin_set_school` raises *on purpose* is
+ * Malay prose and matches none of these markers, so anything that does is a
+ * database wearing a user-facing label: a real constraint failure, or a
+ * deployment that has not run its migration yet ("could not find the function
+ * … in the schema cache"), which the operator sees in full in the server log.
+ */
+const INTERNAL_ERROR =
+  /\b(duplicate key|null value|violates|relation|constraint|column|syntax|permission denied|value too long|foreign key|does not exist|schema cache|could not find the function)\b/i;
+
+function formError(message: string): string {
+  // The one failure an administrator can actually fix from this page, and the
+  // state this deployment is in between shipping the code and running the
+  // migration. PostgREST would otherwise hand them "could not find the
+  // function erph.admin_set_school(p_jpn, p_kod_sekolah, …) in the schema
+  // cache" — a schema dump for a problem with a one-line remedy, which the
+  // server log still records in full.
+  if (/schema cache|could not find the function/i.test(message)) {
+    return "Simpan gagal: pangkalan data belum dikemas kini. Jalankan db/migrations/003_school_identity.sql terlebih dahulu.";
+  }
+  if (INTERNAL_ERROR.test(message)) {
+    return "Maklumat sekolah tidak sah. Sila semak semula.";
+  }
+  return message;
+}
 
 /**
  * Administrator + school, or the response to send back. The two arms must be
@@ -99,7 +148,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Borang tidak sah" }, { status: 400 });
   }
 
+  const rawCode = form.get("kod_sekolah");
   const parsed = textSchema.safeParse({
+    kod_sekolah: typeof rawCode === "string" ? rawCode.trim() : "",
     nama: form.get("nama"),
     ppd: form.get("ppd") || null,
     jpn: form.get("jpn") || null,
@@ -143,6 +194,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   const { error } = await gate.db.rpc("admin_set_school", {
     p_school: gate.schoolId,
+    p_kod_sekolah: parsed.data.kod_sekolah,
     p_nama: parsed.data.nama,
     p_ppd: parsed.data.ppd,
     p_jpn: parsed.data.jpn,
@@ -151,7 +203,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   });
   if (error) {
     console.error("[admin] set school failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return NextResponse.json({ error: formError(error.message) }, { status: 422 });
   }
 
   const { data } = await gate.db.from("school").select(COLUMNS).eq("id", gate.schoolId);
