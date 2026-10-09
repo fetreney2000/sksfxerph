@@ -231,6 +231,22 @@ create table erph.user (
   password_changed_at timestamptz not null default now(),
   last_login_at timestamptz,
 
+  -- Sign-in with a KPM Google account (DELIMa, @moe-dl.edu.my). NULL means
+  -- "not linked yet", and password login keeps working whatever this says —
+  -- the pentadbir has no MOE account at all.
+  --
+  -- `google_sub` is the identity. Google's `sub` is stable for the life of an
+  -- account and the address is not, so it alone is used to find the row on
+  -- every sign-in after the first. `google_email` is kept for display and for
+  -- that first link, and deliberately not consulted again: an address handed to
+  -- someone else must not become a way into the previous holder's account.
+  --
+  -- The UNIQUE index is doing more than tidiness — it is what makes linking
+  -- idempotent under concurrent first sign-ins, since the loser of that race
+  -- gets a constraint violation rather than two claims on one identity.
+  google_sub    text unique,
+  google_email  text,
+
   full_name     text not null,
   email         text,                                 -- optional; login is by username
   moe_id        text,                                 -- staff/teacher id if known

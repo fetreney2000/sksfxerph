@@ -70,7 +70,8 @@ for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
     # ---- route guard audit ----
     rel = str(f).replace("\\", "/")
     is_public = any(
-        k in rel for k in ("auth/login", "auth/logout", "auth/me", "heartbeat")
+        k in rel
+        for k in ("auth/login", "auth/logout", "auth/me", "auth/google", "heartbeat")
     )
     # Substring match against the source, so a route that merely imports a
     # guard without calling it would still read as protected — the same

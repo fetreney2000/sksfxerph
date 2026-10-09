@@ -2,6 +2,7 @@
 
 import { ArrowRight, KeyRound, User } from "lucide-react";
 import { useState } from "react";
+import { GoogleSignIn } from "@/components/auth/google-signin";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -126,6 +127,11 @@ export function LoginCard() {
             </span>
           </p>
         )}
+        {/* Below the form, deliberately: password is the fallback that always
+            works — offline, in local mode, and for anyone without an MOE
+            account (the pentadbir has none). Google is the convenience for
+            teachers, not the only door. */}
+        <GoogleSignIn onError={setError} />
       </CardContent>
 
       <CardFooter className="flex-col items-start gap-1.5 text-[11.5px] text-ink-4">

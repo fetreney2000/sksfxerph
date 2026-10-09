@@ -48,6 +48,9 @@ def main() -> int:
     delta5 = (ROOT / "db" / "migrations" / "005_pantau_teachers.sql").read_text(
         encoding="utf-8"
     )
+    delta6 = (ROOT / "db" / "migrations" / "006_google_identity.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -149,9 +152,9 @@ def main() -> int:
             run(delta3, "003")
             run(delta4, "004")
             run(delta5, "005")
+            run(delta6, "006")
         print(
-            "  [OK ] migration applied (001a + 001b + 002 + 003 + 004 + 005, "
-            "old signature pre-installed)"
+            "  [OK ] migration applied (001a→006, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -428,6 +431,28 @@ def main() -> int:
             )
     except Exception as e:  # noqa: BLE001
         check("004 supervision and signing", False, str(e).splitlines()[0][:140])
+
+    # ── 006: Google sign-in identity ────────────────────────────────────────
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select count(*) from information_schema.columns "
+                "where table_schema='erph' and table_name='user' "
+                "and column_name in ('google_sub','google_email')"
+            )
+            check("erph.user gained google_sub + google_email", cur.fetchone()[0] == 2)
+
+            # The UNIQUE index is what makes linking idempotent: two concurrent
+            # first sign-ins cannot both claim one identity, and the loser gets
+            # a constraint violation rather than a second binding.
+            cur.execute(
+                "select count(*) from information_schema.table_constraints "
+                "where table_schema='erph' and table_name='user' "
+                "and constraint_type='UNIQUE' and constraint_name='user_google_sub_uniq'"
+            )
+            check("google_sub is uniquely constrained", cur.fetchone()[0] == 1)
+    except Exception as e:  # noqa: BLE001
+        check("006 google identity", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

@@ -39,6 +39,24 @@ export const supabaseConfigured =
 export const schoolCode = process.env.NEXT_PUBLIC_SCHOOL_CODE ?? "SK0000";
 
 /**
+ * Google sign-in — opt-in, and entirely optional.
+ *
+ * All four are `NEXT_PUBLIC_` because the button has to be rendered by the
+ * browser; none of them is a secret. `GOOGLE_CLIENT_SECRET` is not in this
+ * file at all — it exists only in `.env` and is read by `/api/auth/google`.
+ *
+ * Unset, and nothing is rendered: no button, no script, no request. That is
+ * the local-mode story too, where there is no network to reach Google with —
+ * password login stays the only route, exactly as it is today.
+ */
+export const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+
+/** The Workspace domain teachers' accounts live on. `moe-dl.edu.my` for KPM. */
+export const googleDomain = process.env.NEXT_PUBLIC_GOOGLE_DOMAIN ?? "moe-dl.edu.my";
+
+export const googleAuthConfigured = googleClientId.length > 0;
+
+/**
  * The school this deployment belongs to.
  *
  * One constant rather than a string in six files: the crest is the login
