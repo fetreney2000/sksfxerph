@@ -14,6 +14,15 @@ const patchSchema = z.object({
   submitWeekday: z.number().int().min(1).max(7),
   submitTime: z.string().regex(/^\d{2}:\d{2}$/),
   requireComplete: z.boolean(),
+  /**
+   * The school year. Optional so a caller that only means to touch the
+   * deadline does not have to know it; validated here because the CHECK on
+   * `school_setting.current_session` would otherwise reach the UI as raw SQL.
+   */
+  currentSession: z
+    .string()
+    .regex(/^\d{4}\/\d{4}$/, "Sesi mesti dalam bentuk TTTT/TTTT")
+    .optional(),
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -66,6 +75,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     p_weekday: parsed.data.submitWeekday,
     p_time: parsed.data.submitTime,
     p_require_complete: parsed.data.requireComplete,
+    p_session: parsed.data.currentSession ?? null,
   });
   if (error) {
     console.error("[admin] set setting failed:", error.message);

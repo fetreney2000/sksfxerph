@@ -1,8 +1,9 @@
-import { SESSION, schoolCode } from "@/lib/config";
+import { schoolCode } from "@/lib/config";
 import { schoolDays, todayIso } from "@/lib/date";
 import { db, findByNaturalKey } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { emptyPayload } from "@/lib/schemas/rph";
+import { currentSession } from "@/lib/session";
 import { commit } from "@/lib/sync/queue";
 import type { RphDocument, SchoolClass } from "@/lib/types";
 
@@ -31,12 +32,15 @@ export interface NewPlanInput {
 export async function createPlan(input: NewPlanInput): Promise<RphDocument> {
   const subjectCode = input.subjectCode ?? DEFAULT_SUBJECT.code;
   const subjectName = input.subjectName ?? DEFAULT_SUBJECT.nama;
+  // Read per call, not captured at module load: rolling the school year over
+  // must take effect on the very next plan, without a reload.
+  const session = currentSession();
 
   const existing = await findByNaturalKey(
     LOCAL_OWNER_ID,
     input.classId,
     subjectCode,
-    SESSION,
+    session,
     input.weekNo,
     input.planDate,
   );
@@ -51,7 +55,7 @@ export async function createPlan(input: NewPlanInput): Promise<RphDocument> {
     className: input.className,
     subjectCode,
     subjectName,
-    session: SESSION,
+    session,
     weekNo: input.weekNo,
     planDate: input.planDate,
     slotTime: input.slotTime,
@@ -104,9 +108,10 @@ export async function createBlankRph(
   weekNo: number,
   classes: SchoolClass[],
 ): Promise<RphDocument | undefined> {
+  const session = currentSession();
   const mine = await db.documents
     .where("[ownerId+session]")
-    .equals([LOCAL_OWNER_ID, SESSION])
+    .equals([LOCAL_OWNER_ID, session])
     .toArray();
 
   const untouched = mine
@@ -144,7 +149,7 @@ export async function openDraft(
 ): Promise<RphDocument | undefined> {
   const mine = await db.documents
     .where("[ownerId+session]")
-    .equals([LOCAL_OWNER_ID, SESSION])
+    .equals([LOCAL_OWNER_ID, currentSession()])
     .filter((d) => d.weekNo === weekNo && (d.status === "draft" || d.status === "returned"))
     .toArray();
 
@@ -177,9 +182,10 @@ export async function reuseLastWeek(
   toWeek: number,
   classes: SchoolClass[],
 ): Promise<number> {
+  const session = currentSession();
   const source = await db.documents
     .where("[ownerId+session]")
-    .equals([LOCAL_OWNER_ID, SESSION])
+    .equals([LOCAL_OWNER_ID, session])
     .filter((d) => d.weekNo === fromWeek)
     .toArray();
 
@@ -196,7 +202,7 @@ export async function reuseLastWeek(
       LOCAL_OWNER_ID,
       doc.classId,
       doc.subjectCode,
-      SESSION,
+      session,
       toWeek,
       targetDate,
     );
@@ -206,6 +212,7 @@ export async function reuseLastWeek(
     const clone: RphDocument = {
       ...doc,
       id: mintId(),
+      session,
       weekNo: toWeek,
       planDate: targetDate,
       status: "draft",

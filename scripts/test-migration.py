@@ -36,6 +36,9 @@ def main() -> int:
     delta = (ROOT / "db" / "migrations" / "001b_schema_delta.sql").read_text(
         encoding="utf-8"
     )
+    delta2 = (ROOT / "db" / "migrations" / "002_admin_console.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -98,20 +101,29 @@ def main() -> int:
         with conn.cursor() as cur:
             for stmt in re.findall(r"(?m)^alter type[^;]+;", alter_a):
                 cur.execute(stmt)
-            # Statement by statement so a failure names the statement.
-            for _offset, stmt in rs.split_statements(delta):
-                clean = "\n".join(
-                    ln for ln in stmt.splitlines() if not ln.strip().startswith("--")
-                ).strip()
-                if not clean:
-                    continue
-                try:
-                    cur.execute(clean)
-                except Exception as e:  # noqa: BLE001
-                    raise RuntimeError(
-                        f"{str(e).splitlines()[0][:140]} :: {clean[:140]!r}"
-                    ) from e
-        print("  [OK ] migration applied")
+
+            def run(sql_text: str, label: str) -> None:
+                """Statement by statement so a failure names the statement."""
+                for _offset, stmt in rs.split_statements(sql_text):
+                    clean = "\n".join(
+                        ln for ln in stmt.splitlines() if not ln.strip().startswith("--")
+                    ).strip()
+                    if not clean:
+                        continue
+                    try:
+                        cur.execute(clean)
+                    except Exception as e:  # noqa: BLE001
+                        raise RuntimeError(
+                            f"{label}: {str(e).splitlines()[0][:140]} :: {clean[:140]!r}"
+                        ) from e
+
+            run(delta, "001b")
+            # 002 drops and recreates two functions whose shape changed. Applied
+            # in the same session as 001b precisely because 001b now emits the
+            # *current* definitions — proving the pair works in sequence is the
+            # whole point of generating both from one source.
+            run(delta2, "002")
+        print("  [OK ] migration applied (001a + 001b + 002)")
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
         return 1
@@ -136,9 +148,28 @@ def main() -> int:
         cur.execute(
             "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
             "where n.nspname='erph' and p.proname in "
-            "('semak_rph','lulus_rph','admin_list_members','admin_set_member','admin_set_setting')"
+            "('semak_rph','lulus_rph','admin_list_members','admin_set_member','admin_set_setting',"
+            " 'admin_create_member','admin_reset_password','admin_unlock_member',"
+            " 'admin_list_classes','admin_set_class','admin_list_subjects',"
+            " 'admin_set_subject','admin_create_subject')"
         )
         new_fns = cur.fetchone()[0]
+        cur.execute(
+            "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+            "where n.nspname='erph' and p.proname='admin_set_setting'"
+        )
+        setting_overloads = cur.fetchone()[0]
+        cur.execute(
+            "select pg_get_function_result(p.oid) from pg_proc p "
+            "join pg_namespace n on n.oid=p.pronamespace "
+            "where n.nspname='erph' and p.proname='admin_list_members'"
+        )
+        list_result = cur.fetchone()[0]
+        cur.execute(
+            "select count(*) from pg_indexes where schemaname='erph' "
+            "and indexname='user_username_uniq'"
+        )
+        uniq_idx = cur.fetchone()[0]
         cur.execute(
             "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
             "where n.nspname='erph' and p.proname='review_rph'"
@@ -152,7 +183,24 @@ def main() -> int:
     )
     check("forwarded added to rph_status", "forwarded" in statuses, statuses)
     check("review_rph gone", old_fn == 0)
-    check("5 new functions present", new_fns == 5, f"found {new_fns}")
+    check("13 functions present", new_fns == 13, f"found {new_fns}")
+    # The exact bug the `drop` in 002 exists to prevent: an added parameter
+    # makes Postgres treat the function as a *different* one, so `create or
+    # replace` silently leaves the old arity behind — and calls that omit the
+    # new argument keep resolving to it, ignoring the session entirely.
+    check(
+        "admin_set_setting has exactly one overload",
+        setting_overloads == 1,
+        f"found {setting_overloads}",
+    )
+    # Likewise the return type: `create or replace` cannot change it, so this
+    # only reads the new columns if the drop actually happened.
+    check(
+        "admin_list_members returns the new columns",
+        "last_login_at" in list_result,
+        list_result[:80],
+    )
+    check("username uniqueness index exists", uniq_idx == 1, f"found {uniq_idx}")
     check("ppd/jpn rows removed", "ppd" not in live_roles and "jpn" not in live_roles, str(live_roles))
     check("5 roles in use", len(live_roles) == 5, str(live_roles))
     check("no orphan accounts", users == 5, f"{users} users")
@@ -189,6 +237,63 @@ def main() -> int:
         check("admin_list_members fails closed", n == 0, f"{n} rows for an anonymous caller")
     except Exception as e:  # noqa: BLE001
         check("admin_list_members fails closed", False, str(e).splitlines()[0][:120])
+
+    # The same refusal for the *new* write path. A `security definer` function
+    # bypasses RLS, so the role check inside it is the only thing between a
+    # teacher and the ability to mint accounts — executing it as nobody is the
+    # only way to prove the check fires rather than merely being present.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select erph.admin_create_member((select id from erph.school limit 1), "
+                "'gagal.uji', 'Tidak Seharusnya Wujud', 'guru_biasa', 'scrypt$16384$8$1$x$y')"
+            )
+            conn.commit()
+        check("admin_create_member fails closed", False, "no exception raised")
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check(
+            "admin_create_member fails closed",
+            "pentadbir" in str(e),
+            str(e).splitlines()[0][:120],
+        )
+
+    # The session write must reach the row. This is the check that earns the
+    # `drop` in 002: had the old four-argument form survived `create or replace`
+    # (it would — an added parameter makes Postgres see a *different* function),
+    # the old arity would still be there and a caller omitting the session would
+    # resolve to it, silently changing nothing.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute(
+                "insert into erph.school_setting (school_id) "
+                "select s.id from erph.school s where not exists "
+                "(select 1 from erph.school_setting where school_id = s.id)"
+            )
+            conn.commit()
+            cur.execute(
+                "select erph.admin_set_setting((select id from erph.school limit 1), "
+                "5::smallint, '16:00', true, '2031/2032')"
+            )
+            conn.commit()
+            cur.execute("select current_session from erph.school_setting limit 1")
+            got = cur.fetchone()[0]
+            # Back to the seeded value so later assertions see it.
+            cur.execute(
+                "select erph.admin_set_setting((select id from erph.school limit 1), "
+                "5::smallint, '16:00', true, '2026/2027')"
+            )
+            conn.commit()
+        check("admin_set_setting persists the session", got == "2031/2032", got)
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("admin_set_setting persists the session", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

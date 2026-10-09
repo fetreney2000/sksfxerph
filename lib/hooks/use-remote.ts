@@ -2,8 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { handleExpiredSession } from "@/lib/client/auth-session";
-import { currentWeek, SESSION, schoolCode, supabaseConfigured } from "@/lib/config";
+import { currentWeek, schoolCode, supabaseConfigured } from "@/lib/config";
 import { QUEUE, type QueueItem, SCHOOL_STATS } from "@/lib/demo/review";
+import { useSession } from "@/lib/hooks/use-session";
 
 /**
  * Remote data hooks.
@@ -54,8 +55,11 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
   items: QueueItem[];
   loading: boolean;
 } {
+  const session = useSession();
   const remote = useQuery<{ items: QueueItem[] }>({
-    queryKey: ["review-queue", schoolCode, SESSION, stage],
+    // The session is in the key so rolling the school year over refetches rather
+    // than serving last year's cache — the server filters on it too.
+    queryKey: ["review-queue", schoolCode, session, stage],
     queryFn: async () => {
       const res = await fetch("/api/queue", { credentials: "same-origin" });
       // Expired session: leave rather than fall back to demo data — a reviewer
@@ -87,8 +91,9 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
 
 /** School compliance; falls back to the bundled demo figures in local mode. */
 export function useSchoolStats(): SchoolStatsView {
+  const session = useSession();
   const remote = useQuery<WeekStatsRow | null>({
-    queryKey: ["school-stats", schoolCode, SESSION, WEEK],
+    queryKey: ["school-stats", schoolCode, session, WEEK],
     queryFn: async () => {
       const res = await fetch("/api/stats", { credentials: "same-origin" });
       if (handleExpiredSession(res.status)) return null;

@@ -248,7 +248,7 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    check("20 functions in erph", n_funcs == 20, f"found {n_funcs}")
+    check("28 functions in erph", n_funcs == 28, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -479,6 +479,123 @@ def main() -> int:
         print(f"  [FAIL] two-stage chain: {str(e).splitlines()[0][:160]}")
         errors += 1
 
+    # ── admin set-up: every gate must actually refuse ───────────────────────
+    # These are `security definer` functions that bypass RLS, so the role check
+    # *inside* them is the only thing standing between a teacher and the ability
+    # to mint accounts or reset passwords. Executing them as a non-admin is the
+    # only way to prove the check fires rather than merely being present.
+    try:
+        r.q(
+            """
+            insert into erph.user (username, password_hash, full_name, role)
+            values ('admin.uji', 'scrypt$x', 'Pentadbir Ujian', 'pentadbir');
+            insert into erph.school_member (school_id, user_id, role)
+            select s.id, u.id, 'pentadbir' from erph.school s, erph.user u
+            where s.kod_sekolah = 'SKTEST' and u.username = 'admin.uji';
+            """
+        )
+        conn.commit()
+
+        admin: list[tuple[str, bool]] = []
+        NEW_HASH = "'scrypt$16384$8$1$abcdefghijklmnop$qrstuvwxyz'"
+
+        # A Guru Biasa must not be able to reach any of the admin functions.
+        act_as("uji")
+        msg = refused(
+            f"select erph.admin_create_member({SK}, 'guru.baru', 'Guru Baru', "
+            f"'guru_biasa', {NEW_HASH})"
+        )
+        admin.append(("Guru Biasa cannot create an account", "pentadbir" in msg))
+
+        msg = refused(
+            f"select erph.admin_reset_password({SK}, (select id from erph.user "
+            f"where username='uji'), {NEW_HASH})"
+        )
+        admin.append(("Guru Biasa cannot reset a password", "pentadbir" in msg))
+
+        msg = refused(f"select erph.admin_set_class({SK}, null, '6 Ujian', 6::smallint, '2026/2027', true)")
+        admin.append(("Guru Biasa cannot add a class", "pentadbir" in msg))
+
+        msg = refused(f"select erph.admin_set_subject({SK}, 'MAT', false)")
+        admin.append(("Guru Biasa cannot deactivate a subject", "pentadbir" in msg))
+
+        # The administrator reaches all of them.
+        act_as("admin.uji")
+        new_id = r.one(
+            f"select erph.admin_create_member({SK}, 'guru.baru', 'Guru Baru', "
+            f"'guru_biasa', {NEW_HASH})"
+        )[0]
+        # Commit now: the next assertion deliberately rolls back on refusal, and
+        # an uncommitted insert would be undone by that rollback.
+        conn.commit()
+        admin.append(("Administrator creates an account", new_id is not None))
+
+        # The account must be enrolled too: a user with no school cannot sync,
+        # review or report, and would be invisible to the list that fixes it.
+        enrolled = r.one(
+            f"select count(*) from erph.school_member m join erph.user u on u.id=m.user_id "
+            f"where m.school_id = {SK} and u.username='guru.baru'"
+        )[0]
+        admin.append(("new account is enrolled in the school", enrolled == 1))
+
+        # Duplicate usernames must be refused, on the lowercased name — `Admin`
+        # and `admin` are the same person to a case-insensitive login.
+        msg = refused(
+            f"select erph.admin_create_member({SK}, 'GURU.BARU', 'Seorang Lagi', "
+            f"'guru_biasa', {NEW_HASH})"
+        )
+        admin.append(
+            ("duplicate username refused case-insensitively", "telah digunakan" in msg)
+        )
+
+        # Creating the same class twice must name the class, not raise a raw
+        # unique_violation that would surface in the UI as Postgres jargon.
+        r.q(f"select erph.admin_set_class({SK}, null, '6 Ujian', 6::smallint, '2026/2027', true)")
+        conn.commit()
+        msg = refused(f"select erph.admin_set_class({SK}, null, '6 Ujian', 6::smallint, '2026/2027', true)")
+        admin.append(("duplicate class refused by name", "sudah wujud" in msg))
+
+        # Password reset must invalidate the old password and clear the lockout.
+        r.q(
+            f"update erph.user set failed_logins = 5, locked_until = now() + interval '15 minutes' "
+            f"where username = 'guru.baru'"
+        )
+        conn.commit()
+        r.q(
+            f"select erph.admin_reset_password({SK}, "
+            f"(select id from erph.user where username='guru.baru'), {NEW_HASH})"
+        )
+        conn.commit()
+        lock = r.one(
+            "select failed_logins, locked_until from erph.user where username='guru.baru'"
+        )
+        admin.append(("reset clears the lockout", lock[0] == 0 and lock[1] is None))
+
+        # The session is an administrator setting now, so a malformed one has to
+        # be caught here rather than surfacing as a CHECK-constraint violation.
+        msg = refused(
+            f"select erph.admin_set_setting({SK}, 5::smallint, '16:00', true, 'sekolah-2026')"
+        )
+        admin.append(("malformed session refused", "TTTT/TTTT" in msg))
+
+        r.q(f"select erph.admin_set_setting({SK}, 5::smallint, '16:00', true, '2027/2028')")
+        conn.commit()
+        sess = r.one(
+            f"select current_session from erph.school_setting where school_id = {SK}"
+        )[0]
+        admin.append(("administrator can roll the session over", sess == "2027/2028"))
+        # Put it back so later assertions see the fixture's own value.
+        r.q(f"select erph.admin_set_setting({SK}, 5::smallint, '16:00', true, '2026/2027')")
+        conn.commit()
+
+        for label, ok in admin:
+            print(f"  [{'OK ' if ok else 'FAIL'}] {label}")
+            errors += 0 if ok else 1
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        print(f"  [FAIL] admin set-up: {str(e).splitlines()[0][:160]}")
+        errors += 1
+
     # ── clean up EVERYTHING the behaviour tests created, before seeding ────
     # Order matters: rph_document.school_id has no ON DELETE (deliberate — a
     # statutory record must not vanish with its school), so the document has to
@@ -492,7 +609,8 @@ def main() -> int:
             delete from erph.rph_document
              where school_id = (select id from erph.school where kod_sekolah='SKTEST');
             delete from erph.school where kod_sekolah='SKTEST';  -- cascades member/class/setting
-            delete from erph.user where username in ('uji', 'gpk.uji', 'gb.uji');
+            delete from erph.user where username in
+              ('uji', 'gpk.uji', 'gb.uji', 'admin.uji', 'guru.baru');
             delete from erph.subject where code = 'MAT';
             select set_config('app.purge', '0', false);
             """

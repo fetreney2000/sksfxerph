@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { reviewStageFor } from "@/lib/auth/permissions";
-import { SESSION } from "@/lib/config";
 import type { QueueItem } from "@/lib/demo/review";
 import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
+import { resolveSession } from "@/lib/server/session";
 
 /**
  * GET /api/queue — plans awaiting a grade.
@@ -10,6 +10,10 @@ import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
  * Replaces the browser's direct `from("rph_document")` query: the handler is
  * authenticated by cookie, then scopes the query to the caller's own school.
  * A teacher who forges this request gets 403 before any row is read.
+ *
+ * The session comes from `school_setting`, not from `lib/config` — the same
+ * value the dashboard's client-side queries use, so the queue and the teacher's
+ * own list cannot drift into counting different school years.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const gate = await requireReviewer(request);
@@ -23,6 +27,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ items: [] as QueueItem[] });
   }
 
+  const session = await resolveSession(gate.user.id);
+
   const { data, error } = await gate.db
     .from("rph_document")
     .select(
@@ -30,7 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         "class:class_id(nama), subject:subject_code(nama), owner:owner_id(full_name)",
     )
     .eq("school_id", schoolId)
-    .eq("session", SESSION)
+    .eq("session", session)
     .eq("status", stage.status)
     .order("submitted_at", { ascending: true })
     .limit(50);

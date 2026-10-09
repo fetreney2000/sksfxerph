@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { currentWeek, SESSION } from "@/lib/config";
+import { currentWeek } from "@/lib/config";
 import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
+import { resolveSession } from "@/lib/server/session";
 
 /**
  * GET /api/stats — school compliance for the current week.
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const { data, error } = await gate.db.rpc("school_week_stats", {
     p_school: schoolId,
-    p_session: SESSION,
+    p_session: await resolveSession(gate.user.id),
     p_week: currentWeek(),
   });
 

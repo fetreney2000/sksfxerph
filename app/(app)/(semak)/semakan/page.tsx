@@ -13,9 +13,10 @@ import { Label, Textarea } from "@/components/ui/field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { reviewStageFor } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
-import { SESSION, supabaseConfigured } from "@/lib/config";
+import { supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
 import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
+import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 import { reviewRph } from "@/lib/rpc";
 import { completeness, stepStatus } from "@/lib/schemas/rph";
@@ -38,6 +39,7 @@ function gradeMessage(grade: 0 | 1, isGpk: boolean): string {
 export default function SemakanPage() {
   // Remote when configured, bundled demo otherwise — same shape either way.
   const { role } = useUser();
+  const session = useSession();
   const stage = reviewStageFor(role);
   const isGpk = stage?.rpc === "semak_rph";
   const { items: QUEUE } = useReviewQueueData(stage?.status ?? null);
@@ -252,7 +254,7 @@ export default function SemakanPage() {
             <CardContent className="grid gap-4 xl:grid-cols-[1fr_300px]">
               <RphPaper
                 payload={item.payload}
-                session={SESSION}
+                session={session}
                 teacherName={item.teacherName}
               />
 

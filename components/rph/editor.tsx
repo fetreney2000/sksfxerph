@@ -32,10 +32,11 @@ import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/fiel
 import { HelpHint } from "@/components/ui/help-hint";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/cn";
-import { SESSION, supabaseConfigured } from "@/lib/config";
+import { supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
 import { db } from "@/lib/db";
-import { CLASSES } from "@/lib/demo/seed";
+import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
+import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 import { RpcError, submitRph } from "@/lib/rpc";
 import { completeness, emptyPayload, type RphPayload, stepStatus } from "@/lib/schemas/rph";
@@ -167,6 +168,9 @@ export function RphEditor({ docId }: { docId?: string }) {
   }, [id]);
 
   const live = found?.state === "ok" ? found.doc : undefined;
+  // The school year the preview prints — server-resolved, so the paper shows
+  // the same year the plan will be filed under.
+  const session = useSession();
 
   const [submitOpen, setSubmitOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -743,7 +747,7 @@ export function RphEditor({ docId }: { docId?: string }) {
             </Button>
           </div>
 
-          <RphPaper payload={deferredPayload} session={SESSION} />
+          <RphPaper payload={deferredPayload} session={session} />
         </div>
       </div>
 
@@ -943,6 +947,28 @@ function StepProfil({
   onPatch: (p: Partial<RphDocument>) => void;
   onPayload: (p: Partial<RphPayload>) => void;
 }) {
+  // Live lists, not fixtures: a subject or class the administrator switches off
+  // must stop appearing here, and one they add must show up without a redeploy.
+  const { items: classes } = useSchoolClasses();
+  const { items: subjects } = useSchoolSubjects();
+
+  // A plan written against a class or subject that has since been archived
+  // still has to render its own value — otherwise the select would silently
+  // show the first option while `doc.classId` kept pointing somewhere else, and
+  // the next save would not change anything the user could see.
+  const classOptions = React.useMemo(() => {
+    if (classes.some((c) => c.id === doc.classId)) return classes;
+    return [...classes, { id: doc.classId, nama: doc.className, session: doc.session }];
+  }, [classes, doc.classId, doc.className, doc.session]);
+
+  const subjectOptions = React.useMemo(() => {
+    if (subjects.some((s) => s.code === doc.subjectCode)) return subjects;
+    return [
+      ...subjects,
+      { code: doc.subjectCode, nama: doc.subjectName, curriculum: "KSSR" as const },
+    ];
+  }, [subjects, doc.subjectCode, doc.subjectName]);
+
   return (
     <div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -952,18 +978,16 @@ function StepProfil({
             id="f-14796"
             value={doc.subjectCode}
             onChange={(e) => {
-              const name =
-                e.target.value === "MAT"
-                  ? "Matematik"
-                  : e.target.value === "BM"
-                    ? "Bahasa Melayu"
-                    : "Sains";
-              onPatch({ subjectCode: e.target.value, subjectName: name });
+              const code = e.target.value;
+              const name = subjects.find((s) => s.code === code)?.nama ?? doc.subjectName;
+              onPatch({ subjectCode: code, subjectName: name });
             }}
           >
-            <option value="MAT">Matematik</option>
-            <option value="BM">Bahasa Melayu</option>
-            <option value="SAIN">Sains</option>
+            {subjectOptions.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.nama}
+              </option>
+            ))}
           </Select>
         </div>
         <div>
@@ -972,11 +996,11 @@ function StepProfil({
             id="f-733697"
             value={doc.classId}
             onChange={(e) => {
-              const cls = CLASSES.find((c) => c.id === e.target.value);
+              const cls = classes.find((c) => c.id === e.target.value);
               if (cls) onPatch({ classId: cls.id, className: cls.nama });
             }}
           >
-            {CLASSES.map((c) => (
+            {classOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nama}
               </option>

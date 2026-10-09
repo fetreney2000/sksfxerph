@@ -164,19 +164,38 @@ TYPES = [
     "notification_type",
 ]
 
+# A bare type name is a bug only in **type position** — immediately after an
+# identifier and whitespace (`role member_role`, `v_status rph_status`). A
+# column merely named `curriculum` never sits in that shape:
+#   `select s.curriculum, ...`        → preceded by `.`
+#   `insert into ... (code, nama, …)` → preceded by `, `
+#   `values (p_code, p_curriculum)`   → part of the identifier `p_curriculum`
+# Scanning for the bare token anywhere instead reported all three as unqualified
+# types, which is why the rule is now the shape of the position, not the token.
+type_alt = "|".join(TYPES)
+
 unqualified_types = []
 for i, line in enumerate(SQL.split("\n"), 1):
     if line.lstrip().startswith("--"):
         continue
     code = line.split("--", 1)[0]
-    # column-definition lines: <indent><name> <rest> — the leading name is a
-    # column, never a type reference.
-    m = re.match(r"\s+(\w+)(\s+)(\w+.*)$", code)
-    body = code[m.end(1) :] if m else code
-    for t in TYPES:
-        if re.search(rf"(?<!erph\.)\b{t}\b", body):
-            unqualified_types.append(f"L{i}: {line.strip()[:90]}")
+    hit = None
+
+    # `<identifier> <whitespace> <bare type>` — the shape of a column or
+    # variable definition with its schema qualifier missing.
+    for m in re.finditer(rf"\b\w+\s+({type_alt})\b", code):
+        hit = m.group(0)
+        break
+
+    # `<expr>::<bare type>` — a cast, where the type is not preceded by an
+    # identifier at all so the rule above cannot see it.
+    if hit is None:
+        for m in re.finditer(rf"::\s*({type_alt})\b", code):
+            hit = m.group(0)
             break
+
+    if hit:
+        unqualified_types.append(f"L{i}: {line.strip()[:90]}")
 
 leaked_literals = []
 for i, line in enumerate(SQL.split("\n"), 1):

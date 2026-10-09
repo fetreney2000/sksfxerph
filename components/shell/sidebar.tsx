@@ -6,9 +6,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navFor } from "@/components/shell/nav";
 import { cn } from "@/lib/cn";
-import { currentWeek, SCHOOL, SESSION } from "@/lib/config";
+import { currentWeek, SCHOOL } from "@/lib/config";
 import { db } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
+import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 import type { MemberRole } from "@/lib/types";
 
@@ -41,16 +42,17 @@ export function Sidebar({
     }
   };
 
+  const session = useSession();
   const counts = useLiveQuery(
     async () => ({
       drafts: await db.documents
         .where("[ownerId+session]")
-        .equals([LOCAL_OWNER_ID, SESSION])
+        .equals([LOCAL_OWNER_ID, session])
         .filter((d) => d.weekNo === WEEK && d.status === "draft")
         .count(),
       pending: 4, // stand-in for `select count(*) ... status='submitted'` in local mode
     }),
-    [],
+    [session],
     { drafts: 0, pending: 4 },
   );
 

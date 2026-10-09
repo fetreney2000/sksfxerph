@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createBlankRph } from "@/lib/actions/plans";
 import { currentWeek } from "@/lib/config";
-import { CLASSES } from "@/lib/demo/seed";
+import { useSchoolClasses } from "@/lib/hooks/use-school-data";
 
 interface Template {
   id: string;
@@ -77,6 +77,7 @@ export default function TemplatPage() {
   const router = useRouter();
   const [filter, setFilter] = React.useState<(typeof FILTERS)[number]>("Semua");
   const [starting, setStarting] = React.useState(false);
+  const { items: classes } = useSchoolClasses();
 
   /**
    * "Start from scratch" — lands in the editor on a brand-new empty eRPH
@@ -87,7 +88,7 @@ export default function TemplatPage() {
     setStarting(true);
     void (async () => {
       try {
-        const doc = await createBlankRph(currentWeek(), CLASSES);
+        const doc = await createBlankRph(currentWeek(), classes);
         if (!doc) {
           toast.error("Tiada slot kosong untuk eRPH baharu");
           return;

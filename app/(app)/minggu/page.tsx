@@ -33,8 +33,8 @@ import { createBlankRph, reuseLastWeek } from "@/lib/actions/plans";
 import { can } from "@/lib/auth/permissions";
 import { currentWeek, weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel } from "@/lib/date";
-import { CLASSES } from "@/lib/demo/seed";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
+import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useWeek } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
 import type { RphDocument } from "@/lib/types";
@@ -46,6 +46,8 @@ export default function MingguPage() {
   const me = useUser();
   const week = useWeek();
   const stats = useSchoolStats();
+  const { items: classes } = useSchoolClasses();
+  const { items: subjects } = useSchoolSubjects();
 
   const deadline = weekDeadline(WEEK);
   const approved = week.documents.filter((d) => d.status === "approved").length;
@@ -55,13 +57,13 @@ export default function MingguPage() {
   // per-row "Sambung" buttons are for. createBlankRph reuses an untouched
   // blank, so tapping this twice still lands on one empty plan.
   const onNew = async () => {
-    const doc = await createBlankRph(WEEK, CLASSES);
+    const doc = await createBlankRph(WEEK, classes);
     if (doc) router.push(`/editor/${doc.id}`);
     else toast.error("Tiada slot kosong untuk eRPH baharu");
   };
 
   const onReuse = async () => {
-    const n = await reuseLastWeek(WEEK - 1, WEEK, CLASSES);
+    const n = await reuseLastWeek(WEEK - 1, WEEK, classes);
     toast.success(
       n > 0
         ? `${n} RPH minggu lepas disalin ke Minggu ${WEEK}`
@@ -207,7 +209,7 @@ export default function MingguPage() {
         </h2>
         <span className="h-px flex-1 bg-border" />
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2">
-          {CLASSES.length} kelas · 3 subjek
+          {classes.length} kelas · {subjects.length} subjek
         </span>
       </div>
 

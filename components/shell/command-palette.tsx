@@ -8,7 +8,7 @@ import { useUser } from "@/components/shell/user-context";
 import { createBlankRph } from "@/lib/actions/plans";
 import { cn } from "@/lib/cn";
 import { currentWeek } from "@/lib/config";
-import { CLASSES } from "@/lib/demo/seed";
+import { useSchoolClasses } from "@/lib/hooks/use-school-data";
 
 interface Cmd {
   id: string;
@@ -28,6 +28,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [q, setQ] = React.useState("");
   const [sel, setSel] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const { items: classes } = useSchoolClasses();
 
   const commands = React.useMemo<Cmd[]>(() => {
     const nav: Cmd[] = navFor(role).flatMap((g) =>
@@ -50,7 +51,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         // store cannot produce a free slot.
         run: () => {
           void (async () => {
-            const doc = await createBlankRph(currentWeek(), CLASSES);
+            const doc = await createBlankRph(currentWeek(), classes);
             router.push(doc ? `/editor/${doc.id}` : "/editor");
           })();
         },
@@ -75,7 +76,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     ];
 
     return [...nav, ...actions];
-  }, [router, role]);
+  }, [classes, router, role]);
 
   const filtered = React.useMemo(() => {
     const term = q.trim().toLowerCase();

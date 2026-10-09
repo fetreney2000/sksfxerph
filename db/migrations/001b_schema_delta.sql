@@ -20,6 +20,10 @@ alter table erph.school_member alter column role set default 'guru_biasa';
 drop function if exists erph.review_rph(uuid, smallint, text);
 
 -- ── 3 · helpers, RPCs and the new admin set-up ─────────────────────────────
+-- Shapes that changed: these cannot be `create or replace`d over.
+drop function if exists erph.admin_list_members(uuid);
+drop function if exists erph.admin_set_setting(uuid, smallint, time, boolean);
+
 
 create or replace function erph.is_staff(p_school uuid)
 returns boolean language sql stable security definer set search_path = erph, public as $$
@@ -231,9 +235,12 @@ end $$;
 
 create or replace function erph.admin_list_members(p_school uuid)
 returns table (user_id uuid, username text, full_name text, email text,
-               role erph.member_role, is_active boolean)
+               role erph.member_role, is_active boolean,
+               last_login_at timestamptz, locked_until timestamptz,
+               failed_logins int, password_changed_at timestamptz)
 language sql stable security definer set search_path = erph, public as $$
-  select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active
+  select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active,
+         u.last_login_at, u.locked_until, u.failed_logins, u.password_changed_at
     from erph.school_member m
     join erph.user u on u.id = m.user_id
    where m.school_id = p_school and erph.has_role(p_school, array['pentadbir']::erph.member_role[])
@@ -264,17 +271,22 @@ end $$;
 
 create or replace function erph.admin_set_setting(p_school uuid, p_weekday smallint,
                                                   p_time time,
-                                                  p_require_complete boolean)
+                                                  p_require_complete boolean,
+                                                  p_session text default null)
 returns void language plpgsql security definer set search_path = erph, public as $$
 begin
   if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Peranan pentadbir diperlukan';
   end if;
   if p_weekday not between 1 and 7 then raise exception 'Hari mesti antara 1 dan 7'; end if;
+  if p_session is not null and p_session !~ '^[0-9]{4}/[0-9]{4}$' then
+    raise exception 'Sesi mesti dalam bentuk TTTT/TTTT';
+  end if;
   update erph.school_setting
      set submit_weekday = p_weekday,
          submit_time = p_time,
-         require_complete = p_require_complete
+         require_complete = p_require_complete,
+         current_session = coalesce(p_session, current_session)
    where school_id = p_school;
 end $$;
 
