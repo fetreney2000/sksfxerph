@@ -4,7 +4,7 @@ import { db, findByNaturalKey } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { emptyPayload } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
-import { commit } from "@/lib/sync/queue";
+import { commit, hasBackend } from "@/lib/sync/queue";
 import type { RphDocument, SchoolClass } from "@/lib/types";
 
 /** Defaults for the seed data; a real deployment reads teaching_assignment. */
@@ -90,6 +90,35 @@ function isBlank(doc: RphDocument): boolean {
 
 const slotKey = (classId: string, subjectCode: string, weekNo: number, planDate: string) =>
   `${classId}|${subjectCode}|${weekNo}|${planDate}`;
+
+/**
+ * Take a plan out of the archive.
+ *
+ * Synced: a **soft** delete. `deleted_at` keeps the row — under Peraturan 8 a
+ * plan is a statutory record — and every view reads `deleted_at is null`, so it
+ * disappears from the app while staying in the database until the retention
+ * purge takes it five years later.
+ *
+ * Local: IndexedDB *is* the only copy, so it is a real delete. There is no
+ * record to retain because there is no server holding one, and pretending
+ * otherwise would leave a row nobody could ever see or remove.
+ *
+ * Either way the local copy goes, so the archive stops listing it at once
+ * rather than on the next reload.
+ */
+export async function removePlan(id: string): Promise<void> {
+  if (hasBackend()) {
+    const res = await fetch(`/api/rph/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `Gagal memadam (${res.status})`);
+    }
+  }
+  await db.documents.delete(id);
+}
 
 /**
  * Open a completely new, empty RPH — never a plan that already has content.

@@ -1,21 +1,35 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import * as React from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { removePlan } from "@/lib/actions/plans";
 import { schoolDays, weekRangeLabel } from "@/lib/date";
 import { useArchive } from "@/lib/hooks/use-week";
+import type { RphDocument } from "@/lib/types";
 
 const REVIEWER = { initials: "ZR", name: "Zulkifli · GPK" };
 
 export default function ArkibPage() {
   const router = useRouter();
   const docs = useArchive() ?? [];
+  const [confirming, setConfirming] = React.useState<RphDocument | null>(null);
+  const [busy, setBusy] = React.useState(false);
 
   const byWeek = new Map<number, typeof docs>();
   for (const d of docs) {
@@ -130,8 +144,8 @@ export default function ArkibPage() {
 
         <CardFooter>
           <span className="text-[12.5px] text-ink-3">
-            Rekod disimpan mengikut Peraturan 8, Akta Pendidikan 1996 — sedia untuk pemeriksaan
-            pada bila-bila masa.
+            Rekod disimpan mengikut Peraturan 8, Akta Pendidikan 1996 — memadam menyembunyikan
+            rancangan daripada aplikasi, tetapi rekod kekal dalam pangkalan data.
           </span>
         </CardFooter>
       </Card>
@@ -173,13 +187,23 @@ export default function ArkibPage() {
                     <StatusBadge status={d.status} grade={d.grade} />
                   </TD>
                   <TD className="text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => router.push(`/editor/${d.id}`)}
-                    >
-                      Buka
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => router.push(`/editor/${d.id}`)}
+                      >
+                        Buka
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Padam ${d.className} ${d.subjectName} ${d.planDate}`}
+                        onClick={() => setConfirming(d)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                      </Button>
+                    </div>
                   </TD>
                 </TR>
               ))}
@@ -194,6 +218,54 @@ export default function ArkibPage() {
           </Table>
         </TableContainer>
       </Card>
+
+      <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Keluarkan rancangan daripada arkib?</DialogTitle>
+            <DialogDescription>
+              {confirming
+                ? `${confirming.className} · ${confirming.subjectName} · ${confirming.planDate}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            {/* The distinction the footer promises, spelled out at the moment
+                it matters: "gone from the app" and "gone from the record" are
+                not the same thing, and only one of them is happening. */}
+            <p className="text-[13px] leading-[1.6] text-ink-3">
+              Rancangan ini tidak akan dipaparkan dalam arkib, papan pemuka mahupun laporan.
+              <b className="text-ink-2"> Rekod kekal disimpan</b> mengikut Peraturan 8, Akta
+              Pendidikan 1996 dan tidak dipadam daripada pangkalan data.
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirming(null)}>
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                const target = confirming;
+                if (!target) return;
+                setBusy(true);
+                removePlan(target.id)
+                  .then(() => {
+                    toast.success("Rancangan dikeluarkan daripada arkib");
+                    setConfirming(null);
+                  })
+                  .catch((err: unknown) =>
+                    toast.error(err instanceof Error ? err.message : "Gagal memadam"),
+                  )
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Keluarkan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
