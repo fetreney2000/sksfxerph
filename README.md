@@ -74,6 +74,18 @@ In local mode (no Supabase) the login screen names `cikgu` / `cikgu123`
 separation can be exercised and tested — a single superuser proves nothing.
 A third, `pentadbir` / `pentadbir123`, is the Administrator.
 
+### After running `db/ops/fresh-start.sql`
+
+That script clears every account except the Administrator **and renames it
+`pentadbir.sk` → `pentadbir`**. It is the same row, so `pentadbir2026` still
+works — but the username in the table above will not. The other four accounts
+are gone, as are every class, subject, eRPH, template and audit row; the school
+row, its crest/motto/code, and the session deadline survive.
+
+Do **not** run `db/seed.sql` again afterwards. It inserts five accounts and a
+demo lesson plan, which would put a second Administrator called `pentadbir.sk`
+alongside the one now called `pentadbir`.
+
 ### Upgrading an existing database
 
 `db/schema.sql` describes the end state but is not idempotent, so an existing
