@@ -4,10 +4,12 @@ import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { useUser } from "@/components/shell/user-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createBlankRph } from "@/lib/actions/plans";
+import { can } from "@/lib/auth/permissions";
 import { currentWeek } from "@/lib/config";
 import { useSchoolClasses } from "@/lib/hooks/use-school-data";
 
@@ -77,6 +79,8 @@ export default function TemplatPage() {
   const router = useRouter();
   const [filter, setFilter] = React.useState<(typeof FILTERS)[number]>("Semua");
   const [starting, setStarting] = React.useState(false);
+  const { role } = useUser();
+  const mayPlan = can(role, "rph");
   const { items: classes } = useSchoolClasses();
 
   /**
@@ -195,22 +199,27 @@ export default function TemplatPage() {
           </Card>
         ))}
 
-        <button
-          type="button"
-          disabled={starting}
-          onClick={startBlank}
-          className="grid min-h-[172px] place-items-center rounded-[14px] border-2 border-dashed border-border-strong bg-surface-2 p-5 text-center transition-colors hover:border-primary hover:bg-primary-soft disabled:opacity-60"
-        >
-          <span>
-            <span className="mx-auto mb-2.5 grid h-10.5 w-10.5 place-items-center rounded-[11px] border border-primary-soft-2 bg-surface text-primary shadow-xs">
-              <Plus className="h-5 w-5" strokeWidth={2} aria-hidden />
+        {/* Only for someone who may hold plans: this tile opens a blank *eRPH*,
+            not a template — the label above oversold it — so the Administrator,
+            who holds no `rph`, must not be offered it. */}
+        {mayPlan && (
+          <button
+            type="button"
+            disabled={starting}
+            onClick={startBlank}
+            className="grid min-h-[172px] place-items-center rounded-[14px] border-2 border-dashed border-border-strong bg-surface-2 p-5 text-center transition-colors hover:border-primary hover:bg-primary-soft disabled:opacity-60"
+          >
+            <span>
+              <span className="mx-auto mb-2.5 grid h-10.5 w-10.5 place-items-center rounded-[11px] border border-primary-soft-2 bg-surface text-primary shadow-xs">
+                <Plus className="h-5 w-5" strokeWidth={2} aria-hidden />
+              </span>
+              <span className="block text-sm font-bold">Cipta eRPH baharu</span>
+              <span className="mt-1 block max-w-[230px] text-[12.5px] text-ink-3">
+                Mulakan eRPH baharu dari kosong — lengkapkan, kemudian simpan sebagai templat.
+              </span>
             </span>
-            <span className="block text-sm font-bold">Cipta templat baharu</span>
-            <span className="mt-1 block max-w-[230px] text-[12.5px] text-ink-3">
-              Mulakan eRPH baharu dari kosong — lengkapkan, kemudian simpan sebagai templat.
-            </span>
-          </span>
-        </button>
+          </button>
+        )}
       </div>
     </>
   );

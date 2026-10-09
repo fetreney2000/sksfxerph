@@ -6,6 +6,7 @@ import * as React from "react";
 import { navFor } from "@/components/shell/nav";
 import { useUser } from "@/components/shell/user-context";
 import { createBlankRph } from "@/lib/actions/plans";
+import { can } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
 import { currentWeek } from "@/lib/config";
 import { useSchoolClasses } from "@/lib/hooks/use-school-data";
@@ -40,28 +41,38 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       })),
     );
 
+    // Plan-creation actions only exist for someone who may hold plans. The
+    // Administrator has no `rph`, so offering "RPH baharu" would create a
+    // document attributed to an account that must not have one — and then
+    // bounce them off the editor's gate.
+    const planActions: Cmd[] = can(role, "rph")
+      ? [
+          {
+            id: "new",
+            group: "Tindakan",
+            label: "RPH baharu untuk kelas",
+            hint: "N",
+            // Creates the plan before navigating so the URL names the document —
+            // falling back to /editor, which resolves an unfinished one, if the
+            // store cannot produce a free slot.
+            run: () => {
+              void (async () => {
+                const doc = await createBlankRph(currentWeek(), classes);
+                router.push(doc ? `/editor/${doc.id}` : "/editor");
+              })();
+            },
+          },
+          {
+            id: "reuse",
+            group: "Tindakan",
+            label: "Guna semula RPH minggu lepas",
+            run: () => router.push("/editor?reuse=1"),
+          },
+        ]
+      : [];
+
     const actions: Cmd[] = [
-      {
-        id: "new",
-        group: "Tindakan",
-        label: "RPH baharu untuk kelas",
-        hint: "N",
-        // Creates the plan before navigating so the URL names the document —
-        // falling back to /editor, which resolves an unfinished one, if the
-        // store cannot produce a free slot.
-        run: () => {
-          void (async () => {
-            const doc = await createBlankRph(currentWeek(), classes);
-            router.push(doc ? `/editor/${doc.id}` : "/editor");
-          })();
-        },
-      },
-      {
-        id: "reuse",
-        group: "Tindakan",
-        label: "Guna semula RPH minggu lepas",
-        run: () => router.push("/editor?reuse=1"),
-      },
+      ...planActions,
       {
         id: "theme",
         group: "Tindakan",

@@ -42,7 +42,9 @@ async function login(page: Page, username = DEMO_USER, password = DEMO_PASS): Pr
   await page.getByLabel(/Nama pengguna/).fill(username);
   await page.getByLabel(/Kata laluan/).fill(password);
   await page.getByRole("button", { name: "Log masuk" }).click();
-  await page.waitForURL(/\/minggu/, { timeout: 15_000 });
+  // Either home, per `homeFor`: every teaching role lands on /minggu, the
+  // Administrator — who holds no `rph` — on /utama.
+  await page.waitForURL(/\/(minggu|utama)/, { timeout: 15_000 });
 }
 
 test.describe("authentication", () => {
@@ -113,7 +115,18 @@ test.describe("authentication", () => {
 
     // The Administrator reaches it, and in local mode is told why it is empty.
     await login(page, PENTADBIR_USER, PENTADBIR_PASS);
+    // They land on their own dashboard, not a teacher's.
+    await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
     await expect(page.getByRole("link", { name: /Urus eRPH/ })).toHaveCount(1);
+
+    // A teacher's screens must refuse them — they hold no plans to show.
+    await page.goto("/minggu");
+    await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
+    await page.goto("/editor");
+    await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
+    await page.goto("/arkib");
+    await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
+
     await page.goto("/pentadbiran");
     await expect(page).toHaveURL(/\/pentadbiran/, { timeout: 15_000 });
     await expect(page.getByText(/Pentadbiran memerlukan mod disegerakkan/)).toBeVisible();
@@ -305,7 +318,7 @@ test.describe("eRPH smoke", () => {
   test("the template page's create button opens a brand-new blank eRPH", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/templat");
-    await page.getByRole("button", { name: /Cipta templat baharu/ }).click();
+    await page.getByRole("button", { name: /Cipta eRPH baharu/ }).click();
 
     await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
     const first = page.url();
@@ -317,7 +330,7 @@ test.describe("eRPH smoke", () => {
     // an untouched blank is reused, because the natural key is unique per
     // lesson and cannot hold two plans for the same class/date anyway.
     await page.goto("/templat");
-    await page.getByRole("button", { name: /Cipta templat baharu/ }).click();
+    await page.getByRole("button", { name: /Cipta eRPH baharu/ }).click();
     await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
     expect(page.url()).toBe(first);
 

@@ -30,20 +30,34 @@ export type Permission =
   | "laporan"
   /** Read the audit log. */
   | "audit"
+  /**
+   * The template library — reading, and for the school's own templates,
+   * writing them.
+   *
+   * Split from `rph` because the Administrator needs it without needing `rph`.
+   * An administrator does not teach, so they should not be given a permission
+   * named "write and submit one's own plans" just to reach a screen they *do*
+   * administer; folding the two together would have been the smaller diff and
+   * the worse model.
+   */
+  | "templat"
   /** App set-up: accounts, classes, subjects, session, deadlines. */
   | "pentadbir";
 
 const MATRIX: Record<MemberRole, readonly Permission[]> = {
   // Guru Mata Pelajaran (KPM HR12–HR21): their own RPH and nothing else.
-  guru_biasa: ["rph"],
+  guru_biasa: ["rph", "templat"],
   // GPK Pentadbiran (KPM HR02) — "menyelia dan menilai pengajaran" — so it
   // supervises: grade, monitor, report, and see who reviewed what.
-  gpk: ["rph", "semak", "pantau", "laporan", "audit"],
+  gpk: ["rph", "semak", "pantau", "laporan", "audit", "templat"],
   // PGB (KPM HR01) reaches the same screens as its GPK today.
-  guru_besar: ["rph", "semak", "pantau", "laporan", "audit"],
+  guru_besar: ["rph", "semak", "pantau", "laporan", "audit", "templat"],
   // Administrator sets the app up. Deliberately outside `is_staff` in SQL, so
-  // it can never grade a plan, read whole-school compliance or open the log.
-  pentadbir: ["rph", "pentadbir"],
+  // it can never grade a plan, read whole-school compliance or open the log —
+  // and deliberately *without* `rph`: they do not teach, so they have no plans
+  // of their own to write, submit or be graded on. `templat` is what they do
+  // administer.
+  pentadbir: ["pentadbir", "templat"],
   // District/state officers were removed: this app is internal to one school.
   system: [],
 };
@@ -59,6 +73,19 @@ export function permissionsFor(role: string | null | undefined): readonly Permis
 
 /** Roles allowed to grade — SQL mirrors this as `erph.is_staff`. */
 export const REVIEWER_ROLES: readonly MemberRole[] = ["gpk", "guru_besar"];
+
+/**
+ * Where a role lands after signing in, and where it is sent when it asks for a
+ * screen it may not have.
+ *
+ * Derived rather than configured: the Administrator has no `rph`, so sending
+ * them to `/minggu` — a page gated on `rph` — would bounce them straight back
+ * and produce a redirect loop. One rule, used by `/`, `/login` and every
+ * `requirePermission` fallback, so the three can never disagree.
+ */
+export function homeFor(role: string | null | undefined): string {
+  return can(role, "rph") ? "/minggu" : "/utama";
+}
 
 /**
  * The rung each reviewer owns.

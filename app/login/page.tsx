@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LoginCard } from "@/components/auth/login-card";
+import { homeFor } from "@/lib/auth/permissions";
 import { SCHOOL } from "@/lib/config";
 import { getCurrentUser } from "@/lib/server/auth/session";
 
@@ -17,7 +18,7 @@ import { getCurrentUser } from "@/lib/server/auth/session";
  */
 export default async function LoginPage() {
   const user = await getCurrentUser();
-  if (user) redirect("/minggu");
+  if (user) redirect(homeFor(user.role));
 
   return (
     <div className="grid min-h-dvh bg-bg lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)]">
@@ -62,9 +63,6 @@ export default async function LoginPage() {
           <span className="inline-flex items-center rounded-full border border-[#ffd60a]/35 bg-[#ffd60a]/10 px-4 py-1.5 text-[12.5px] font-semibold tracking-[0.4px] text-[#ffe066]">
             {SCHOOL.motto}
           </span>
-          <p className="text-[11.5px] text-[#6d7f99]">
-            Kementerian Pendidikan Malaysia · Garis Panduan e-RPH
-          </p>
         </footer>
       </aside>
 

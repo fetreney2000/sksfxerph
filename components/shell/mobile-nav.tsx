@@ -15,7 +15,15 @@ import { ms } from "@/lib/i18n/ms";
  * filtered through `navFor()` so the reviewer pair never appears for a Guru
  * Biasa, ≥48px touch targets.
  */
-const PRIMARY = ["/minggu", "/editor", "/templat", "/semakan", "/sekolah"];
+const PRIMARY = [
+  "/utama",
+  "/minggu",
+  "/editor",
+  "/templat",
+  "/semakan",
+  "/sekolah",
+  "/pentadbiran",
+];
 
 export function MobileNav() {
   const pathname = usePathname();

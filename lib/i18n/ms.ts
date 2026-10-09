@@ -30,6 +30,7 @@ export const ms = {
     guru: "Guru",
     pentadbiran: "Pentadbiran",
     urus: "Urus eRPH",
+    utama: "Utama",
   },
 
   dashboard: {

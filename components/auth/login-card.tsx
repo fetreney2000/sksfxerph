@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FieldError, Input, Label } from "@/components/ui/field";
+import { homeFor } from "@/lib/auth/permissions";
 import { supabaseConfigured } from "@/lib/config";
 import { LOCAL_ACCOUNT, LOCAL_DEMO_PASSWORD } from "@/lib/server/auth/local";
 
@@ -41,8 +42,12 @@ export function LoginCard() {
         body: JSON.stringify({ username, password }),
       });
 
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        role?: string;
+      } | null;
+
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
         setError(body?.error ?? "Log masuk gagal. Cuba lagi.");
         return;
       }
@@ -50,7 +55,11 @@ export function LoginCard() {
       // Full navigation rather than a client-side push: the (app) layout reads
       // the cookie server-side, so the server must render the authenticated
       // shell — a soft navigation would show it stale.
-      window.location.assign("/minggu");
+      //
+      // Destination follows the role. A literal "/minggu" would land the
+      // Administrator on a page that gates on `rph` — a permission they hold
+      // precisely because they do not teach — and bounce them straight back.
+      window.location.assign(homeFor(body?.role ?? null));
     } catch {
       setError("Rangkaian bermasalah. Cuba lagi.");
     } finally {
@@ -82,7 +91,6 @@ export function LoginCard() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="cth. nurul.aisyah"
             />
           </div>
 
@@ -98,7 +106,6 @@ export function LoginCard() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
             />
             {error && <FieldError id="login-error">{error}</FieldError>}
           </div>

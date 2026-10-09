@@ -45,13 +45,17 @@ export const NAV: NavGroup[] = [
         perm: "rph",
         badge: "drafts",
       },
-      { href: "/templat", label: ms.nav.templat, icon: BookOpen, perm: "rph" },
+      { href: "/templat", label: ms.nav.templat, icon: BookOpen, perm: "templat" },
       { href: "/arkib", label: ms.nav.arkib, icon: History, perm: "rph" },
     ],
   },
   {
     label: ms.nav.pentadbiran,
     items: [
+      // The Administrator's home. Listed first because it *is* their landing
+      // page — for every other role `navFor` filters it out and the group
+      // still reads correctly.
+      { href: "/utama", label: ms.nav.utama, icon: LayoutGrid, perm: "pentadbir" },
       {
         href: "/semakan",
         label: ms.nav.semakan,
@@ -79,6 +83,7 @@ export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/editor": { title: ms.nav.editor, crumb: "Draf aktif" },
   "/templat": { title: ms.nav.templat, crumb: "Templat tersedia" },
   "/arkib": { title: ms.nav.arkib, crumb: "Rekod sesi" },
+  "/utama": { title: ms.nav.utama, crumb: "Papan pemuka pentadbir" },
   "/semakan": { title: ms.nav.semakan, crumb: "Mod pentadbir" },
   "/sekolah": { title: ms.nav.sekolah, crumb: "Pemantauan sekolah" },
   "/laporan": { title: "Laporan & Eksport", crumb: "Eksport rasmi" },

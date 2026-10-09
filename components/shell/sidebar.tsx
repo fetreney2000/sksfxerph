@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navFor } from "@/components/shell/nav";
+import { homeFor } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
 import { currentWeek, SCHOOL } from "@/lib/config";
 import { db } from "@/lib/db";
@@ -61,7 +62,7 @@ export function Sidebar({
       className="sticky top-0 z-40 hidden h-dvh w-63 shrink-0 flex-col border-r border-[rgba(255,255,255,0.07)] bg-gradient-to-b from-[#0c1d33] to-[#0a1729] lg:flex"
       aria-label={ms.a11y.mainNavigation}
     >
-      <Link href="/minggu" className="flex items-center gap-2.5 px-4.5 py-4">
+      <Link href={homeFor(user.role)} className="flex items-center gap-2.5 px-4.5 py-4">
         <Image
           src={SCHOOL.logo}
           alt=""
