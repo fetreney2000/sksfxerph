@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import { homeFor } from "@/lib/auth/permissions";
-import { googleAuthConfigured, googleClientId, googleDomain } from "@/lib/config";
+import {
+  googleAuthConfigured,
+  googleClientId,
+  googleDomain,
+  supabaseConfigured,
+} from "@/lib/config";
 
 /**
  * Sign in with a KPM Google account.
@@ -75,7 +80,10 @@ export function GoogleSignIn({ onError }: { onError: (message: string) => void }
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    if (!googleAuthConfigured) return;
+    // Both conditions, not just the client id: accounts live in `erph.user`, so
+    // in local mode a rendered button would POST to a route that answers 503 —
+    // a failure the teacher cannot act on, on a page that looked ready.
+    if (!googleAuthConfigured || !supabaseConfigured) return;
 
     let cancelled = false;
 
@@ -146,7 +154,7 @@ export function GoogleSignIn({ onError }: { onError: (message: string) => void }
     };
   }, [onError]);
 
-  if (!googleAuthConfigured) return null;
+  if (!googleAuthConfigured || !supabaseConfigured) return null;
 
   return (
     <div className="mt-4">
