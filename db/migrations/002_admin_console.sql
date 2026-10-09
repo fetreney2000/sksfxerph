@@ -21,21 +21,6 @@ drop function if exists erph.admin_set_setting(uuid, smallint, time, boolean);
 
 -- ── 2 · admin set-up functions ─────────────────────────────────────────────
 
-create or replace function erph.admin_list_members(p_school uuid)
-returns table (user_id uuid, username text, full_name text, email text,
-               role erph.member_role, is_active boolean,
-               last_login_at timestamptz, locked_until timestamptz,
-               failed_logins int, password_changed_at timestamptz)
-language sql stable security definer set search_path = erph, public as $$
-  select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active,
-         u.last_login_at, u.locked_until, u.failed_logins, u.password_changed_at
-    from erph.school_member m
-    join erph.user u on u.id = m.user_id
-   where m.school_id = p_school and erph.has_role(p_school, array['pentadbir']::erph.member_role[])
-   order by m.role, u.username;
-$$;
-
-
 create or replace function erph.admin_create_member(p_school uuid, p_username text,
                                                     p_full_name text,
                                                     p_role erph.member_role,

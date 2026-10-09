@@ -241,17 +241,23 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("review queue grades with the keyboard (Lampiran 7)", async ({ page }) => {
+  test("review queue decides with the keyboard — sahkan or kembalikan", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/semakan");
 
     await expect(page.getByText("Baris gilir")).toBeVisible();
     const before = await page.getByText(/Belum semak \((\d+)\)/).textContent();
 
-    // `1` = Lengkap, exactly as the KPM Garis Panduan specifies.
+    // `1` = sahkan. There is no longer a Guru Besar to forward to: a GPK
+    // approves here, and the Guru Besar does exactly the same thing on any
+    // teacher's plan. Local mode skips the signature — there is no database
+    // to file it against; synced mode signs first and /api/rpc/review
+    // verifies before it will append anything.
     await page.keyboard.press("1");
 
-    await expect(page.getByText(/Gred 1 · Lengkap/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Disahkan dan ditandatangani/)).toBeVisible({
+      timeout: 10_000,
+    });
     const after = await page.getByText(/Belum semak \((\d+)\)/).textContent();
     expect(after).not.toBe(before);
 

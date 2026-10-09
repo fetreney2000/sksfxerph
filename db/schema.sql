@@ -103,7 +103,7 @@ begin
      and coalesce(current_setting('app.rpc', true), '0') <> '1'
      and coalesce(current_setting('app.allow_review', true), '0') <> '1'
   then
-    raise exception 'Tukar status semakan melalui submit_rph()/semak_rph()/lulus_rph() sahaja';
+    raise exception 'Tukar status semakan melalui submit_rph()/sahkan_rph()/hantar_balik_rph() sahaja';
   end if;
   return new;
 end $$;
@@ -252,6 +252,15 @@ create table erph.school_member (
   user_id    uuid not null references erph.user(id) on delete cascade,
   role       erph.member_role not null default 'guru_biasa',
   title      text,                                      -- 'GPK Pentadbiran', 'Guru Matematik'
+  -- Who supervises this member's plans. NULL means *nobody*, and that is the
+  -- deliberate default: a teacher with no supervisor is visible only to a Guru
+  -- Besar, because "GPK can only view, review and sahkan rph of teachers under
+  -- their supervision" has to mean something even when nobody assigned yet.
+  -- Points at erph.user, not school_member, so it stays readable from the
+  -- member's own row; the pair is checked in erph.admin_set_supervisor rather
+  -- than as a column CHECK, because "is this user an active gpk in *this*
+  -- school" is a cross-row question a CHECK cannot ask.
+  supervisor_id uuid references erph.user(id) on delete set null,
   invited_at timestamptz not null default now(),
   joined_at  timestamptz,
   is_active  boolean not null default true,
@@ -259,6 +268,9 @@ create table erph.school_member (
 );
 create index school_member_user_idx       on erph.school_member (user_id) where is_active;
 create index school_member_school_role_idx on erph.school_member (school_id, role) where is_active;
+-- Scope lookup for every supervision check: one index scan per policy row.
+create index school_member_supervisor_idx on erph.school_member (school_id, supervisor_id)
+  where supervisor_id is not null;
 
 create table erph.school_setting (
   school_id       uuid primary key references erph.school(id) on delete cascade,
@@ -444,6 +456,48 @@ create table erph.rph_review (
 create index rph_review_doc_idx     on erph.rph_review (document_id, created_at desc);
 create index rph_review_reviewer_idx on erph.rph_review (reviewer_id, created_at desc);
 
+-- ── SIGNATURE ────────────────────────────────────────────────────────────────
+-- Appended by the server, and only after the server has cryptographically
+-- verified the signature.
+--
+-- Why the work is split this way: PostgreSQL cannot check an ECDSA signature.
+-- pgcrypto's own documentation says "No support for signing", so a
+-- `verify_signature()` RPC is not something this schema can offer. Rather than
+-- pretend otherwise, the guarantee is built from what the database *can*
+-- enforce — who may write:
+--
+--   1. This table has NO insert or update policy. Only `service_role` can
+--      append, and `service_role` is only ever our server code.
+--   2. /api/rpc/review verifies the ECDSA signature against the canonical
+--      envelope first, and inserts here only if it verifies.
+--   3. erph.sahkan_rph refuses to approve a plan that has no matching row
+--      below, so a GPK who calls the RPC directly to skip step 2 gets
+--      "Tandatangan diperlukan" rather than an approval nobody signed.
+--
+-- `envelope` is jsonb rather than the signed bytes on purpose: jsonb does not
+-- preserve byte order, so it is re-canonicalised (RFC 8785) on every
+-- verification. Canonicalisation is a function of the *data model*, so the
+-- bytes come out identical — which is the whole reason the signature covers
+-- canonical JSON instead of a serialisation.
+--
+-- The public key is repeated on every row rather than read from a registry:
+-- an archival signature has to stay verifiable after its key is retired, and
+-- verification must not depend on a row someone can later edit.
+create table erph.rph_signature (
+  id               bigint generated always as identity primary key,
+  document_id      uuid not null references erph.rph_document(id) on delete cascade,
+  document_version int not null,                          -- the version covered
+  signer_id        uuid not null references erph.user(id),
+  alg              text not null check (alg in ('ES256')),
+  public_key       text not null,                        -- base64url SPKI/P-256
+  signature        text not null,                        -- base64url, raw r||s
+  envelope         jsonb not null,                       -- what was signed
+  signed_at        timestamptz not null default now(),
+  unique (document_id, document_version, signer_id)
+);
+create index rph_signature_doc_idx    on erph.rph_signature (document_id, signed_at desc);
+create index rph_signature_signer_idx on erph.rph_signature (signer_id, signed_at desc);
+
 -- ── 8 · TEMPLATES, NOTIFICATIONS, SYNC, EXPORTS, AUDIT ───────────────────────
 create table erph.rph_template (
   id           uuid primary key default gen_random_uuid(),
@@ -537,6 +591,81 @@ returns boolean language sql stable security definer set search_path = erph, pub
                  where user_id = erph.actor() and school_id = p_school
                    and role = any(p_roles) and is_active);
 $$;
+
+-- ── Supervision scope ────────────────────────────────────────────────────────
+-- The role check used to be the whole test: `has_role(school, ['gpk'])` meant
+-- "may read every plan in this school". Per-supervisor assignment turns that
+-- into a *relationship*, so the role alone proves nothing — a GPK is now
+-- defined by which teachers point at them.
+--
+-- Both functions are SECURITY DEFINER because they read school_member through
+-- an authenticated connection whose RLS would otherwise only let the caller
+-- see themselves.
+
+-- Does the actor supervise `p_member` in `p_school`?
+create or replace function erph.supervises(p_school uuid, p_member uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select exists (
+    select 1
+      from erph.school_member t
+     where t.school_id = p_school
+       and t.user_id = p_member
+       and t.is_active
+       and t.supervisor_id = erph.actor()
+  );
+$$;
+
+-- May the actor act on a plan owned by `p_owner`?
+--
+--   • everyone on their own plans (the owner path already exists separately,
+--     but a policy written in terms of this must not lose it);
+--   • a Guru Besar on the whole school — "guru besar will have access to all
+--     teacher's rph", so no assignment is needed for them and none is asked;
+--   • a GPK only on the teachers assigned to them.
+--
+-- A teacher whose supervisor_id is NULL therefore reaches no GPK at all —
+-- which is the safe default, not an oversight.
+create or replace function erph.may_supervise(p_school uuid, p_owner uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select erph.actor() = p_owner
+      or erph.has_role(p_school, array['guru_besar']::erph.member_role[])
+      or erph.supervises(p_school, p_owner);
+$$;
+
+-- A supervisor is an active gpk/guru_besar member of the same school, and
+-- nobody supervises themselves. Checked here rather than in a column CHECK
+-- because it spans rows: `supervisor_id` alone cannot see the supervisor's
+-- own membership or role.
+create or replace function erph.admin_set_supervisor(p_school uuid, p_member uuid,
+                                                     p_supervisor uuid)
+returns void language plpgsql security definer set search_path = erph, public as $$
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if p_member = p_supervisor then
+    raise exception 'Ahli tidak boleh menyelia diri sendiri';
+  end if;
+  if not exists (select 1 from erph.school_member
+                  where school_id = p_school and user_id = p_member) then
+    raise exception 'Bukan ahli sekolah ini';
+  end if;
+  if p_supervisor is not null then
+    if not exists (select 1 from erph.school_member
+                    where school_id = p_school and user_id = p_supervisor
+                      and role in ('gpk','guru_besar') and is_active) then
+      raise exception 'Penyelia mesti GPK atau Guru Besar yang aktif';
+    end if;
+  end if;
+
+  update erph.school_member set supervisor_id = p_supervisor
+   where school_id = p_school and user_id = p_member;
+
+  -- Reassigning a supervisor orphans nothing, but a teacher moved from one GPK
+  -- to another must not leave the previous GPK holding a plan they can no
+  -- longer open. Nothing is rewritten — plans keep who signed them — only the
+  -- *forward* scope changes, which is exactly what the UPDATE above does.
+end $$;
 
 create or replace function erph.my_schools()
 returns uuid[] language sql stable security definer set search_path = erph, public as $$
@@ -645,106 +774,125 @@ begin
 end $$;
 
 -- REVIEW ─ KPM Lampiran 7: 1 = lengkap, 0 = tidak lengkap
--- STAGE 1 — GPK semak. Accepting passes the plan up to the Guru Besar rather
--- than approving it; returning sends it straight back to the teacher.
-create or replace function erph.semak_rph(p_document uuid, p_grade smallint,
-                                          p_comment text default null)
+--
+-- ── ONE stage, not two ─────────────────────────────────────────────────────
+-- The GPK → Guru Besar hop is gone. A GPK reviews and then either **sahkan**
+-- (approve, signed) or **hantar balik** (return to the teacher). A Guru Besar
+-- can do everything a GPK can, on any teacher's plan in the school, so no
+-- assignment is needed for them and none is asked for.
+--
+-- `forwarded` remains in the rph_status enum because Postgres cannot drop a
+-- value, but nothing produces it any more.
+--
+-- Three checks are shared by both functions and neither is optional:
+--   · supervision scope, so a GPK is never told a plan exists that is not theirs
+--   · no self-review, since a GPK also teaches
+--   · only `submitted` plans can be decided, so a decided plan cannot be
+--     re-decided by replaying the call
+
+-- Approve. The signature is deliberately NOT a parameter: the caller must
+-- already hold a verified row in erph.rph_signature for this exact document
+-- version and this signer, and only our server can write one.
+create or replace function erph.sahkan_rph(p_document uuid,
+                                           p_comment text default null)
 returns jsonb language plpgsql security definer set search_path = erph, public as $$
 declare
   v_doc erph.rph_document%rowtype;
-  v_next erph.rph_status;
 begin
-  if p_grade not in (0,1) then raise exception 'Gred mesti 0 atau 1'; end if;
   perform set_config('app.rpc', '1', true);
 
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH tidak dijumpai'; end if;
-  if not erph.has_role(v_doc.school_id, array['gpk']::erph.member_role[]) then
-    raise exception 'Peranan Guru Penolong Kanan diperlukan';
+
+  if not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[]) then
+    raise exception 'Peranan Guru Penolong Kanan atau Guru Besar diperlukan';
+  end if;
+  if not erph.may_supervise(v_doc.school_id, v_doc.owner_id) then
+    raise exception 'RPH di luar bidang penyeliaan anda';
+  end if;
+  if v_doc.owner_id = erph.actor() then
+    raise exception 'Anda tidak boleh mengesahkan RPH sendiri';
   end if;
   if v_doc.status <> 'submitted' then
-    raise exception 'RPH tidak dalam peringkat semakan GPK';
+    raise exception 'RPH tidak dalam peringkat semakan';
+  end if;
+  if not exists (select 1 from erph.rph_signature
+                  where document_id = v_doc.id
+                    and document_version = v_doc.version
+                    and signer_id = erph.actor()) then
+    raise exception 'Tandatangan diperlukan';
   end if;
 
-  v_next := case when p_grade = 1 then 'forwarded'::erph.rph_status
-                 else 'returned'::erph.rph_status end;
-
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
-  values (v_doc.id, v_doc.version, erph.actor(), p_grade, p_comment,
-          jsonb_build_object('stage', 'gpk',
+  values (v_doc.id, v_doc.version, erph.actor(), 1, p_comment,
+          jsonb_build_object('stage', 'sahkan',
                              'completeness', erph.rph_completeness(v_doc.payload)));
 
   update erph.rph_document
-     set status = v_next,
-         grade = p_grade, reviewed_by = erph.actor(), reviewed_at = now(),
+     set status = 'approved'::erph.rph_status,
+         grade = 1, reviewed_by = erph.actor(), reviewed_at = now(),
          version = version + 1
    where id = p_document;
 
   insert into erph.notification (school_id, user_id, type, title, body, link_view)
-  values (v_doc.school_id, v_doc.owner_id,
-          case when p_grade = 1 then 'forwarded'::erph.notification_type
-               else 'returned'::erph.notification_type end,
-          case when p_grade = 1 then 'RPH dihantar ke Guru Besar'
-               else 'RPH perlu dibaiki' end,
-          coalesce(p_comment, ''), 'dashboard');
+  values (v_doc.school_id, v_doc.owner_id, 'approved'::erph.notification_type,
+          'RPH disahkan', coalesce(p_comment, ''), 'dashboard');
 
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
-  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'semak',
-          jsonb_build_object('grade', p_grade, 'status', v_next, 'comment', p_comment));
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'sahkan',
+          jsonb_build_object('status', 'approved', 'comment', p_comment));
 
-  return jsonb_build_object('ok', true, 'grade', p_grade, 'status', v_next);
+  return jsonb_build_object('ok', true, 'grade', 1, 'status', 'approved');
 end $$;
 
--- STAGE 2 — Guru Besar lulus. Approves what the GPK forwarded, or returns it
--- to the teacher; a GPK cannot approve its own forwarding.
-create or replace function erph.lulus_rph(p_document uuid, p_grade smallint,
-                                          p_comment text default null)
+-- Return it to the teacher, with the reason. No signature: nothing was
+-- approved, so there is nothing to attest to.
+create or replace function erph.hantar_balik_rph(p_document uuid,
+                                                 p_comment text default null)
 returns jsonb language plpgsql security definer set search_path = erph, public as $$
 declare
   v_doc erph.rph_document%rowtype;
-  v_next erph.rph_status;
 begin
-  if p_grade not in (0,1) then raise exception 'Gred mesti 0 atau 1'; end if;
   perform set_config('app.rpc', '1', true);
 
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH tidak dijumpai'; end if;
-  if not erph.has_role(v_doc.school_id, array['guru_besar']::erph.member_role[]) then
-    raise exception 'Peranan Guru Besar diperlukan';
-  end if;
-  if v_doc.status <> 'forwarded' then
-    raise exception 'RPH belum disemak oleh Guru Penolong Kanan';
-  end if;
 
-  v_next := case when p_grade = 1 then 'approved'::erph.rph_status
-                 else 'returned'::erph.rph_status end;
+  if not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[]) then
+    raise exception 'Peranan Guru Penolong Kanan atau Guru Besar diperlukan';
+  end if;
+  if not erph.may_supervise(v_doc.school_id, v_doc.owner_id) then
+    raise exception 'RPH di luar bidang penyeliaan anda';
+  end if;
+  if v_doc.owner_id = erph.actor() then
+    raise exception 'Anda tidak boleh mengembalikan RPH sendiri';
+  end if;
+  if v_doc.status <> 'submitted' then
+    raise exception 'RPH tidak dalam peringkat semakan';
+  end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
-  values (v_doc.id, v_doc.version, erph.actor(), p_grade, p_comment,
-          jsonb_build_object('stage', 'guru_besar',
+  values (v_doc.id, v_doc.version, erph.actor(), 0, p_comment,
+          jsonb_build_object('stage', 'hantar_balik',
                              'completeness', erph.rph_completeness(v_doc.payload)));
 
   update erph.rph_document
-     set status = v_next,
-         grade = p_grade, reviewed_by = erph.actor(), reviewed_at = now(),
+     set status = 'returned'::erph.rph_status,
+         grade = 0, reviewed_by = erph.actor(), reviewed_at = now(),
          version = version + 1
    where id = p_document;
 
   insert into erph.notification (school_id, user_id, type, title, body, link_view)
-  values (v_doc.school_id, v_doc.owner_id,
-          case when p_grade = 1 then 'approved'::erph.notification_type
-               else 'returned'::erph.notification_type end,
-          case when p_grade = 1 then 'RPH diluluskan Guru Besar'
-               else 'RPH perlu dibaiki' end,
-          coalesce(p_comment, ''), 'dashboard');
+  values (v_doc.school_id, v_doc.owner_id, 'returned'::erph.notification_type,
+          'RPH perlu dibaiki', coalesce(p_comment, ''), 'dashboard');
 
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
-  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'lulus',
-          jsonb_build_object('grade', p_grade, 'status', v_next, 'comment', p_comment));
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'hantar_balik',
+          jsonb_build_object('status', 'returned', 'comment', p_comment));
 
-  return jsonb_build_object('ok', true, 'grade', p_grade, 'status', v_next);
+  return jsonb_build_object('ok', true, 'grade', 0, 'status', 'returned');
 end $$;
 
 -- SYNC ─ batch, idempotent, offline-friendly; returns authoritative versions.
@@ -941,16 +1089,23 @@ end $$;
 -- route hashes it with scrypt first (lib/server/auth/password.ts), so reading
 -- these functions still yields no way back to what a teacher typed.
 
+-- Who supervises whom is part of the roster, not a separate screen: the
+-- administrator assigning a teacher needs the GPK's name beside them, and the
+-- "nobody supervises this teacher yet" state has to be visible rather than
+-- discoverable later when a GPK's queue is mysteriously empty.
 create or replace function erph.admin_list_members(p_school uuid)
 returns table (user_id uuid, username text, full_name text, email text,
                role erph.member_role, is_active boolean,
                last_login_at timestamptz, locked_until timestamptz,
-               failed_logins int, password_changed_at timestamptz)
+               failed_logins int, password_changed_at timestamptz,
+               supervisor_id uuid, supervisor_name text)
 language sql stable security definer set search_path = erph, public as $$
   select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active,
-         u.last_login_at, u.locked_until, u.failed_logins, u.password_changed_at
+         u.last_login_at, u.locked_until, u.failed_logins, u.password_changed_at,
+         m.supervisor_id, sup.full_name
     from erph.school_member m
     join erph.user u on u.id = m.user_id
+    left join erph.user sup on sup.id = m.supervisor_id
    where m.school_id = p_school and erph.has_role(p_school, array['pentadbir']::erph.member_role[])
    order by m.role, u.username;
 $$;
@@ -1332,6 +1487,9 @@ alter table erph.teaching_assignment enable row level security;
 alter table erph.rph_document        enable row level security;
 alter table erph.rph_revision        enable row level security;
 alter table erph.rph_review          enable row level security;
+-- Enabled, and with only a SELECT policy below: writes are service_role-only
+-- by virtue of having no policy at all.
+alter table erph.rph_signature       enable row level security;
 alter table erph.rph_template        enable row level security;
 alter table erph.notification        enable row level security;
 alter table erph.sync_op             enable row level security;
@@ -1403,21 +1561,37 @@ create policy rph_owner_update on erph.rph_document
     and school_id in (select unnest(erph.my_schools()))
     and erph.class_in_school(class_id, school_id)
   );
+-- A GPK reads only the plans of the teachers assigned to them; a Guru Besar
+-- reads the whole school, and everyone reads their own.
+--
+-- This used to be `has_role(school, ['gpk'])` alone — which meant *every plan
+-- in the school*. `may_supervise` subsumes the role test entirely: it grants a
+-- Guru Besar school-wide, grants a GPK through `supervises`, and grants the
+-- owner their own row. Note what falls out for free — the Administrator, who
+-- holds no `rph`, gets nothing here either.
 create policy rph_reviewer_read on erph.rph_document
-  for select using (deleted_at is null
-                    and erph.has_role(school_id, array['guru_besar','gpk']::erph.member_role[]));
+  for select using (deleted_at is null and erph.may_supervise(school_id, owner_id));
 
 -- history tables: SELECT only → writes happen inside SECURITY DEFINER RPCs
+-- Scope follows the plan it belongs to, so a GPK who is moved off a teacher
+-- stops seeing that teacher's revision history too — not just new decisions.
 create policy rph_revision_read on erph.rph_revision
   for select using (exists (select 1 from erph.rph_document d
                             where d.id = erph.rph_revision.document_id
-                              and (d.owner_id = erph.actor()
-                                   or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[]))));
+                              and erph.may_supervise(d.school_id, d.owner_id)));
 create policy rph_review_read on erph.rph_review
   for select using (exists (select 1 from erph.rph_document d
                             where d.id = erph.rph_review.document_id
-                              and (d.owner_id = erph.actor()
-                                   or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[]))));
+                              and erph.may_supervise(d.school_id, d.owner_id)));
+
+-- Signatures are readable by everyone who can read the plan, so a client can
+-- verify one itself rather than taking the server's word for it — and by the
+-- owner, so a teacher can see who sealed their RPH. There is deliberately no
+-- INSERT or UPDATE policy: see erph.rph_signature above.
+create policy rph_signature_read on erph.rph_signature
+  for select using (exists (select 1 from erph.rph_document d
+                            where d.id = erph.rph_signature.document_id
+                              and erph.may_supervise(d.school_id, d.owner_id)));
 
 create policy template_read on erph.rph_template
   for select using (

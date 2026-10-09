@@ -84,10 +84,21 @@ export interface SubmitResult {
 export const submitRph = (documentId: string, force = false) =>
   post<SubmitResult>("/api/rpc/submit", { documentId, force });
 
-/** KPM Lampiran 7: grade 1 = lengkap, 0 = tidak lengkap. */
-export const reviewRph = (documentId: string, grade: 0 | 1, comment?: string) =>
-  post<{ ok: boolean; grade: number; status: string }>("/api/rpc/review", {
-    documentId,
-    grade,
-    comment: comment ?? null,
-  });
+export type ReviewDecision = "sahkan" | "hantar_balik";
+
+/**
+ * Decide a plan.
+ *
+ * An approval must carry the envelope and signature produced over the
+ * document's current version — the server recomputes the payload hash and
+ * verifies the signature before it will append anything. `decide()` in
+ * `lib/signature/review.ts` builds both; calling this directly with a missing
+ * or stale signature is refused, which is the point.
+ */
+export const reviewRph = (body: {
+  documentId: string;
+  decision: ReviewDecision;
+  comment?: string;
+  envelope?: unknown;
+  signature?: string;
+}) => post<{ ok: boolean; grade: number; status: string }>("/api/rpc/review", body);

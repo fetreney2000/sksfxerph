@@ -102,106 +102,6 @@ begin
 end $$;
 
 
-create or replace function erph.semak_rph(p_document uuid, p_grade smallint,
-                                          p_comment text default null)
-returns jsonb language plpgsql security definer set search_path = erph, public as $$
-declare
-  v_doc erph.rph_document%rowtype;
-  v_next erph.rph_status;
-begin
-  if p_grade not in (0,1) then raise exception 'Gred mesti 0 atau 1'; end if;
-  perform set_config('app.rpc', '1', true);
-
-  select * into v_doc from erph.rph_document
-   where id = p_document and deleted_at is null for update;
-  if not found then raise exception 'RPH tidak dijumpai'; end if;
-  if not erph.has_role(v_doc.school_id, array['gpk']::erph.member_role[]) then
-    raise exception 'Peranan Guru Penolong Kanan diperlukan';
-  end if;
-  if v_doc.status <> 'submitted' then
-    raise exception 'RPH tidak dalam peringkat semakan GPK';
-  end if;
-
-  v_next := case when p_grade = 1 then 'forwarded'::erph.rph_status
-                 else 'returned'::erph.rph_status end;
-
-  insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
-  values (v_doc.id, v_doc.version, erph.actor(), p_grade, p_comment,
-          jsonb_build_object('stage', 'gpk',
-                             'completeness', erph.rph_completeness(v_doc.payload)));
-
-  update erph.rph_document
-     set status = v_next,
-         grade = p_grade, reviewed_by = erph.actor(), reviewed_at = now(),
-         version = version + 1
-   where id = p_document;
-
-  insert into erph.notification (school_id, user_id, type, title, body, link_view)
-  values (v_doc.school_id, v_doc.owner_id,
-          case when p_grade = 1 then 'forwarded'::erph.notification_type
-               else 'returned'::erph.notification_type end,
-          case when p_grade = 1 then 'RPH dihantar ke Guru Besar'
-               else 'RPH perlu dibaiki' end,
-          coalesce(p_comment, ''), 'dashboard');
-
-  insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
-  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'semak',
-          jsonb_build_object('grade', p_grade, 'status', v_next, 'comment', p_comment));
-
-  return jsonb_build_object('ok', true, 'grade', p_grade, 'status', v_next);
-end $$;
-
-
-create or replace function erph.lulus_rph(p_document uuid, p_grade smallint,
-                                          p_comment text default null)
-returns jsonb language plpgsql security definer set search_path = erph, public as $$
-declare
-  v_doc erph.rph_document%rowtype;
-  v_next erph.rph_status;
-begin
-  if p_grade not in (0,1) then raise exception 'Gred mesti 0 atau 1'; end if;
-  perform set_config('app.rpc', '1', true);
-
-  select * into v_doc from erph.rph_document
-   where id = p_document and deleted_at is null for update;
-  if not found then raise exception 'RPH tidak dijumpai'; end if;
-  if not erph.has_role(v_doc.school_id, array['guru_besar']::erph.member_role[]) then
-    raise exception 'Peranan Guru Besar diperlukan';
-  end if;
-  if v_doc.status <> 'forwarded' then
-    raise exception 'RPH belum disemak oleh Guru Penolong Kanan';
-  end if;
-
-  v_next := case when p_grade = 1 then 'approved'::erph.rph_status
-                 else 'returned'::erph.rph_status end;
-
-  insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
-  values (v_doc.id, v_doc.version, erph.actor(), p_grade, p_comment,
-          jsonb_build_object('stage', 'guru_besar',
-                             'completeness', erph.rph_completeness(v_doc.payload)));
-
-  update erph.rph_document
-     set status = v_next,
-         grade = p_grade, reviewed_by = erph.actor(), reviewed_at = now(),
-         version = version + 1
-   where id = p_document;
-
-  insert into erph.notification (school_id, user_id, type, title, body, link_view)
-  values (v_doc.school_id, v_doc.owner_id,
-          case when p_grade = 1 then 'approved'::erph.notification_type
-               else 'returned'::erph.notification_type end,
-          case when p_grade = 1 then 'RPH diluluskan Guru Besar'
-               else 'RPH perlu dibaiki' end,
-          coalesce(p_comment, ''), 'dashboard');
-
-  insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
-  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'lulus',
-          jsonb_build_object('grade', p_grade, 'status', v_next, 'comment', p_comment));
-
-  return jsonb_build_object('ok', true, 'grade', p_grade, 'status', v_next);
-end $$;
-
-
 create or replace function erph.school_week_stats(p_school uuid, p_session text, p_week smallint)
 returns table (expected int, submitted int, approved int, returned_t int,
                drafts int, compliance numeric)
@@ -231,21 +131,6 @@ begin
     round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
           / nullif((select n from t), 0), 1);
 end $$;
-
-
-create or replace function erph.admin_list_members(p_school uuid)
-returns table (user_id uuid, username text, full_name text, email text,
-               role erph.member_role, is_active boolean,
-               last_login_at timestamptz, locked_until timestamptz,
-               failed_logins int, password_changed_at timestamptz)
-language sql stable security definer set search_path = erph, public as $$
-  select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active,
-         u.last_login_at, u.locked_until, u.failed_logins, u.password_changed_at
-    from erph.school_member m
-    join erph.user u on u.id = m.user_id
-   where m.school_id = p_school and erph.has_role(p_school, array['pentadbir']::erph.member_role[])
-   order by m.role, u.username;
-$$;
 
 
 create or replace function erph.admin_set_member(p_school uuid, p_user uuid,
@@ -297,22 +182,6 @@ drop policy if exists rph_review_read on erph.rph_review;
 drop policy if exists export_read on erph.export_file;
 drop policy if exists audit_admin_read on erph.audit_log;
 drop policy if exists storage_read on storage.objects;
-
-create policy rph_reviewer_read on erph.rph_document
-  for select using (deleted_at is null
-                    and erph.has_role(school_id, array['guru_besar','gpk']::erph.member_role[]));
-
-create policy rph_revision_read on erph.rph_revision
-  for select using (exists (select 1 from erph.rph_document d
-                            where d.id = erph.rph_revision.document_id
-                              and (d.owner_id = erph.actor()
-                                   or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[]))));
-
-create policy rph_review_read on erph.rph_review
-  for select using (exists (select 1 from erph.rph_document d
-                            where d.id = erph.rph_review.document_id
-                              and (d.owner_id = erph.actor()
-                                   or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[]))));
 
 create policy export_read on erph.export_file
   for select using (

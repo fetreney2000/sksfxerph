@@ -88,23 +88,34 @@ export function homeFor(role: string | null | undefined): string {
 }
 
 /**
- * The rung each reviewer owns.
+ * What a reviewer may decide.
  *
- * The chain is Guru Biasa → GPK → Guru Besar, and each reviewer only ever sees
- * its own stage and calls its own RPC. Deriving both from one table is what
- * stops the two drifting — a GPK that could call `lulus_rph` would be able to
- * approve the very plan it just forwarded.
+ * There is no chain to climb any more. A GPK reviews and then either **sahkan**
+ * (approve, signed) or **hantar balik** (return to the teacher), and a Guru
+ * Besar can do everything a GPK can — on any teacher's plan in the school, not
+ * only the ones assigned to them. Both roles therefore share this table and the
+ * difference lives in `erph.may_supervise`, which SQL checks independently of
+ * the role.
+ *
+ * Which function runs is derived from the role rather than taken from the
+ * request, so a caller cannot choose the decision it wants to make.
  */
 export interface ReviewStage {
-  /** The status this reviewer's queue holds. */
-  status: "submitted" | "forwarded";
-  /** The SECURITY DEFINER function that moves a plan out of that stage. */
-  rpc: "semak_rph" | "lulus_rph";
+  /** The only status either reviewer can decide. */
+  status: "submitted";
+  /** Approve. The plan must already carry a verified signature. */
+  approveRpc: "sahkan_rph";
+  /** Return to the teacher, with a reason. No signature — nothing was approved. */
+  returnRpc: "hantar_balik_rph";
 }
 
 const REVIEWERS: Partial<Record<MemberRole, ReviewStage>> = {
-  gpk: { status: "submitted", rpc: "semak_rph" },
-  guru_besar: { status: "forwarded", rpc: "lulus_rph" },
+  gpk: { status: "submitted", approveRpc: "sahkan_rph", returnRpc: "hantar_balik_rph" },
+  guru_besar: {
+    status: "submitted",
+    approveRpc: "sahkan_rph",
+    returnRpc: "hantar_balik_rph",
+  },
 };
 
 export function reviewStageFor(role: string | null | undefined): ReviewStage | null {

@@ -42,6 +42,9 @@ def main() -> int:
     delta3 = (ROOT / "db" / "migrations" / "003_school_identity.sql").read_text(
         encoding="utf-8"
     )
+    delta4 = (ROOT / "db" / "migrations" / "004_supervision_and_signing.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -141,7 +144,11 @@ def main() -> int:
                 "returns void language plpgsql as $stub$ begin return; end $stub$"
             )
             run(delta3, "003")
-        print("  [OK ] migration applied (001a + 001b + 002 + 003, old signature pre-installed)")
+            run(delta4, "004")
+        print(
+            "  [OK ] migration applied (001a + 001b + 002 + 003 + 004, "
+            "old signature pre-installed)"
+        )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
         return 1
@@ -166,12 +173,18 @@ def main() -> int:
         cur.execute(
             "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
             "where n.nspname='erph' and p.proname in "
-            "('semak_rph','lulus_rph','admin_list_members','admin_set_member','admin_set_setting',"
-            " 'admin_create_member','admin_reset_password','admin_unlock_member',"
-            " 'admin_list_classes','admin_set_class','admin_list_subjects',"
-            " 'admin_set_subject','admin_create_subject')"
+            "('sahkan_rph','hantar_balik_rph','may_supervise','supervises',"
+            " 'admin_set_supervisor','admin_list_members','admin_set_member',"
+            " 'admin_set_setting','admin_create_member','admin_reset_password',"
+            " 'admin_unlock_member','admin_list_classes','admin_set_class',"
+            " 'admin_list_subjects','admin_set_subject','admin_create_subject')"
         )
         new_fns = cur.fetchone()[0]
+        cur.execute(
+            "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+            "where n.nspname='erph' and p.proname in ('semak_rph','lulus_rph','review_rph')"
+        )
+        old_fn = cur.fetchone()[0]
         cur.execute(
             "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
             "where n.nspname='erph' and p.proname='admin_set_setting'"
@@ -188,11 +201,6 @@ def main() -> int:
             "and indexname='user_username_uniq'"
         )
         uniq_idx = cur.fetchone()[0]
-        cur.execute(
-            "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
-            "where n.nspname='erph' and p.proname='review_rph'"
-        )
-        old_fn = cur.fetchone()[0]
 
     check(
         "roles renamed",
@@ -200,8 +208,12 @@ def main() -> int:
         roles,
     )
     check("forwarded added to rph_status", "forwarded" in statuses, statuses)
-    check("review_rph gone", old_fn == 0)
-    check("13 functions present", new_fns == 13, f"found {new_fns}")
+    # `review_rph` was the pre-001 shape; `semak_rph` and `lulus_rph` were
+    # retired by 004 when the GPK → Guru Besar hop disappeared. None may
+    # survive — a lingering one would still be callable through PostgREST and
+    # would restore a flow the app no longer drives.
+    check("review_rph / semak_rph / lulus_rph gone", old_fn == 0, f"found {old_fn}")
+    check("16 functions present", new_fns == 16, f"found {new_fns}")
     # The exact bug the `drop` in 002 exists to prevent: an added parameter
     # makes Postgres treat the function as a *different* one, so `create or
     # replace` silently leaves the old arity behind — and calls that omit the
@@ -370,6 +382,47 @@ def main() -> int:
             check("public school-assets bucket", cur.fetchone()[0] == 1)
     except Exception as e:  # noqa: BLE001
         check("003 school identity", False, str(e).splitlines()[0][:140])
+
+    # ── 004: supervision scope and the signed single-stage review ────────────
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select count(*) from information_schema.columns "
+                "where table_schema='erph' and table_name='school_member' "
+                "and column_name='supervisor_id'"
+            )
+            check("school_member gained supervisor_id", cur.fetchone()[0] == 1)
+
+            cur.execute(
+                "select count(*) from information_schema.tables "
+                "where table_schema='erph' and table_name='rph_signature'"
+            )
+            check("rph_signature exists", cur.fetchone()[0] == 1)
+
+            # The entire signing design rests on this pair. PostgreSQL cannot
+            # verify ECDSA, so the database's only contribution is refusing to
+            # let anyone but service_role append — and that only works while
+            # the table carries no INSERT policy.
+            cur.execute(
+                "select count(*) from pg_policies where schemaname='erph' "
+                "and tablename='rph_signature'"
+            )
+            n_sig_policies = cur.fetchone()[0]
+            check(
+                "rph_signature has exactly one policy",
+                n_sig_policies == 1,
+                f"found {n_sig_policies}",
+            )
+            cur.execute(
+                "select cmd from pg_policies where schemaname='erph' "
+                "and tablename='rph_signature'"
+            )
+            check(
+                "…a SELECT, so only service_role may append a signature",
+                cur.fetchone()[0] == "SELECT",
+            )
+    except Exception as e:  # noqa: BLE001
+        check("004 supervision and signing", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

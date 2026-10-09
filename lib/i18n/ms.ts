@@ -119,12 +119,11 @@ export const ms = {
 
   review: {
     queue: "Baris gilir",
-    // Stage 2 (Guru Besar): accepting ends the chain.
-    approve: "Lulus · Lengkap (1)",
-    approveHint: "lulus",
-    // Stage 1 (GPK): accepting only passes the plan up.
-    forward: "Hantar ke Guru Besar · (1)",
-    forwardHint: "hantar",
+    // One stage: a GPK or the Guru Besar either approves — signed — or returns.
+    // `forward`, `forwardHint`, `gpkNote` and `gbNote` are gone with the hop
+    // they described: there is nobody left to send it *to*.
+    approve: "Sahkan · Lengkap (1)",
+    approveHint: "sahkan",
     return: "Kembalikan · Tidak lengkap (0)",
     saveAndContinue: "Simpan & teruskan",
     comment: "Komen sulit",
@@ -134,9 +133,8 @@ export const ms = {
     all: "Semua",
     keyboardHint: "navigasi",
     grade0: "kembalikan",
-    gpkNote:
-      "Gred 1 meneruskan rancangan ke Guru Besar untuk kelulusan; gred 0 mengembalikannya terus kepada guru.",
-    gbNote: "Gred 1 ialah kelulusan akhir; gred 0 mengembalikannya terus kepada guru.",
+    signedNote:
+      "Mengesahkan menandatangani rancangan ini dengan kunci penyemak sendiri — nama, versi dan waktu keputusan tercatat bersamanya, dan guru boleh mengesahkannya sendiri.",
   },
 
   a11y: {

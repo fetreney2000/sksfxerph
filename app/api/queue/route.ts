@@ -29,17 +29,43 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const session = await resolveSession(gate.user.id);
 
-  const { data, error } = await gate.db
+  let query = gate.db
     .from("rph_document")
     .select(
-      "id, status, plan_date, slot_time, payload, owner_id, " +
+      "id, version, status, plan_date, slot_time, payload, owner_id, " +
         "class:class_id(nama), subject:subject_code(nama), owner:owner_id(full_name)",
     )
     .eq("school_id", schoolId)
     .eq("session", session)
-    .eq("status", stage.status)
-    .order("submitted_at", { ascending: true })
-    .limit(50);
+    .eq("status", stage.status);
+
+  // Scope. RLS on rph_document enforces this too, but this handler holds the
+  // secret key and therefore bypasses it — a filter the database would have
+  // applied is not applied unless it is written here. A Guru Besar takes the
+  // whole school; a GPK takes only the teachers assigned to them, which is
+  // exactly what `supervisor_id` says and nothing else.
+  if (gate.user.role !== "guru_besar") {
+    const { data: supervised, error: scopeErr } = await gate.db
+      .from("school_member")
+      .select("user_id")
+      .eq("school_id", schoolId)
+      .eq("supervisor_id", gate.user.id)
+      .eq("is_active", true);
+
+    if (scopeErr) {
+      console.error("[queue] scope lookup failed:", scopeErr.message);
+      return NextResponse.json(
+        { error: "Ralat pelayan semasa mengambil baris gilir." },
+        { status: 500 },
+      );
+    }
+    const ids = (supervised ?? []).map((row) => (row as { user_id: string }).user_id);
+    // Not an error: a GPK with no teachers assigned yet simply has no queue.
+    if (ids.length === 0) return NextResponse.json({ items: [] as QueueItem[] });
+    query = query.in("owner_id", ids);
+  }
+
+  const { data, error } = await query.order("submitted_at", { ascending: true }).limit(50);
 
   if (error) {
     console.error("[queue] query failed:", error.message);
@@ -53,6 +79,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // relations — shape the rows explicitly rather than trusting `any`.
   interface QueueRow {
     id: string;
+    /** Carried through because signing needs it: the server refuses a
+     *  signature over any other version. */
+    version: number;
     status: QueueItem["status"];
     plan_date: string;
     slot_time: string | null;
@@ -68,6 +97,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const name = row.owner?.full_name ?? "Guru";
     return {
       id: row.id,
+      version: row.version,
       teacherName: name,
       initials: name.slice(0, 2).toUpperCase(),
       tone: "blue",

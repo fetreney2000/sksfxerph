@@ -19,8 +19,8 @@ import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
-import { reviewRph } from "@/lib/rpc";
 import { completeness, stepStatus } from "@/lib/schemas/rph";
+import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review";
 
 /**
  * Review queue — the admin screen.
@@ -29,21 +29,18 @@ import { completeness, stepStatus } from "@/lib/schemas/rph";
  * move and `1`/`0` to decide (the exact grades from Lampiran 7 of the KPM
  * Garis Panduan) is the difference between a 5-minute job and a 30-minute one.
  */
-/** The message shown after a Lampiran 7 grade — the wording depends on the rung. */
-function gradeMessage(grade: 0 | 1, isGpk: boolean): string {
-  if (grade === 0) return "Gred 0 · Tidak lengkap — dikembalikan kepada guru";
-  return isGpk
-    ? "Gred 1 · Lengkap — dihantar ke Guru Besar untuk kelulusan"
-    : "Gred 1 · Lengkap — diluluskan, guru dimaklumkan";
+/** The message shown after a decision. Both reviewers now end the flow. */
+function decisionMessage(decision: "sahkan" | "hantar_balik"): string {
+  if (decision === "hantar_balik") return "Tidak lengkap — dikembalikan kepada guru";
+  return "Disahkan dan ditandatangani — guru dimaklumkan";
 }
 
 export default function SemakanPage() {
   // Remote when configured, bundled demo otherwise — same shape either way.
-  const { role } = useUser();
+  const { id: meId, role } = useUser();
   const session = useSession();
   const school = useSchool();
   const stage = reviewStageFor(role);
-  const isGpk = stage?.rpc === "semak_rph";
   const { items: QUEUE } = useReviewQueueData(stage?.status ?? null);
   const stats = useSchoolStats();
   const [selected, setSelected] = React.useState<string | undefined>(QUEUE[0]?.id);
@@ -65,39 +62,48 @@ export default function SemakanPage() {
   );
 
   const decide = React.useCallback(
-    (grade: 0 | 1) => {
+    (decision: ReviewDecision) => {
       if (!item) return;
 
-      // Server owns the decision when configured: semak_rph / lulus_rph write
-      // the grade, the private comment, the notification to the teacher and the
-      // audit row atomically (backend §6). Local mode updates the demo queue only.
+      // Server owns the decision when configured: sahkan_rph / hantar_balik_rph
+      // write the review, the notification to the teacher and the audit row,
+      // and sahkan_rph refuses unless a verified signature is already on file —
+      // so an approval here means the browser has signed it first. Local mode
+      // updates the demo queue only.
       if (supabaseConfigured) {
-        void reviewRph(item.id, grade, comment || undefined)
-          .then(() => toast.success(gradeMessage(grade, isGpk)))
+        void decideRph({
+          userId: meId,
+          documentId: item.id,
+          version: item.version,
+          payload: item.payload,
+          decision,
+          comment: comment || undefined,
+        })
+          .then(() => toast.success(decisionMessage(decision)))
           .catch((err: unknown) =>
             toast.error(
               `Gagal menyemak: ${err instanceof Error ? err.message : "ralat rangkaian"}`,
             ),
           );
       } else {
-        toast.success(gradeMessage(grade, isGpk));
+        toast.success(decisionMessage(decision));
       }
 
-      setGraded((g) => ({ ...g, [item.id]: grade }));
+      setGraded((g) => ({ ...g, [item.id]: decision === "sahkan" ? 1 : 0 }));
       setComment("");
       // Advance to the next ungraded item — the queue is the whole workflow.
       const next = QUEUE.find((q) => !(q.id in graded) && q.id !== item.id);
       if (next) setSelected(next.id);
     },
-    [item, graded, comment, QUEUE, isGpk],
+    [item, graded, comment, QUEUE, meId],
   );
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "1") decide(1);
-      if (e.key === "0") decide(0);
+      if (e.key === "1") decide("sahkan");
+      if (e.key === "0") decide("hantar_balik");
       if (e.key === "j" || e.key === "k") {
         e.preventDefault();
         const idx = visible.findIndex((q) => q.id === selected);
@@ -169,7 +175,7 @@ export default function SemakanPage() {
               <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
                 1
               </kbd>
-              {isGpk ? ms.review.forwardHint : ms.review.approveHint}
+              {ms.review.approveHint}
               <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
                 0
               </kbd>
@@ -334,14 +340,14 @@ export default function SemakanPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Button size="lg" variant="success" onClick={() => decide(1)}>
+                  <Button size="lg" variant="success" onClick={() => decide("sahkan")}>
                     <Check className="h-4 w-4" strokeWidth={2.4} aria-hidden />
-                    {isGpk ? ms.review.forward : ms.review.approve}
+                    {ms.review.approve}
                     <kbd className="rounded border border-white/25 bg-white/20 px-1.5 font-mono text-[11px]">
                       1
                     </kbd>
                   </Button>
-                  <Button size="lg" variant="danger" onClick={() => decide(0)}>
+                  <Button size="lg" variant="danger" onClick={() => decide("hantar_balik")}>
                     <Undo2 className="h-4 w-4" strokeWidth={2.1} aria-hidden />
                     {ms.review.return}
                     <kbd className="rounded border border-black/10 bg-black/10 px-1.5 font-mono text-[11px]">
@@ -363,7 +369,7 @@ export default function SemakanPage() {
                     Gred 1/0 selaras <b>Lampiran 7</b> Garis Panduan e-RPH KPM: 1 = lengkap, 0 =
                     tidak lengkap.
                     <br />
-                    {isGpk ? ms.review.gpkNote : ms.review.gbNote}
+                    {ms.review.signedNote}
                   </div>
                 </div>
               </div>

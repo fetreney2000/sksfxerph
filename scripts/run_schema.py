@@ -231,12 +231,12 @@ def main() -> int:
     n_tables = r.one(
         "select count(*) from information_schema.tables where table_schema='erph' and table_type='BASE TABLE'"
     )[0]
-    check("17 tables in erph", n_tables == 17, f"found {n_tables}")
+    check("18 tables in erph", n_tables == 18, f"found {n_tables}")
 
     # policies live in TWO schemas: erph.* (tables) and storage.objects (buckets)
     n_policies = r.one("select count(*) from pg_policies where schemaname='erph'")[0]
     n_storage = r.one("select count(*) from pg_policies where schemaname='storage'")[0]
-    check("24 policies on erph tables", n_policies == 24, f"found {n_policies}")
+    check("25 policies on erph tables", n_policies == 25, f"found {n_policies}")
     check(
         "3 policies on storage.objects",
         n_storage == 3,
@@ -248,7 +248,7 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    check("29 functions in erph", n_funcs == 29, f"found {n_funcs}")
+    check("32 functions in erph", n_funcs == 32, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -433,6 +433,26 @@ def main() -> int:
             conn.rollback()
             return str(e).splitlines()[0]
 
+    def read_as_authenticated(sql: str):
+        """Row count a browser would actually see.
+
+        This connection owns the tables and owners bypass RLS entirely, so a
+        plain SELECT here proves nothing but our own privilege — the same
+        mistake that made the pentadbir-profile check vacuous. `SET ROLE` is
+        reverted by ROLLBACK but *not* by COMMIT, so it is reset explicitly.
+        """
+        try:
+            r.q("set role authenticated")
+            value = r.q(sql)[0][0]
+            conn.commit()
+            return value
+        except Exception as e:  # noqa: BLE001
+            conn.rollback()
+            return f"denied: {str(e).splitlines()[0][:60]}"
+        finally:
+            r.q("reset role")
+            conn.commit()
+
     try:
         r.q(
             f"""
@@ -453,38 +473,114 @@ def main() -> int:
 
         stage: list[tuple[str, bool]] = []
 
-        # `1::smallint`: an unadorned literal is `integer`, and int4→int2 is an
-        # assignment cast, so the call would not resolve at all.
-        msg = refused(f"select erph.semak_rph({DOC}, 1::smallint)")
-        stage.append(("Guru Biasa cannot semak", "Guru Penolong Kanan" in msg))
+        # ── a GPK must first *have* teachers assigned to them ───────────────
+        # Scope is checked before the signature or the state machine, so the
+        # first thing a GPK without any teachers meets is a refusal — not a
+        # glimpse of a plan they are not allowed to open.
+        act_as("gpk.uji")
+        msg = refused(f"select erph.sahkan_rph({DOC})")
+        stage.append(("GPK with no assignment is out of scope", "penyeliaan" in msg))
+        visible = read_as_authenticated(
+            f"select count(*) from erph.rph_document where id = {DOC}"
+        )
+        stage.append(("…and cannot even read it through RLS", visible == 0, str(visible)))
+
+        # Stand in for erph.admin_set_supervisor, which is tested below against
+        # its own pentadbir gate. This bypasses it on purpose: the block under
+        # test is *scope*, not the admin RPC that writes the assignment.
+        r.q(
+            f"""
+            update erph.school_member
+               set supervisor_id = (select id from erph.user where username = 'gpk.uji')
+             where user_id = (select id from erph.user where username = 'uji')
+               and school_id = {SK};
+            """
+        )
+        conn.commit()
+        act_as("gpk.uji")
+        visible = read_as_authenticated(
+            f"select count(*) from erph.rph_document where id = {DOC}"
+        )
+        stage.append(("after assignment the same GPK can read it", visible == 1, str(visible)))
+        scoped = r.one(
+            f"select erph.may_supervise(school_id, owner_id) from erph.rph_document where id = {DOC}"
+        )[0]
+        stage.append(("…and may_supervise says so", scoped is True))
+
+        # A Guru Besar needs no assignment at all.
+        act_as("gb.uji")
+        scoped = r.one(
+            f"select erph.may_supervise(school_id, owner_id) from erph.rph_document where id = {DOC}"
+        )[0]
+        stage.append(("Guru Besar is in scope without an assignment", scoped is True))
+
+        # ── a teacher may not decide their own work ─────────────────────────
+        act_as("uji")
+        msg = refused(f"select erph.sahkan_rph({DOC})")
+        stage.append(("Guru Biasa cannot sahkan", "Guru Penolong Kanan" in msg))
+        msg = refused(f"select erph.hantar_balik_rph({DOC})")
+        stage.append(("Guru Biasa cannot hantar balik", "Guru Penolong Kanan" in msg))
+
+        # ── approval is gated on a verified signature existing ──────────────
+        # erph.sahkan_rph accepts no signature: it insists one is already on
+        # file for this exact document version and signer, and only our server
+        # can put it there. Calling the RPC directly must fail.
+        act_as("gpk.uji")
+        msg = refused(f"select erph.sahkan_rph({DOC})")
+        stage.append(("sahkan without a signature is refused", "Tandatangan" in msg))
+
+        def sign_as(username: str) -> None:
+            """Stand in for /api/rpc/review, which is the only thing that
+            writes this table — it verifies the ECDSA signature first."""
+            r.q(
+                f"""
+                insert into erph.rph_signature (document_id, document_version, signer_id,
+                                                alg, public_key, signature, envelope)
+                select d.id, d.version, u.id, 'ES256', 'cHVibGlj', 'c2ln', jsonb_build_object('v', 1)
+                  from erph.rph_document d, erph.user u
+                 where d.id = {DOC} and u.username = '{username}'
+                on conflict do nothing;
+                """
+            )
+            conn.commit()
+
+        sign_as("gpk.uji")
+        r.q(f"select erph.hantar_balik_rph({DOC}, 'Objektif belum jelas')")
+        conn.commit()
+        status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
+        stage.append(("hantar balik -> returned", status == "returned"))
+
+        # The teacher fixes it and resubmits; the version moves on, so the old
+        # signature no longer covers this plan.
+        act_as("uji")
+        r.q(f"select erph.submit_rph({DOC}, true)")
+        conn.commit()
 
         act_as("gpk.uji")
-        r.q(f"select erph.semak_rph({DOC}, 1::smallint)")
+        msg = refused(f"select erph.sahkan_rph({DOC})")
+        stage.append(
+            ("a signature for the previous version no longer counts", "Tandatangan" in msg)
+        )
+
+        sign_as("gpk.uji")
+        r.q(f"select erph.sahkan_rph({DOC}, 'Memuaskan')")
         conn.commit()
         status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
-        stage.append(("GPK semak -> forwarded", status == "forwarded"))
+        stage.append(("sahkan -> approved", status == "approved"))
 
-        msg = refused(f"select erph.lulus_rph({DOC}, 1::smallint)")
-        stage.append(("GPK cannot lulus", "Guru Besar" in msg))
+        # ── a decided plan cannot be re-decided by replaying the call ───────
+        msg = refused(f"select erph.sahkan_rph({DOC})")
+        stage.append(("a decided plan cannot be re-sahkan", "peringkat semakan" in msg))
+        msg = refused(f"select erph.hantar_balik_rph({DOC})")
+        stage.append(("…nor hantar balik", "peringkat semakan" in msg))
 
-        msg = refused(f"select erph.semak_rph({DOC}, 1::smallint)")
-        stage.append(("GPK cannot re-semak", "peringkat semakan GPK" in msg))
-
-        act_as("gb.uji")
-        msg = refused(f"select erph.semak_rph({DOC}, 1::smallint)")
-        stage.append(("Guru Besar cannot semak", "Guru Penolong Kanan" in msg))
-
-        r.q(f"select erph.lulus_rph({DOC}, 1::smallint)")
-        conn.commit()
-        status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
-        stage.append(("Guru Besar lulus -> approved", status == "approved"))
-
-        for label, ok in stage:
+        for item in stage:
+            label, ok = item[0], item[1]
             print(f"  [{'OK ' if ok else 'FAIL'}] {label}")
             errors += 0 if ok else 1
     except Exception as e:  # noqa: BLE001
         conn.rollback()
-        print(f"  [FAIL] two-stage chain: {str(e).splitlines()[0][:160]}")
+        print(f"  [FAIL] one-stage flow: {str(e).splitlines()[0][:160]}")
         errors += 1
 
     # ── admin set-up: every gate must actually refuse ───────────────────────
@@ -657,6 +753,66 @@ def main() -> int:
             f"select erph.admin_set_school({SK}, 'SKTEST', 'Sekolah Ujian Baharu', 'PPD Ujian', "
             f"'JPN Ujian', null, null)"
         )
+        conn.commit()
+
+        # ── supervision assignment ─────────────────────────────────────────
+        # This is the switch that decides which plans a GPK can even see, so
+        # who may throw it matters as much as the check that reads it.
+        def uid(name: str) -> str:
+            value = r.one(f"select id from erph.user where username = '{name}'")[0]
+            return f"'{value}'"
+
+        act_as("uji")
+        msg = refused(
+            f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})"
+        )
+        admin.append(("Guru Biasa cannot assign supervisors", "pentadbir" in msg))
+
+        act_as("admin.uji")
+        msg = refused(
+            f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('uji')})"
+        )
+        admin.append(("nobody supervises themselves", "diri sendiri" in msg))
+
+        # A Guru Biasa is not a valid supervisor — assigning one would quietly
+        # hand them read access to every plan belonging to the person they
+        # "supervise", which is precisely the access the scope check denies.
+        msg = refused(
+            f"select erph.admin_set_supervisor({SK}, {uid('gpk.uji')}, {uid('uji')})"
+        )
+        admin.append(("a Guru Biasa cannot be a supervisor", "GPK atau Guru Besar" in msg))
+
+        r.q(f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})")
+        conn.commit()
+        admin.append(
+            (
+                "administrator can assign a GPK",
+                r.one(
+                    f"select u.username from erph.school_member m "
+                    f"join erph.user u on u.id = m.supervisor_id "
+                    f"where m.school_id = {SK} and m.user_id = {uid('uji')}"
+                )[0]
+                == "gpk.uji",
+            )
+        )
+
+        # Clearing it puts the teacher back under the Guru Besar alone, which
+        # is the state a brand-new account starts in.
+        r.q(f"select erph.admin_set_supervisor({SK}, {uid('uji')}, null)")
+        conn.commit()
+        admin.append(
+            (
+                "and can clear it again",
+                r.one(
+                    f"select supervisor_id from erph.school_member "
+                    f"where school_id = {SK} and user_id = {uid('uji')}"
+                )[0]
+                is None,
+            )
+        )
+        # The flow block above left it assigned; restore the same state so the
+        # cleanup and any later assertion see a coherent fixture.
+        r.q(f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})")
         conn.commit()
 
         # ── the Administrator is visible only to a pentadbir ──────────────

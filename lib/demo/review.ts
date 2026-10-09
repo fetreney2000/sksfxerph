@@ -14,6 +14,14 @@ import type { RphStatus } from "@/lib/types";
  */
 export interface QueueItem {
   id: string;
+  /**
+   * `rph_document.version`.
+   *
+   * Carried into the client because signing covers it: the server refuses a
+   * signature over any version other than the plan's current one, so the
+   * reviewer has to know which that is.
+   */
+  version: number;
   teacherName: string;
   initials: string;
   tone: "blue" | "teal" | "plum";
@@ -96,6 +104,7 @@ const aizuddin = base({
 export const QUEUE: QueueItem[] = [
   {
     id: "q-1",
+    version: 3,
     teacherName: "Ramlan bin Yusof",
     initials: "RY",
     tone: "blue",
@@ -109,6 +118,7 @@ export const QUEUE: QueueItem[] = [
   },
   {
     id: "q-2",
+    version: 2,
     teacherName: "Suhaila Hassan",
     initials: "SH",
     tone: "plum",
@@ -116,12 +126,13 @@ export const QUEUE: QueueItem[] = [
     subjectName: "Bahasa Melayu",
     planDate: "2026-10-07",
     slotTime: "09:15",
-    status: "forwarded",
-    ageLabel: "Disemak GPK 40 minit lalu",
+    status: "submitted",
+    ageLabel: "Dihantar 40 minit lalu",
     payload: suhaila,
   },
   {
     id: "q-3",
+    version: 4,
     teacherName: "Aizuddin Omar",
     initials: "AO",
     tone: "teal",
@@ -129,8 +140,8 @@ export const QUEUE: QueueItem[] = [
     subjectName: "Sains",
     planDate: "2026-10-06",
     slotTime: "11:00",
-    status: "forwarded",
-    ageLabel: "Disemak GPK 2 jam lalu",
+    status: "submitted",
+    ageLabel: "Dihantar 2 jam lalu",
     payload: aizuddin,
   },
 ];
