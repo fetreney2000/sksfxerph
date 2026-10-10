@@ -109,7 +109,13 @@ async function verifyAndStore(
     .from("rph_document")
     .select("id, version, payload, status, owner_id")
     .eq("id", documentId)
-    .eq("deleted_at", false)
+    // `.is(…, null)`, not `.eq(…, false)` — `deleted_at` is a timestamptz.
+    // PostgREST rejects a boolean against it before the query reaches the
+    // database, so every approval answered 500 "Ralat pelayan" from a branch
+    // that could not possibly have been the cause. The same mistake was made
+    // and fixed in ../rph/[id]/signature; both are the only two places this
+    // column is filtered by hand.
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {
