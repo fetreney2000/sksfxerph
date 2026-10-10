@@ -113,23 +113,38 @@ function toLocal(row: DocumentRow): RphDocument {
     // from the wire: PostgREST's default order for an embedded collection is
     // not a promise, and printing an older comment than the one that governed
     // the current status would tell a teacher to fix the wrong thing.
-    ...(latestComment(row) ? { reviewComment: latestComment(row) } : {}),
+    ...reviewFields(row),
   };
 }
 
-/** Newest non-empty `rph_review.comment`, or null when the reviewer wrote none. */
-function latestComment(row: {
-  rph_review?: { comment: string | null; created_at: string }[] | null;
-}): string | null {
-  const rows = [...(row.rph_review ?? [])].sort(
+/**
+ * The newest review's catatan and the reviewer's name.
+ *
+ * Both are taken from the *same* row. Pairing one review's comment with
+ * another's name would describe a decision nobody made: a plan returned by one
+ * GPK and approved by another would print the approver's name beside the
+ * returner's note, which is worse than showing neither.
+ */
+function reviewFields(row: {
+  rph_review?:
+    | {
+        reviewer?: { full_name: string } | null;
+        comment: string | null;
+        created_at: string;
+      }[]
+    | null;
+}): { reviewComment?: string; reviewerName?: string } {
+  const newest = [...(row.rph_review ?? [])].sort(
     (a, b) =>
       // Newest first; a missing/invalid timestamp sorts last rather than
       // throwing, because a bad row must not take the whole pull down.
       Date.parse(b.created_at) - Date.parse(a.created_at),
-  );
-  for (const r of rows) {
-    const text = r.comment?.trim();
-    if (text) return r.comment;
-  }
-  return null;
+  )[0];
+
+  const comment = newest?.comment?.trim();
+  const reviewer = newest?.reviewer?.full_name?.trim();
+  return {
+    ...(comment ? { reviewComment: comment } : {}),
+    ...(reviewer ? { reviewerName: reviewer } : {}),
+  };
 }

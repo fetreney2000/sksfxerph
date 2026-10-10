@@ -74,12 +74,14 @@ export default function ArkibPage() {
               )}
               {weeks.map((w) => {
                 const rows = byWeek.get(w) ?? [];
-                // Newest review in the week. Absent rather than zero when
-                // nothing has been decided yet.
-                const reviewed = rows
-                  .map((r) => r.reviewedAt)
-                  .filter((t): t is number => typeof t === "number")
-                  .sort((a, b) => b - a)[0];
+                // The week's most recent review. Name and date come from the
+                // same document, so the pair describes one decision rather
+                // than one person's name beside another's date.
+                const newest = rows
+                  .filter((r) => typeof r.reviewedAt === "number")
+                  .sort((a, b) => (b.reviewedAt ?? 0) - (a.reviewedAt ?? 0))[0];
+                const reviewed = newest?.reviewedAt;
+                const reviewer = newest?.reviewerName;
                 const approved = rows.filter((r) => r.status === "approved").length;
                 const returned = rows.filter((r) => r.status === "returned").length;
                 const submitted = rows.filter((r) => r.status !== "draft").length;
@@ -112,16 +114,23 @@ export default function ArkibPage() {
                       )}
                     </TD>
                     <TD>
-                      {/* The document records *when* it was reviewed, but not
-                          who did it — the reviewer's name lives on the
-                          signature, which is fetched per plan and is not on
-                          this list query. A date is real; a name here would be
-                          one the school never gave us, printed next to work it
-                          may have had nothing to do with. */}
-                      {reviewed ? (
-                        <span className="num text-[12.5px] text-ink-2">
-                          {longDate(new Date(reviewed).toISOString().slice(0, 10))}
-                        </span>
+                      {/* Name and date from the same document — the week's
+                          most recent review. The reviewer is whoever wrote the
+                          newest `rph_review` row, which for a plan returned
+                          and then approved is the approver. */}
+                      {reviewer || reviewed ? (
+                        <div className="min-w-0">
+                          {reviewer && (
+                            <span className="block truncate text-[12.5px] font-semibold text-ink">
+                              {reviewer}
+                            </span>
+                          )}
+                          {reviewed && (
+                            <span className="num block text-[11px] text-ink-4">
+                              {longDate(new Date(reviewed).toISOString().slice(0, 10))}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-[12.5px] text-ink-4">Belum disemak</span>
                       )}

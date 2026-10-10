@@ -40,8 +40,14 @@ export interface DocumentRow {
   /** Joined, because the local document stores names as well as ids. */
   class: { nama: string } | null;
   subject: { nama: string } | null;
-  /** Every review this plan has had; the caller takes the newest catatan. */
-  rph_review?: { comment: string | null; created_at: string }[] | null;
+  /** Every review this plan has had; the caller takes the newest one. */
+  rph_review?:
+    | {
+        reviewer?: { full_name: string } | null;
+        comment: string | null;
+        created_at: string;
+      }[]
+    | null;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -58,10 +64,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         "slot_time_end, status, payload, version, content_hash, created_at, " +
         "updated_at, submitted_at, deleted_at, grade, reviewed_at, " +
         "class:class_id(nama), subject:subject_code(nama), " +
-        // The reviewer's catatan. One-to-many — a plan can be returned and
-        // re-reviewed — so the whole set comes across and the caller takes the
-        // newest, rather than the server guessing which one a reader wants.
-        "rph_review(comment, created_at)",
+        // The reviewer's catatan and their name, from the same row. One-to-many
+        // — a plan can be returned and re-reviewed — so the whole set comes
+        // across and the caller takes the newest, rather than the server
+        // guessing which one a reader wants.
+        "rph_review(reviewer:reviewer_id(full_name), comment, created_at)",
     )
     .eq("school_id", schoolId)
     .eq("owner_id", gate.user.id)

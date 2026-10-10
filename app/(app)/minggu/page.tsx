@@ -499,14 +499,24 @@ function PlanRow({ doc }: { doc: RphDocument }) {
         <StatusBadge status={doc.status} grade={doc.grade} />
       </TD>
       <TD>
-        {/* When, not who. The reviewer's name is on the signature, fetched
-            per plan — it is not a column this list carries, and inventing a
-            colleague's name here would put their reputation next to work they
-            may never have seen. */}
-        {doc.reviewedAt ? (
-          <span className="num text-[12.5px] text-ink-2">
-            {longDate(new Date(doc.reviewedAt).toISOString().slice(0, 10))}
-          </span>
+        {/* The name when the record carries one, the date when only that is
+            known, and nothing when neither is. The reviewer is whoever wrote
+            the newest `rph_review` row — so for a plan returned and then
+            approved, it is the person who approved it, which is the decision
+            the Status column beside it reflects. */}
+        {doc.reviewerName || doc.reviewedAt ? (
+          <div className="min-w-0">
+            {doc.reviewerName && (
+              <span className="block truncate text-[12.5px] font-semibold text-ink">
+                {doc.reviewerName}
+              </span>
+            )}
+            {doc.reviewedAt && (
+              <span className="block text-[11px] text-ink-4">
+                {longDate(new Date(doc.reviewedAt).toISOString().slice(0, 10))}
+              </span>
+            )}
+          </div>
         ) : (
           <span className="text-[12.5px] text-ink-4">—</span>
         )}

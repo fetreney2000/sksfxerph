@@ -67,6 +67,14 @@ export interface RphDocument {
    * were told, not send them back to the queue to find out.
    */
   reviewComment?: string | null;
+  /**
+   * Who made the newest review decision.
+   *
+   * Carried alongside `reviewComment` and taken from the same `rph_review`
+   * row, so a name can never be shown beside a note that a different person
+   * wrote. Absent when nothing has been reviewed yet.
+   */
+  reviewerName?: string | null;
   createdAt: number;
 }
 
