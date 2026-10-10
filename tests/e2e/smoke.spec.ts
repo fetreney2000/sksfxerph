@@ -140,7 +140,12 @@ test.describe("authentication", () => {
 
     // Identity comes from the cookie, resolved server-side in the layout.
     await expect(page.getByRole("heading", { name: /Selamat pagi/ })).toBeVisible();
-    await expect(page.getByText("Nurul Aisyah")).toBeVisible();
+    // Scoped to the sidebar on purpose. The teacher's name also prints on the
+    // weekly sheets waiting in the hidden print container — one row per plan
+    // — so an unscoped query is ambiguous by design, not by accident.
+    await expect(
+      page.getByRole("complementary", { name: "Navigasi utama" }).getByText("Nurul Aisyah"),
+    ).toBeVisible();
     expect(errors, errors.join("\n")).toEqual([]);
   });
 

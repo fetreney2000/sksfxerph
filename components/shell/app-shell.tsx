@@ -1,11 +1,27 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import * as React from "react";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { MobileNav } from "@/components/shell/mobile-nav";
+import { ROUTE_META } from "@/components/shell/nav";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { type ShellUser, UserProvider } from "@/components/shell/user-context";
+
+/**
+ * The page title for a path, or the app's name.
+ *
+ * Matched on the deepest known prefix so `/editor/3f2a…` reads as "Penyunting"
+ * rather than falling through to a generic title — a teacher who navigates by
+ * heading should be told which screen they are on, not merely that it exists.
+ */
+function titleFor(pathname: string): string {
+  const hit = Object.keys(ROUTE_META)
+    .filter((route) => pathname === route || pathname.startsWith(`${route}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  return (hit && ROUTE_META[hit]?.title) || "eRPH";
+}
 
 /**
  * Client chrome: holds the command-palette open state so ⌘K works anywhere and
@@ -13,6 +29,7 @@ import { type ShellUser, UserProvider } from "@/components/shell/user-context";
  */
 export function AppShell({ children, user }: { children: React.ReactNode; user: ShellUser }) {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
+  const pathname = usePathname();
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -47,7 +64,15 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
             id="main"
             className="w-full max-w-[1420px] flex-1 px-4 pt-5 pb-28 sm:px-6 lg:pb-14"
           >
-            <div className="erph-rise-in">{children}</div>
+            <div className="erph-rise-in">
+              {/* One h1 per screen. Every page renders its visible heading at
+                  h2, so without this the document opens at a sub-heading: a
+                  screen-reader user navigating by heading gets a list of h2s
+                  with nothing above them, and no way to tell which screen they
+                  are on. `sr-only` because each page draws its own title. */}
+              <h1 className="sr-only">{titleFor(pathname)}</h1>
+              {children}
+            </div>
           </main>
         </div>
 

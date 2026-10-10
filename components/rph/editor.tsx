@@ -512,6 +512,34 @@ export function RphEditor({ docId }: { docId?: string }) {
     }
   }, [pending, persisted, creating, router]);
 
+  /**
+   * Ctrl/Cmd+S.
+   *
+   * The keystroke everyone expects in a document editor, and the only one
+   * here whose meaning differs by state. An unsaved plan has to be *created*,
+   * which is what `savePlan` does; a saved one is already written on every
+   * keystroke, so the honest response is to say so rather than to stage an
+   * action that changes nothing.
+   *
+   * Shift is left alone so Ctrl+Shift+S still reaches the browser's own
+   * Save-Page-As — swallowing a keystroke a user may legitimately want is
+   * how a shortcut becomes a trap.
+   */
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey) return;
+      if (e.key.toLowerCase() !== "s") return;
+      e.preventDefault();
+      if (persisted) {
+        toast.success("Sudah disimpan");
+        return;
+      }
+      void savePlan();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [persisted, savePlan]);
+
   const updatePayload = React.useCallback(
     (patch: Partial<RphPayload>) => {
       const next = { ...payloadRef.current, ...patch };

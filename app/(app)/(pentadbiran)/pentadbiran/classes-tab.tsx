@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label } from "@/components/ui/field";
+import { TableContainer } from "@/components/ui/table";
 import { type ClassRow, createClass, listAdminClasses, setClass } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 
@@ -89,85 +90,87 @@ export function ClassesTab() {
               Tiada kelas untuk sesi ini lagi. Tambah kelas pertama untuk mula menulis RPH.
             </p>
           ) : (
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="bg-surface-2">
-                  {["Kelas", "Tahun", "Status", "Rancangan", ""].map((h) => (
-                    <th
-                      key={h}
-                      className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((c) => (
-                  <tr key={c.id} className="border-b border-border last:border-b-0">
-                    <td className="px-4 py-2.5 font-semibold text-ink">{c.nama}</td>
-                    <td className="px-4 py-2.5 text-ink-3">
-                      {c.tahun
-                        ? `Tahun ${c.tahun}`
-                        : c.tingkatan
-                          ? `Tingkatan ${c.tingkatan}`
-                          : "—"}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <Badge variant={c.is_active ? "success" : "neutral"}>
-                        {c.is_active ? "Aktif" : "Diarkibkan"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-2.5 text-[12.5px] text-ink-3">
-                      {c.doc_count} rancangan
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={busy}
-                          onClick={() => setDialog({ mode: "edit", row: c })}
-                        >
-                          <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                          Sunting
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            save(
-                              () =>
-                                setClass({
-                                  id: c.id,
-                                  nama: c.nama,
-                                  tahun: c.tahun,
-                                  session,
-                                  isActive: !c.is_active,
-                                }),
-                              c.is_active ? `${c.nama} diarkibkan` : `${c.nama} dipulihkan`,
-                              () => void classes.refetch(),
-                            )
-                          }
-                        >
-                          {c.is_active ? (
-                            <Archive className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                          ) : (
-                            <ArchiveRestore
-                              className="h-3.5 w-3.5"
-                              strokeWidth={1.9}
-                              aria-hidden
-                            />
-                          )}
-                          {c.is_active ? "Arkibkan" : "Pulihkan"}
-                        </Button>
-                      </div>
-                    </td>
+            <TableContainer>
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="bg-surface-2">
+                    {["Kelas", "Tahun", "Status", "Rancangan", ""].map((h) => (
+                      <th
+                        key={h}
+                        className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((c) => (
+                    <tr key={c.id} className="border-b border-border last:border-b-0">
+                      <td className="px-4 py-2.5 font-semibold text-ink">{c.nama}</td>
+                      <td className="px-4 py-2.5 text-ink-3">
+                        {c.tahun
+                          ? `Tahun ${c.tahun}`
+                          : c.tingkatan
+                            ? `Tingkatan ${c.tingkatan}`
+                            : "—"}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant={c.is_active ? "success" : "neutral"}>
+                          {c.is_active ? "Aktif" : "Diarkibkan"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-[12.5px] text-ink-3">
+                        {c.doc_count} rancangan
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy}
+                            onClick={() => setDialog({ mode: "edit", row: c })}
+                          >
+                            <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                            Sunting
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={busy}
+                            onClick={() =>
+                              save(
+                                () =>
+                                  setClass({
+                                    id: c.id,
+                                    nama: c.nama,
+                                    tahun: c.tahun,
+                                    session,
+                                    isActive: !c.is_active,
+                                  }),
+                                c.is_active ? `${c.nama} diarkibkan` : `${c.nama} dipulihkan`,
+                                () => void classes.refetch(),
+                              )
+                            }
+                          >
+                            {c.is_active ? (
+                              <Archive className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                            ) : (
+                              <ArchiveRestore
+                                className="h-3.5 w-3.5"
+                                strokeWidth={1.9}
+                                aria-hidden
+                              />
+                            )}
+                            {c.is_active ? "Arkibkan" : "Pulihkan"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableContainer>
           )}
         </CardContent>
       </Card>

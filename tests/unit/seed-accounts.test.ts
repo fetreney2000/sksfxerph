@@ -60,6 +60,11 @@ describe("seeded accounts", () => {
     }
   });
 
+  // Every password checked against every *other* account is ~20 scrypt
+  // verifications, and scrypt is slow on purpose — that is what makes it
+  // worth using. The default 5s sits within a whisker of the honest cost on a
+  // quiet machine and over it on a busy one, so this test was failing for
+  // speed rather than for meaning.
   it("each documented password is actually correct for its own account only", async () => {
     // Sanity: the hashes are per-account salted, so no two should verify the
     // same password even though they look similar.
@@ -75,7 +80,7 @@ describe("seeded accounts", () => {
         }
       }
     }
-  });
+  }, 60_000);
 
   it("the system account cannot log in", async () => {
     const sys = users.find((u) => u.role === "system");

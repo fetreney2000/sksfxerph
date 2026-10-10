@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select } from "@/components/ui/field";
+import { TableContainer } from "@/components/ui/table";
 import { createSubject, listAdminSubjects, setSubject } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import type { Curriculum } from "@/lib/types";
@@ -91,57 +92,59 @@ export function SubjectsTab() {
               Tiada mata pelajaran.
             </p>
           ) : (
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="bg-surface-2">
-                  {["Kod", "Mata pelajaran", "Kurikulum", "Status", "Rancangan", ""].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((s) => (
-                  <tr key={s.code} className="border-b border-border last:border-b-0">
-                    <td className="px-4 py-2.5 font-mono text-[12.5px] font-semibold text-ink-2">
-                      {s.code}
-                    </td>
-                    <td className="px-4 py-2.5 font-semibold text-ink">{s.nama}</td>
-                    <td className="px-4 py-2.5 text-ink-3">{s.curriculum}</td>
-                    <td className="px-4 py-2.5">
-                      <Badge variant={s.is_active ? "success" : "neutral"}>
-                        {s.is_active ? "Ditawarkan" : "Tidak ditawarkan"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-2.5 text-[12.5px] text-ink-3">{s.doc_count}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={busy}
-                        onClick={() =>
-                          save(
-                            () => setSubject(s.code, !s.is_active),
-                            s.is_active
-                              ? `${s.nama} disembunyikan daripada penyunting`
-                              : `${s.nama} ditawarkan semula`,
-                            () => void subjects.refetch(),
-                          )
-                        }
-                      >
-                        {s.is_active ? "Matikan" : "Hidupkan"}
-                      </Button>
-                    </td>
+            <TableContainer>
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="bg-surface-2">
+                    {["Kod", "Mata pelajaran", "Kurikulum", "Status", "Rancangan", ""].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((s) => (
+                    <tr key={s.code} className="border-b border-border last:border-b-0">
+                      <td className="px-4 py-2.5 font-mono text-[12.5px] font-semibold text-ink-2">
+                        {s.code}
+                      </td>
+                      <td className="px-4 py-2.5 font-semibold text-ink">{s.nama}</td>
+                      <td className="px-4 py-2.5 text-ink-3">{s.curriculum}</td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant={s.is_active ? "success" : "neutral"}>
+                          {s.is_active ? "Ditawarkan" : "Tidak ditawarkan"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-[12.5px] text-ink-3">{s.doc_count}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            save(
+                              () => setSubject(s.code, !s.is_active),
+                              s.is_active
+                                ? `${s.nama} disembunyikan daripada penyunting`
+                                : `${s.nama} ditawarkan semula`,
+                              () => void subjects.refetch(),
+                            )
+                          }
+                        >
+                          {s.is_active ? "Matikan" : "Hidupkan"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableContainer>
           )}
         </CardContent>
       </Card>

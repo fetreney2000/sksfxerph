@@ -5,9 +5,13 @@ import {
   Bolt,
   CheckCircle2,
   Clock3,
+  FileText,
+  History,
   Layers,
   Plus,
   Printer,
+  School,
+  ScrollText,
   Target,
   Upload,
 } from "lucide-react";
@@ -399,6 +403,12 @@ export default function MingguPage() {
                 ref={fileRef}
                 type="file"
                 accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                // Hidden on purpose, and hidden from the accessibility tree as
+                // well. The button beside it is the control a person uses; a
+                // second, unnamed file input in the tab order is one more stop
+                // between a keyboard user and everything below it.
+                aria-hidden="true"
+                tabIndex={-1}
                 className="sr-only"
                 onChange={(e) => {
                   // Reset after handling: without it, choosing the same file
@@ -420,8 +430,38 @@ export default function MingguPage() {
               <Shortcut
                 icon={<Layers className="h-4 w-4" />}
                 label="Templat sekolah"
-                onClick={() => (window.location.href = "/templat")}
+                onClick={() => router.push("/templat")}
               />
+              {/* Gated with `can`, the same predicate the sidebar filters on.
+                  A shortcut to a page a teacher cannot open is a button that
+                  fails, and the sidebar hiding it while this offered it would
+                  be two parts of one screen disagreeing. */}
+              <Shortcut
+                icon={<History className="h-4 w-4" />}
+                label="Sejarah RPH"
+                onClick={() => router.push("/arkib")}
+              />
+              {can(me.role, "semak") && (
+                <Shortcut
+                  icon={<ScrollText className="h-4 w-4" />}
+                  label="Semakan"
+                  onClick={() => router.push("/semakan")}
+                />
+              )}
+              {can(me.role, "laporan") && (
+                <Shortcut
+                  icon={<FileText className="h-4 w-4" />}
+                  label="Laporan & Eksport"
+                  onClick={() => router.push("/laporan")}
+                />
+              )}
+              {can(me.role, "pantau") && (
+                <Shortcut
+                  icon={<School className="h-4 w-4" />}
+                  label="Pantau guru"
+                  onClick={() => router.push("/sekolah")}
+                />
+              )}
             </CardContent>
           </Card>
         </div>

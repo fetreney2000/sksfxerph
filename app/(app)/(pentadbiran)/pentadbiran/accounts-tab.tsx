@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select } from "@/components/ui/field";
+import { TableContainer } from "@/components/ui/table";
 import {
   createAccount,
   listMembers,
@@ -128,170 +129,176 @@ export function AccountsTab() {
               Tiada akaun ditemui.
             </p>
           ) : (
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr className="bg-surface-2">
-                  {["Nama", "Peranan", "Penyelia", "Status", "Log masuk terakhir", ""].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((m) => {
-                  const own = m.user_id === myId;
-                  const state = lockState(m);
-                  const status = STATUS[state];
-
-                  const changeRole = (role: MemberRole) =>
-                    save(
-                      () => setMember(m.user_id, role, m.is_active),
-                      `Peranan ${m.full_name} dikemas kini`,
-                      () => void accounts.refetch(),
-                    );
-
-                  const toggleActive = () =>
-                    save(
-                      () => setMember(m.user_id, m.role, !m.is_active),
-                      m.is_active
-                        ? `${m.full_name} dinyahaktifkan`
-                        : `${m.full_name} diaktifkan`,
-                      () => void accounts.refetch(),
-                    );
-
-                  // Only a GPK or the Guru Besar may supervise, so the list is
-                  // the members who are one — not every account on the roster.
-                  const supervisors = items.filter(
-                    (s) => s.role === "gpk" || s.role === "guru_besar",
-                  );
-
-                  const changeSupervisor = (supervisorId: string | null) =>
-                    save(
-                      () => setSupervisor(m.user_id, supervisorId),
-                      supervisorId
-                        ? `Penyelia ${m.full_name} dikemas kini`
-                        : `${m.full_name} kini hanya kelihatan kepada Guru Besar`,
-                      () => void accounts.refetch(),
-                    );
-
-                  return (
-                    <tr key={m.user_id} className="border-b border-border last:border-b-0">
-                      <td className="px-4 py-2.5">
-                        <span className="block font-semibold text-ink">{m.full_name}</span>
-                        <span className="block text-[11.5px] text-ink-4">
-                          {m.username}
-                          {m.email ? ` · ${m.email}` : ""}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Select
-                          aria-label={`Peranan ${m.full_name}`}
-                          value={m.role}
-                          className="w-[190px] py-1.5 text-[12.5px]"
-                          disabled={busy || own}
-                          title={own ? "Anda tidak boleh mengubah peranan sendiri" : undefined}
-                          onChange={(e) => changeRole(e.target.value as MemberRole)}
+            <TableContainer>
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="bg-surface-2">
+                    {["Nama", "Peranan", "Penyelia", "Status", "Log masuk terakhir", ""].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
                         >
-                          {ASSIGNABLE.map((r) => (
-                            <option key={r} value={r}>
-                              {ms.roles[r]}
-                            </option>
-                          ))}
-                        </Select>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {/* Scope, not decoration: this decides whose plans the
+                          {h}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((m) => {
+                    const own = m.user_id === myId;
+                    const state = lockState(m);
+                    const status = STATUS[state];
+
+                    const changeRole = (role: MemberRole) =>
+                      save(
+                        () => setMember(m.user_id, role, m.is_active),
+                        `Peranan ${m.full_name} dikemas kini`,
+                        () => void accounts.refetch(),
+                      );
+
+                    const toggleActive = () =>
+                      save(
+                        () => setMember(m.user_id, m.role, !m.is_active),
+                        m.is_active
+                          ? `${m.full_name} dinyahaktifkan`
+                          : `${m.full_name} diaktifkan`,
+                        () => void accounts.refetch(),
+                      );
+
+                    // Only a GPK or the Guru Besar may supervise, so the list is
+                    // the members who are one — not every account on the roster.
+                    const supervisors = items.filter(
+                      (s) => s.role === "gpk" || s.role === "guru_besar",
+                    );
+
+                    const changeSupervisor = (supervisorId: string | null) =>
+                      save(
+                        () => setSupervisor(m.user_id, supervisorId),
+                        supervisorId
+                          ? `Penyelia ${m.full_name} dikemas kini`
+                          : `${m.full_name} kini hanya kelihatan kepada Guru Besar`,
+                        () => void accounts.refetch(),
+                      );
+
+                    return (
+                      <tr key={m.user_id} className="border-b border-border last:border-b-0">
+                        <td className="px-4 py-2.5">
+                          <span className="block font-semibold text-ink">{m.full_name}</span>
+                          <span className="block text-[11.5px] text-ink-4">
+                            {m.username}
+                            {m.email ? ` · ${m.email}` : ""}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <Select
+                            aria-label={`Peranan ${m.full_name}`}
+                            value={m.role}
+                            className="w-[190px] py-1.5 text-[12.5px]"
+                            disabled={busy || own}
+                            title={
+                              own ? "Anda tidak boleh mengubah peranan sendiri" : undefined
+                            }
+                            onChange={(e) => changeRole(e.target.value as MemberRole)}
+                          >
+                            {ASSIGNABLE.map((r) => (
+                              <option key={r} value={r}>
+                                {ms.roles[r]}
+                              </option>
+                            ))}
+                          </Select>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {/* Scope, not decoration: this decides whose plans the
                             GPK above them can open. A GPK's own scope is the
                             Guru Besar, so the column is blank for anyone who
                             is not a Guru Biasa. */}
-                        {m.role === "guru_biasa" ? (
-                          supervisors.length === 0 ? (
-                            <span className="text-[12px] text-ink-4">
-                              Tiada GPK — hanya Guru Besar
-                            </span>
+                          {m.role === "guru_biasa" ? (
+                            supervisors.length === 0 ? (
+                              <span className="text-[12px] text-ink-4">
+                                Tiada GPK — hanya Guru Besar
+                              </span>
+                            ) : (
+                              <Select
+                                aria-label={`Penyelia ${m.full_name}`}
+                                value={m.supervisor_id ?? ""}
+                                className="w-[190px] py-1.5 text-[12.5px]"
+                                disabled={busy}
+                                onChange={(e) => changeSupervisor(e.target.value || null)}
+                              >
+                                <option value="">— Guru Besar sahaja —</option>
+                                {supervisors.map((s) => (
+                                  <option key={s.user_id} value={s.user_id}>
+                                    {s.full_name} · {ms.roles[s.role]}
+                                  </option>
+                                ))}
+                              </Select>
+                            )
                           ) : (
-                            <Select
-                              aria-label={`Penyelia ${m.full_name}`}
-                              value={m.supervisor_id ?? ""}
-                              className="w-[190px] py-1.5 text-[12.5px]"
-                              disabled={busy}
-                              onChange={(e) => changeSupervisor(e.target.value || null)}
-                            >
-                              <option value="">— Guru Besar sahaja —</option>
-                              {supervisors.map((s) => (
-                                <option key={s.user_id} value={s.user_id}>
-                                  {s.full_name} · {ms.roles[s.role]}
-                                </option>
-                              ))}
-                            </Select>
-                          )
-                        ) : (
-                          <span className="text-[12.5px] text-ink-4">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Badge variant={status.variant}>{status.label}</Badge>
-                        {state === "locked" && (
-                          <span className="mt-1 block text-[11.5px] text-ink-4">
-                            {m.failed_logins} percubaan gagal
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-[12.5px] text-ink-3">
-                        {when(m.last_login_at)}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex flex-wrap justify-end gap-1.5">
+                            <span className="text-[12.5px] text-ink-4">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <Badge variant={status.variant}>{status.label}</Badge>
                           {state === "locked" && (
+                            <span className="mt-1 block text-[11.5px] text-ink-4">
+                              {m.failed_logins} percubaan gagal
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-[12.5px] text-ink-3">
+                          {when(m.last_login_at)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            {state === "locked" && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={busy}
+                                onClick={() =>
+                                  save(
+                                    () => unlockMember(m.user_id),
+                                    `Kunci ${m.full_name} dibuka`,
+                                    () => void accounts.refetch(),
+                                  )
+                                }
+                              >
+                                <Unlock className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                                Buka kunci
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="secondary"
                               disabled={busy}
-                              onClick={() =>
-                                save(
-                                  () => unlockMember(m.user_id),
-                                  `Kunci ${m.full_name} dibuka`,
-                                  () => void accounts.refetch(),
-                                )
-                              }
+                              onClick={() => setResetting(m)}
                             >
-                              <Unlock className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                              Buka kunci
+                              <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                              Tetap semula kata laluan
                             </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={busy}
-                            onClick={() => setResetting(m)}
-                          >
-                            <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                            Tetap semula kata laluan
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={busy || own}
-                            title={
-                              own ? "Anda tidak boleh menyahaktifkan akaun sendiri" : undefined
-                            }
-                            onClick={toggleActive}
-                          >
-                            {m.is_active ? "Nyahaktif" : "Aktifkan"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={busy || own}
+                              title={
+                                own
+                                  ? "Anda tidak boleh menyahaktifkan akaun sendiri"
+                                  : undefined
+                              }
+                              onClick={toggleActive}
+                            >
+                              {m.is_active ? "Nyahaktif" : "Aktifkan"}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableContainer>
           )}
         </CardContent>
       </Card>

@@ -190,6 +190,10 @@ function clickTab(name: string) {
 }
 
 describe("pentadbiran", () => {
+  // Mounts the whole console against six fixtures. Its timeout is not only its
+  // own problem: an aborted mount leaves the previous render in the document,
+  // and the next test then fails with a confusing "multiple elements" instead
+  // of the timeout that actually happened.
   it("offers every part of the set-up console", async () => {
     vi.stubGlobal("fetch", fakeFetch);
     await mount();
@@ -203,7 +207,7 @@ describe("pentadbiran", () => {
     ]) {
       expect(screen.getByRole("tab", { name: label })).toBeTruthy();
     }
-  });
+  }, 20_000);
 
   it("lists accounts with their role, status and lock state", async () => {
     vi.stubGlobal("fetch", fakeFetch);

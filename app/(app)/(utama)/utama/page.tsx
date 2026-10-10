@@ -13,6 +13,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Overview } from "@/app/api/admin/overview/route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TableContainer } from "@/components/ui/table";
 import { can, type Permission, permissionsFor } from "@/lib/auth/permissions";
 import { supabaseConfigured } from "@/lib/config";
 import { ms } from "@/lib/i18n/ms";
@@ -208,52 +209,54 @@ export default function UtamaPage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full border-collapse text-[12.5px]">
-            <thead>
-              <tr className="bg-surface-2">
-                <th className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase">
-                  Peranan
-                </th>
-                {ORDER.map((p) => (
-                  <th
-                    key={p}
-                    className="border-b border-border px-2.5 py-2.5 text-center text-[11.5px] font-bold tracking-[0.4px] text-ink-4"
-                  >
-                    {PERMISSION_LABEL[p]}
+          <TableContainer>
+            <table className="w-full border-collapse text-[12.5px]">
+              <thead>
+                <tr className="bg-surface-2">
+                  <th className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase">
+                    Peranan
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {roles.map((role) => (
-                <tr key={role} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-2.5 font-semibold text-ink">{ms.roles[role]}</td>
-                  {ORDER.map((p) => {
-                    const allowed = can(role, p);
-                    return (
-                      <td key={p} className="px-2.5 py-2.5 text-center">
-                        {allowed ? (
-                          <span
-                            role="img"
-                            className="inline-grid h-5 w-5 place-items-center rounded-full bg-success-soft text-[12px] font-bold text-success-ink"
-                            aria-label={`Boleh: ${PERMISSION_LABEL[p]}`}
-                          >
-                            ✓
-                          </span>
-                        ) : (
-                          <span
-                            role="img"
-                            className="inline-block h-1.5 w-1.5 rounded-full bg-border-strong"
-                            aria-label={`Tidak: ${PERMISSION_LABEL[p]}`}
-                          />
-                        )}
-                      </td>
-                    );
-                  })}
+                  {ORDER.map((p) => (
+                    <th
+                      key={p}
+                      className="border-b border-border px-2.5 py-2.5 text-center text-[11.5px] font-bold tracking-[0.4px] text-ink-4"
+                    >
+                      {PERMISSION_LABEL[p]}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {roles.map((role) => (
+                  <tr key={role} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-2.5 font-semibold text-ink">{ms.roles[role]}</td>
+                    {ORDER.map((p) => {
+                      const allowed = can(role, p);
+                      return (
+                        <td key={p} className="px-2.5 py-2.5 text-center">
+                          {allowed ? (
+                            <span
+                              role="img"
+                              className="inline-grid h-5 w-5 place-items-center rounded-full bg-success-soft text-[12px] font-bold text-success-ink"
+                              aria-label={`Boleh: ${PERMISSION_LABEL[p]}`}
+                            >
+                              ✓
+                            </span>
+                          ) : (
+                            <span
+                              role="img"
+                              className="inline-block h-1.5 w-1.5 rounded-full bg-border-strong"
+                              aria-label={`Tidak: ${PERMISSION_LABEL[p]}`}
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableContainer>
         </CardContent>
       </Card>
 
