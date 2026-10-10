@@ -5,7 +5,6 @@ import {
   Bolt,
   CheckCircle2,
   Clock3,
-  Download,
   Layers,
   Plus,
   Printer,
@@ -396,12 +395,6 @@ export default function MingguPage() {
               <CardTitle>{ms.dashboard.shortcuts}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2.5">
-              <Shortcut
-                icon={<Bolt className="h-4 w-4 text-primary" />}
-                label="Jana RPH dengan AI"
-                tag="Beta"
-                onClick={() => toast("Pilih kelas → objektif & aktiviti dijana automatik")}
-              />
               <input
                 ref={fileRef}
                 type="file"
@@ -420,16 +413,14 @@ export default function MingguPage() {
                 label="Masukkan RPH sedia ada"
                 onClick={() => fileRef.current?.click()}
               />
+              {/* No count shown. The number would have to come from a query
+                  this page does not make, and a badge that reads "8" because
+                  someone typed 8 is worse than no badge — the teacher opens
+                  /templat expecting eight and finds however many there are. */}
               <Shortcut
                 icon={<Layers className="h-4 w-4" />}
                 label="Templat sekolah"
-                count={8}
                 onClick={() => (window.location.href = "/templat")}
-              />
-              <Shortcut
-                icon={<Download className="h-4 w-4" />}
-                label="Eksport PDF minggu ini"
-                onClick={() => toast("RPH minggu ini dijana sebagai PDF…")}
               />
             </CardContent>
           </Card>
@@ -593,14 +584,10 @@ function StatCard({
 function Shortcut({
   icon,
   label,
-  tag,
-  count,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
-  tag?: string;
-  count?: number;
   onClick: () => void;
 }) {
   return (
@@ -611,12 +598,6 @@ function Shortcut({
     >
       {icon}
       <span className="truncate">{label}</span>
-      {tag && (
-        <Badge variant="solid" className="ml-auto">
-          {tag}
-        </Badge>
-      )}
-      {count !== undefined && <span className="ml-auto text-[12px] text-ink-4">{count}</span>}
     </button>
   );
 }
