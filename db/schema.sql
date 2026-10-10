@@ -109,6 +109,11 @@ begin
 end $$;
 
 -- Completeness per KPM FAQ (profil SK/SP, objektif, aktiviti, refleksi, intervensi)
+-- Completeness per the school's submitted form, not the KPM circular: the four
+-- things it cannot be issued without. MUST match `completeness()` in
+-- lib/schemas/rph.ts byte for byte — tests/unit/completeness.test.ts runs the
+-- same fixtures through both so the editor's meter and `submit_rph`'s gate can
+-- never disagree.
 -- returns 0..100 → drives the editor progress meter and the submit gate
 create or replace function erph.rph_completeness(p_payload jsonb)
 returns smallint language plpgsql immutable as $$
@@ -116,21 +121,27 @@ declare
   v int := 0;
   v_act jsonb := coalesce(p_payload->'aktiviti', '[]'::jsonb);
 begin
+  -- 1. Standard Kandungan + Standard Pembelajaran
   if nullif(trim(coalesce(p_payload->>'standard_kandungan','')), '') is not null
      and nullif(trim(coalesce(p_payload->>'standard_pembelajaran','')), '') is not null
-     and nullif(trim(coalesce(p_payload->>'objektif','')), '') is not null
   then v := v + 25; end if;
 
-  if jsonb_typeof(v_act) = 'array' and jsonb_array_length(v_act) > 0
-     and nullif(trim(coalesce((v_act->0)->>'aktiviti_guru','')), '') is not null
+  -- 2. Objektif + Kriteria Kejayaan
+  if nullif(trim(coalesce(p_payload->>'objektif','')), '') is not null
+     and nullif(trim(coalesce(p_payload->>'kriteria_kejayaan','')), '') is not null
   then v := v + 25; end if;
 
+  -- 3. at least one Aktiviti PdPC carrying a name. `exists` over the array
+  -- rather than a check on element 0: an activity list whose first entry is a
+  -- blank separator line is not an empty list, and refusing to submit over it
+  -- would be a gate that cannot be satisfied by filling the form correctly.
+  if jsonb_typeof(v_act) = 'array' and exists (
+       select 1 from jsonb_array_elements(v_act) e
+        where nullif(trim(coalesce(e->>'nama','')), '') is not null)
+  then v := v + 25; end if;
+
+  -- 4. Refleksi
   if nullif(trim(coalesce(p_payload->>'refleksi','')), '') is not null
-  then v := v + 25; end if;
-
-  if nullif(trim(coalesce(p_payload->>'intervensi','')), '') is not null
-     or (jsonb_typeof(coalesce(p_payload->'emk', '[]'::jsonb)) = 'array'
-         and jsonb_array_length(coalesce(p_payload->'emk', '[]'::jsonb)) > 0)
   then v := v + 25; end if;
 
   return v::smallint;
@@ -387,6 +398,10 @@ create table erph.rph_document (
   -- review queue, and edited offline — so it belongs beside plan_date rather
   -- than inside the free-form payload.
   slot_time        time not null default '07:30',
+  -- Masa Tamat. The school's form prints both times, so both are stored — one
+  -- start time leaves the printed page to invent an end time, and that is how
+  -- a five-hour lesson ends up on an approved document.
+  slot_time_end    time not null default '12:40',
   status           erph.rph_status not null default 'draft',
 
   -- flexible body: shape differs by level and evolves with KPM circulars
@@ -1028,6 +1043,7 @@ begin
              version = version + 1,
              client_updated_at = v_client_ts,
              slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
+             slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end),
              content_hash = coalesce(v_op->>'content_hash', content_hash),
              -- Status is server-managed. The client may request only:
              --   • nothing (null)     → keep current state
@@ -1053,11 +1069,12 @@ begin
       begin
         insert into erph.rph_document
           (id, school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
-           slot_time, payload, status, version, client_updated_at, content_hash, submitted_at)
+           slot_time, slot_time_end, payload, status, version, client_updated_at, content_hash, submitted_at)
         values
           (v_id, v_school, v_uid, (v_op->>'class_id')::uuid, v_op->>'subject_code',
            v_op->>'session', (v_op->>'week_no')::smallint, (v_op->>'plan_date')::date,
            coalesce((v_op->>'slot_time')::time, '07:30'::time),
+           coalesce((v_op->>'slot_time_end')::time, '12:40'::time),
            v_op->'payload',
            -- New documents are always drafts: submitting is an explicit act
            -- through submit_rph(), and the same 100% gate applies here.
@@ -1073,7 +1090,8 @@ begin
            set payload = v_op->'payload',
                version = version + 1,
                client_updated_at = v_client_ts,
-               slot_time = coalesce((v_op->>'slot_time')::time, slot_time)
+               slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
+               slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end)
          where owner_id = v_uid
            and class_id = (v_op->>'class_id')::uuid
            and subject_code = v_op->>'subject_code'

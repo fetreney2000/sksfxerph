@@ -44,7 +44,13 @@ export interface RphDocument {
   session: string;
   weekNo: number;
   planDate: string; // ISO yyyy-mm-dd
-  slotTime: string; // '07:30'
+  slotTime: string; // '07:30' — Masa Mula
+  /**
+   * Masa Tamat. The school's form prints both, so both are stored — a single
+   * start time leaves the printed page to invent an end time, which is how a
+   * 5-hour lesson ends up on an approved document.
+   */
+  slotTimeEnd: string; // '12:40'
   status: RphStatus;
   payload: RphPayload;
   version: number;

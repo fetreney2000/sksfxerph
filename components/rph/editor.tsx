@@ -44,7 +44,13 @@ import { useSession } from "@/lib/hooks/use-session";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { ms } from "@/lib/i18n/ms";
 import { RpcError, submitRph } from "@/lib/rpc";
-import { completeness, emptyPayload, type RphPayload, stepStatus } from "@/lib/schemas/rph";
+import {
+  type Aktiviti,
+  completeness,
+  emptyPayload,
+  type RphPayload,
+  stepStatus,
+} from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import { payloadHash, verifySignature } from "@/lib/signature";
 import { commit } from "@/lib/sync/queue";
@@ -160,35 +166,20 @@ function notes(payload: RphPayload): Note[] {
     out.push(n);
   };
 
-  const first = payload.aktiviti[0];
-
   if (!has(payload.standard_kandungan))
     add({ section: 1, field: "f-188949", text: ms.editor.missing.sk, blocking: true });
   if (!has(payload.standard_pembelajaran))
     add({ section: 1, field: "f-907255", text: ms.editor.missing.sp, blocking: true });
   if (!has(payload.objektif))
     add({ section: 1, field: "f-675227", text: ms.editor.missing.objektif, blocking: true });
-  if (payload.aktiviti.length === 0)
+  // An activity list whose first entry is a blank separator is not an empty
+  // list — asking for "at least one" is not the same as asking for "the first".
+  if (!payload.aktiviti.some((a) => has(a.nama)))
     add({ section: 2, text: ms.editor.missing.noAktiviti, blocking: true });
-  else if (!has(first?.aktiviti_guru))
-    add({
-      section: 2,
-      field: "f-aktiviti-0-guru",
-      text: ms.editor.missing.aktivitiGuru,
-      blocking: true,
-    });
+  if (!has(payload.kriteria_kejayaan))
+    add({ section: 2, field: "f-kriteria", text: ms.editor.missing.kriteria, blocking: true });
   if (!has(payload.refleksi))
     add({ section: 3, field: "f-270580", text: ms.editor.missing.refleksi, blocking: true });
-  if (!has(payload.intervensi) && payload.emk.length === 0)
-    add({ section: 3, field: "f-305006", text: ms.editor.missing.intervensi, blocking: true });
-
-  if (payload.aktiviti.length > 0 && has(first?.aktiviti_guru) && !has(first?.aktiviti_murid))
-    add({
-      section: 2,
-      field: "f-aktiviti-0-murid",
-      text: ms.editor.missing.aktivitiMurid,
-      blocking: false,
-    });
 
   return out;
 }
@@ -321,6 +312,7 @@ export function RphEditor({ docId }: { docId?: string }) {
         weekNo: currentWeek(),
         planDate: mytIso(),
         slotTime: "07:30",
+        slotTimeEnd: "12:40",
         status: "draft",
         // A template or last week's plan arrives *here*, not in the database —
         // readable, editable and discardable before anything exists.
@@ -887,10 +879,9 @@ export function RphEditor({ docId }: { docId?: string }) {
                     — {doneCount} daripada 4 bahagian · {score}%
                   </span>
                   <HelpHint label="Keluargaan dokumen">
-                    Empat bahagian wajib mengikut Garis Panduan e-RPH KPM: (1) Standard
-                    Kandungan + Standard Pembelajaran + objektif, (2) sekurang-kurangnya satu
-                    aktiviti PdPc, (3) refleksi, (4) intervensi <b>atau</b> elemen EMK. Setiap
-                    bahagian = 25%.
+                    Empat bahagian wajib mengikut borang RPH sekolah: (1) Standard Kandungan +
+                    Standard Pembelajaran, (2) objektif + Kriteria Kejayaan, (3)
+                    sekurang-kurangnya satu Aktiviti PdPC, (4) refleksi. Setiap bahagian = 25%.
                   </HelpHint>
                   <span className="ml-auto">
                     <Badge variant={ready ? "success" : "warning"}>
@@ -1305,19 +1296,15 @@ function StepProfil({
           />
         </div>
         <div>
-          <Label htmlFor="f-311133">{ms.editor.students}</Label>
+          {/* Masa Tamat. The printed form has it, so the plan has to carry it
+              — a single start time leaves the page to invent an end time. */}
+          <Label htmlFor="f-masa-tamat">Masa Tamat</Label>
           <Input
-            id="f-311133"
-            type="number"
-            min={0}
-            max={100}
+            id="f-masa-tamat"
+            type="time"
             className="num"
-            value={payload.bilangan_murid ?? ""}
-            onChange={(e) =>
-              onPayload({
-                bilangan_murid: e.target.value === "" ? undefined : Number(e.target.value),
-              })
-            }
+            value={doc.slotTimeEnd}
+            onChange={(e) => onPatch({ slotTimeEnd: e.target.value })}
           />
         </div>
         <div>
@@ -1327,6 +1314,24 @@ function StepProfil({
             value={payload.fasa_tema ?? ""}
             placeholder="Nombor & Operasi"
             onChange={(e) => onPayload({ fasa_tema: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label htmlFor="f-bidang">Bidang</Label>
+          <Input
+            id="f-bidang"
+            value={payload.bidang ?? ""}
+            placeholder="Sifat Manusia"
+            onChange={(e) => onPayload({ bidang: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label htmlFor="f-tajuk">Tajuk</Label>
+          <Input
+            id="f-tajuk"
+            value={payload.tajuk ?? ""}
+            placeholder="Keutamaan dalam keluarga"
+            onChange={(e) => onPayload({ tajuk: e.target.value })}
           />
         </div>
       </div>
@@ -1395,15 +1400,6 @@ function StepDskp({
 
 /* ══ Step 3 · PdPc ════════════════════════════════════════════════════ */
 
-const EMK_OPTIONS = [
-  "Kerjasama",
-  "Kreativiti",
-  "Nilai Murni: Amanah",
-  "Nilai Murni: Bertanggungjawab",
-  "KBAT · Analisis",
-  "PAK-21 · Berfikir Aras Tinggi",
-];
-
 function StepPdPc({
   payload,
   onPatch,
@@ -1411,147 +1407,98 @@ function StepPdPc({
   payload: RphPayload;
   onPatch: (p: Partial<RphPayload>) => void;
 }) {
-  const totalMin = payload.aktiviti.reduce((sum, a) => {
-    const n = Number.parseInt(a.masa, 10);
-    return sum + (Number.isNaN(n) ? 0 : n);
-  }, 0);
-
-  const setAktiviti = (
-    i: number,
-    field: keyof RphPayload["aktiviti"][number],
-    value: string,
-  ) => {
-    const next = payload.aktiviti.map((a, idx) => (idx === i ? { ...a, [field]: value } : a));
-    onPatch({ aktiviti: next });
+  const setAktiviti = (i: number, patch: Partial<Aktiviti>) => {
+    onPatch({
+      aktiviti: payload.aktiviti.map((a, idx) => (idx === i ? { ...a, ...patch } : a)),
+    });
   };
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <Label className="mb-0">{ms.editor.activities}</Label>
-        <span className="num text-[12.5px] text-ink-3">
-          Jumlah masa aktif: <b className="text-ink">{totalMin} minit</b>
-          {totalMin === 50 && " (sesuai 1 masa pengajaran)"}
-        </span>
-      </div>
+      <Label className="mb-0" required>
+        {ms.editor.activities}
+      </Label>
+      {/* The printed form is a list of names, not a timed table of teacher and
+          student actions — so the form asks for names. A sub-item is printed
+          indented behind a hyphen, which is how the school writes a heading
+          with its contents beneath it ("Permainan Dalaman" → "- Catur"). */}
+      <p className="mb-2.5 mt-1 text-[12.5px] leading-[1.55] text-ink-4">
+        Nama aktiviti mengikut urutan yang dicetak. Tandakan sebagai sub-aktiviti untuk
+        dipaparkan berindeks dengan tanda hubung.
+      </p>
 
-      {/* `overflow-x-auto`, not `hidden`: on a phone the activity table is
-          wider than the card, so it must scroll rather than lose its columns. */}
-      <div className="overflow-x-auto rounded-[10px] border border-border">
-        <table className="w-full border-collapse text-[13.5px]">
-          <thead>
-            <tr className="bg-surface-2">
-              {["Masa", "Aktiviti guru", "Aktiviti murid", ""].map((h) => (
-                <th
-                  key={h}
-                  className="border-b border-border px-3 py-2 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {payload.aktiviti.map((a, i) => (
-              <tr key={i} className="border-b border-border last:border-b-0">
-                <td className="w-20 px-2 py-2">
-                  <Input
-                    className="num px-2 py-1.5 text-[12.5px]"
-                    value={a.masa}
-                    placeholder="10 minit"
-                    onChange={(e) => setAktiviti(i, "masa", e.target.value)}
-                    aria-label={`Masa aktiviti ${i + 1}`}
-                  />
-                </td>
-                <td className="px-2 py-2">
-                  <Input
-                    id={`f-aktiviti-${i}-guru`}
-                    className="px-2 py-1.5 text-[12.5px]"
-                    value={a.aktiviti_guru}
-                    onChange={(e) => setAktiviti(i, "aktiviti_guru", e.target.value)}
-                    aria-label={`Aktiviti guru ${i + 1}`}
-                  />
-                </td>
-                <td className="px-2 py-2">
-                  <Input
-                    id={`f-aktiviti-${i}-murid`}
-                    className="px-2 py-1.5 text-[12.5px]"
-                    value={a.aktiviti_murid}
-                    onChange={(e) => setAktiviti(i, "aktiviti_murid", e.target.value)}
-                    aria-label={`Aktiviti murid ${i + 1}`}
-                  />
-                </td>
-                <td className="w-10 px-2 py-2 text-center">
-                  <button
-                    type="button"
-                    className="rounded-md p-1.5 text-ink-4 transition-colors hover:bg-danger-soft hover:text-danger-ink"
-                    onClick={() =>
-                      onPatch({ aktiviti: payload.aktiviti.filter((_, x) => x !== i) })
-                    }
-                    aria-label={`Buang aktiviti ${i + 1}`}
-                  >
-                    <X className="h-3.5 w-3.5" strokeWidth={2.2} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {payload.aktiviti.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-ink-4">
-                  Tiada aktiviti lagi.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="grid gap-2">
+        {payload.aktiviti.map((a, i) => (
+          <div
+            /* biome-ignore lint/suspicious/noArrayIndexKey: append/delete only —
+               never reordered, and each row is a controlled input with no
+               per-item state. The rule guards against state following an item
+               across a reorder; a delete unmounts the button that caused it, so
+               there is no state to misplace. */
+            key={i}
+            className="flex items-center gap-2"
+          >
+            <Input
+              id={`f-aktiviti-${i}-nama`}
+              value={a.nama}
+              placeholder={a.sub ? "Catur" : "Senamrobik"}
+              onChange={(e) => setAktiviti(i, { nama: e.target.value })}
+              aria-label={`Aktiviti PdPC ${i + 1}`}
+              className={a.sub ? "pl-7" : undefined}
+            />
+            <button
+              type="button"
+              aria-pressed={a.sub}
+              onClick={() => setAktiviti(i, { sub: !a.sub })}
+              className={
+                "shrink-0 rounded-[7px] border px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors " +
+                (a.sub
+                  ? "border-primary-soft-2 bg-primary-soft text-primary-ink"
+                  : "border-border-strong bg-surface text-ink-3 hover:border-primary")
+              }
+              title={a.sub ? "Tanggalkan sub-aktiviti" : "Jadikan sub-aktiviti"}
+            >
+              Sub
+            </button>
+            <button
+              type="button"
+              className="shrink-0 rounded-[7px] p-1.5 text-ink-4 transition-colors hover:bg-danger-soft hover:text-danger-ink"
+              onClick={() => onPatch({ aktiviti: payload.aktiviti.filter((_, x) => x !== i) })}
+              aria-label={`Buang aktiviti ${i + 1}`}
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+            </button>
+          </div>
+        ))}
+        {payload.aktiviti.length === 0 && (
+          <p className="rounded-[10px] border border-dashed border-border-strong px-3 py-6 text-center text-[12.5px] text-ink-4">
+            Tiada aktiviti lagi.
+          </p>
+        )}
       </div>
 
       <Button
         variant="secondary"
         size="sm"
-        className="mt-2.5"
-        onClick={() =>
-          onPatch({
-            aktiviti: [
-              ...payload.aktiviti,
-              { masa: "", aktiviti_guru: "", aktiviti_murid: "" },
-            ],
-          })
-        }
+        className="mt-2.5 self-start"
+        onClick={() => onPatch({ aktiviti: [...payload.aktiviti, { nama: "", sub: false }] })}
       >
         <Plus className="h-4 w-4" strokeWidth={2.1} aria-hidden /> Tambah aktiviti
       </Button>
 
       <div className="mt-5">
-        <Label>{ms.editor.emk}</Label>
-        <div className="flex flex-wrap gap-2">
-          {EMK_OPTIONS.map((opt) => {
-            const on = payload.emk.includes(opt);
-            return (
-              <button
-                key={opt}
-                type="button"
-                aria-pressed={on}
-                onClick={() =>
-                  onPatch({
-                    emk: on ? payload.emk.filter((x) => x !== opt) : [...payload.emk, opt],
-                  })
-                }
-                className={
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-colors " +
-                  (on
-                    ? "border-primary-soft-2 bg-primary-soft text-primary-ink"
-                    : "border-dashed border-border-strong bg-surface text-ink-3 hover:border-primary hover:text-primary-ink")
-                }
-              >
-                {opt}
-                <span aria-hidden className="opacity-70">
-                  {on ? "✕" : "+"}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <Label required htmlFor="f-kriteria">
+          {ms.editor.successCriteria}
+        </Label>
+        <Textarea
+          id="f-kriteria"
+          value={payload.kriteria_kejayaan}
+          placeholder="Murid menunjukkan…"
+          onChange={(e) => onPatch({ kriteria_kejayaan: e.target.value })}
+        />
+        {payload.kriteria_kejayaan.trim() === "" && (
+          <FieldError>Kriteria Kejayaan diperlukan sebelum dihantar.</FieldError>
+        )}
       </div>
     </div>
   );
@@ -1566,45 +1513,24 @@ function StepRefleksi({
   payload: RphPayload;
   onPatch: (p: Partial<RphPayload>) => void;
 }) {
+  // One field, not a pair. The printed form has a Refleksi row and nothing
+  // else in this section — Intervensi and EMK were on the KPM circular, not on
+  // the school's template, so requiring them meant filling in content that
+  // could never appear on the page anyone reads.
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div>
-        <Label required htmlFor="f-270580">
-          {ms.editor.reflection}
-        </Label>
-        <Textarea
-          id="f-270580"
-          value={payload.refleksi}
-          placeholder="Apa yang berlaku? Murid mana perlu perhatian?"
-          onChange={(e) => onPatch({ refleksi: e.target.value })}
-        />
-        {payload.refleksi.trim() === "" && (
-          <FieldError>Refleksi diperlukan sebelum dihantar.</FieldError>
-        )}
-      </div>
-      <div>
-        <Label htmlFor="f-305006">Intervensi</Label>
-        <Textarea
-          id="f-305006"
-          value={payload.intervensi}
-          placeholder="Langkah susulan untuk murid yang lemah…"
-          onChange={(e) => onPatch({ intervensi: e.target.value })}
-        />
-        <p className="mt-1.5 text-[11.5px] text-ink-4">
-          Isi intervensi <b>atau</b> sekurang-kurangnya satu elemen EMK untuk memenuhi keperluan
-          keluargaan.
-        </p>
-      </div>
-      <div className="md:col-span-2">
-        <Label htmlFor="f-491570">Nota KBAT / PAK-21</Label>
-        <Textarea
-          id="f-491570"
-          className="min-h-18"
-          value={payload.kbat}
-          placeholder="Soalan aras tinggi yang anda gunakan…"
-          onChange={(e) => onPatch({ kbat: e.target.value })}
-        />
-      </div>
+    <div>
+      <Label required htmlFor="f-270580">
+        {ms.editor.reflection}
+      </Label>
+      <Textarea
+        id="f-270580"
+        value={payload.refleksi}
+        placeholder="Apa yang berlaku? Murid mana perlu perhatian?"
+        onChange={(e) => onPatch({ refleksi: e.target.value })}
+      />
+      {payload.refleksi.trim() === "" && (
+        <FieldError>Refleksi diperlukan sebelum dihantar.</FieldError>
+      )}
     </div>
   );
 }

@@ -98,6 +98,7 @@ function toLocal(row: DocumentRow): RphDocument {
     // `07:30:00` on the server, `07:30` in the document — the editor's time
     // input takes the short form.
     slotTime: (row.slot_time ?? "07:30").slice(0, 5),
+    slotTimeEnd: (row.slot_time_end ?? "12:40").slice(0, 5),
     status: row.status as RphDocument["status"],
     payload: row.payload as RphPayload,
     version: row.version,

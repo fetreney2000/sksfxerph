@@ -286,14 +286,24 @@ export default function SemakanPage() {
                     {ms.review.autoCheck}
                   </p>
                   {flags &&
+                    // Exactly the six rows the printed form cannot be
+                    // issued without — not the editor's step grouping, which
+                    // is about where a teacher is in the form rather than
+                    // what the reviewer will actually receive.
                     (
                       [
-                        ["Profil", flags.profil],
-                        ["Objektif", flags.dskp],
-                        ["Aktiviti", flags.pdpc],
-                        ["EMK / nilai", item.payload.emk.length > 0],
-                        ["Refleksi", flags.refleksi],
-                        ["Intervensi", item.payload.intervensi.trim() !== ""],
+                        ["Standard Kandungan", item.payload.standard_kandungan.trim() !== ""],
+                        [
+                          "Standard Pembelajaran",
+                          item.payload.standard_pembelajaran.trim() !== "",
+                        ],
+                        ["Objektif", item.payload.objektif.trim() !== ""],
+                        ["Kriteria Kejayaan", item.payload.kriteria_kejayaan.trim() !== ""],
+                        [
+                          "Aktiviti PdPC",
+                          item.payload.aktiviti.some((a) => a.nama.trim() !== ""),
+                        ],
+                        ["Refleksi", item.payload.refleksi.trim() !== ""],
                       ] as [string, boolean][]
                     ).map(([label, ok]) => (
                       <div

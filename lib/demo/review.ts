@@ -38,67 +38,51 @@ const base = (over: Partial<RphPayload>): RphPayload => ({ ...emptyPayload(), ..
 
 const ramlan = base({
   standard_kandungan: "Nombor hingga 100,000 · SK 3.1",
-  kod_sk: "3.1",
   standard_pembelajaran: "3.1.2 Memecahkan nombor kepada nilai tempat",
-  kod_sp: "3.1.2",
   objektif: "Murid dapat memecahkan nombor hingga 100,000 kepada nilai tempat dengan betul.",
+  bidang: "Nombor & Operasi",
+  tajuk: "Nilai tempat",
   aktiviti: [
-    {
-      masa: "10 minit",
-      aktiviti_guru: "Set induksi kad nilai tempat",
-      aktiviti_murid: "Menyusun kad",
-    },
-    {
-      masa: "25 minit",
-      aktiviti_guru: "Penerangan & tunjuk cara",
-      aktiviti_murid: "Lembaran kerja berkumpulan",
-    },
-    {
-      masa: "10 minit",
-      aktiviti_guru: "PdM pemerhatian",
-      aktiviti_murid: "Penyelesaian masalah",
-    },
-    { masa: "5 minit", aktiviti_guru: "Penutup & rumusan", aktiviti_murid: "Refleksi ringkas" },
+    { nama: "Set induksi kad nilai tempat" },
+    { nama: "Menyusun kad", sub: true },
+    { nama: "Penerangan & tunjuk cara" },
+    { nama: "Lembaran kerja berkumpulan", sub: true },
+    { nama: "PdM pemerhatian" },
+    { nama: "Penyelesaian masalah", sub: true },
+    { nama: "Penutup & rumusan" },
   ],
-  emk: ["Kerjasama", "KBAT · Analisis"],
-  kbat: "Murid menilai punca ralat nilai tempat dalam situasi sebenar.",
+  kriteria_kejayaan:
+    "Murid menulis semula nombor hingga 100,000 dengan nilai tempat yang betul tanpa bimbingan.",
   refleksi:
     "7 daripada 28 murid keliru dengan nilai “puluhan”; intervensi kumpulan kecil Khamis.",
-  intervensi: "Intervensi kumpulan kecil Khamis, 07:00–07:20.",
-  bilangan_murid: 28,
 });
 
 const suhaila = base({
   standard_kandungan: "Membaca dan memahami petikan prosedur",
   standard_pembelajaran: "2.2.1 Mengenal pasti maklumat penting dalam petikan",
   objektif: "Murid dapat mengenal pasti lima maklumat penting dalam petikan prosedur.",
+  bidang: "Membaca & Memahami",
+  tajuk: "Petikan prosedur — cara menjaga kesihatan",
   aktiviti: [
-    { masa: "15 minit", aktiviti_guru: "Bacaan berpandu", aktiviti_murid: "Menanda maklumat" },
-    {
-      masa: "25 minit",
-      aktiviti_guru: "Perbincangan kumpulan",
-      aktiviti_murid: "Sintesis maklumat",
-    },
+    { nama: "Bacaan suara berirama" },
+    { nama: "Isi petak maklumat", sub: true },
+    { nama: "Perbincangan berkumpulan" },
+    { nama: "Rumusan kumpulan", sub: true },
   ],
-  emk: ["Kerjasama"],
-  refleksi: "Kebanyakan murid boleh mengenal pasti maklumat eksplisit.",
-  intervensi: "Latihan tambahan untuk maklumat tersirat.",
+  kriteria_kejayaan: "Murid melengkapkan petak maklumat dengan lima jawapan yang betul.",
+  refleksi: "Tiga murid tercicir menyiapkan petak; ulang set induksi sebelum tajuk seterusnya.",
 });
 
 const aizuddin = base({
-  standard_kandungan: "Daya dan kesan",
-  standard_pembelajaran: "3.1.1 Mengenal pasti daya pada objek",
-  objektif: "Murid dapat mengenal pasti daya yang bertindak pada objek harian.",
-  aktiviti: [
-    {
-      masa: "20 minit",
-      aktiviti_guru: "Eksperimen ringkas",
-      aktiviti_murid: "Merekod pemerhatian",
-    },
-  ],
-  emk: [],
-  refleksi: "",
-  intervensi: "",
+  standard_kandungan: "Proses mendengar",
+  standard_pembelajaran: "Sains & Teknologi · Standard 2.1",
+  objektif: "Murid dapat menerangkan proses mendengar dalam situasi harian.",
+  bidang: "Sifat Manusia",
+  tajuk: "Proses mendengar",
+  aktiviti: [{ nama: "Eksperimen ringkas" }, { nama: "Merekod pemerhatian", sub: true }],
+  kriteria_kejayaan: "Murid menyenaraikan tiga langkah proses mendengar dengan betul.",
+  refleksi:
+    "Kelas bising semasa eksperimen; perlu garis panduan kelas sebelum aktiviti seterusnya.",
 });
 
 export const QUEUE: QueueItem[] = [

@@ -18,6 +18,8 @@ export interface NewPlanInput {
   className: string;
   planDate: string;
   slotTime: string;
+  /** Masa Tamat — the printed form shows both, so both are carried. */
+  slotTimeEnd: string;
   weekNo: number;
   subjectCode?: string;
   subjectName?: string;
@@ -59,6 +61,7 @@ export async function createPlan(input: NewPlanInput): Promise<RphDocument> {
     weekNo: input.weekNo,
     planDate: input.planDate,
     slotTime: input.slotTime,
+    slotTimeEnd: input.slotTimeEnd,
     status: "draft",
     payload: emptyPayload(),
     version: 1,
@@ -78,13 +81,12 @@ function isBlank(doc: RphDocument): boolean {
     empty(p.standard_kandungan) &&
     empty(p.standard_pembelajaran) &&
     empty(p.objektif) &&
+    empty(p.kriteria_kejayaan) &&
     empty(p.refleksi) &&
-    empty(p.intervensi) &&
-    empty(p.kbat) &&
     empty(p.fasa_tema) &&
-    p.bilangan_murid === undefined &&
-    p.aktiviti.length === 0 &&
-    p.emk.length === 0
+    empty(p.bidang) &&
+    empty(p.tajuk) &&
+    p.aktiviti.length === 0
   );
 }
 
@@ -162,6 +164,7 @@ export async function createBlankRph(
           className: cls.nama,
           planDate: day,
           slotTime: "07:30",
+          slotTimeEnd: "12:40",
           weekNo: w,
         });
       }
@@ -196,6 +199,7 @@ export async function openDraft(
     className: cls.nama,
     planDate: target,
     slotTime: "07:30",
+    slotTimeEnd: "12:40",
     weekNo,
   });
 }

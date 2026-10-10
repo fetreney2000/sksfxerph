@@ -80,40 +80,34 @@ where s.kod_sekolah = 'SK0000'
 on conflict do nothing;
 
 -- ── 6 · one submitted plan, so the reviewer screens are not empty ────────────
--- Complete by KPM's rules (profil + aktiviti + refleksi + intervensi), status
--- 'submitted' so a Guru Besar logging in can grade it immediately.
+-- Complete by the school's own form (DSKP + objektif/Kriteria Kejayaan +
+-- aktiviti + refleksi), status 'submitted' so a Guru Besar logging in can
+-- grade it immediately.
 insert into erph.rph_document
   (school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
-   slot_time, status, payload, version, submitted_at)
+   slot_time, slot_time_end, status, payload, version, submitted_at)
 select s.id, u.id, c.id, 'MAT', '2026/2027', 1, date '2026-10-05',
-       time '07:30', 'submitted',
+       time '07:30', time '12:40', 'submitted',
        jsonb_build_object(
-         'payload_version', 1,
-         'bilangan_murid', 28,
+         'payload_version', 2,
          'fasa_tema', 'Nombor & Operasi',
-         'kod_sk', '3.1',
+         'bidang', 'Nilai tempat',
+         'tajuk', 'Nombor hingga 100,000',
          'standard_kandungan', 'Mengenal, membaca dan menulis semula nombor hingga 100,000',
-         'kod_sp', '3.1.1',
          'standard_pembelajaran', '3.1.1 Menulis semula nombor hingga 100,000 dalam bentuk angka dan perkataan',
-         'bidang', 'Nombor & Operasi',
          'objektif', 'Murid dapat menulis semula nombor hingga 100,000 dalam bentuk angka dan perkataan dengan ketepatan 80%.',
+         'kriteria_kejayaan', 'Murid menulis semula nombor hingga 100,000 dengan ketepatan 80% dalam lembaran kerja.',
          'aktiviti', jsonb_build_array(
-           jsonb_build_object('masa', '10 minit', 'aktiviti_guru',
-             'Set induksi: slaid nombor harian', 'aktiviti_murid',
-             'Mengenal pasti nombor besar dalam kehidupan seharian'),
-           jsonb_build_object('masa', '20 minit', 'aktiviti_guru',
-             'Penerangan nilai tempat menggunakan carta digit',
-             'aktiviti_murid', 'Saling mengajar dalam kumpulan'),
-           jsonb_build_object('masa', '15 minit', 'aktiviti_guru',
-             'PdM: agihan lembaran kerja', 'aktiviti_murid',
-             'Menyelesaikan 5 soalan nombor hingga 100,000'),
-           jsonb_build_object('masa', '5 minit', 'aktiviti_guru',
-             'Penutup: kuiz pantas', 'aktiviti_murid', 'Menjawab di papan putih')
+           jsonb_build_object('nama', 'Set induksi: slaid nombor harian'),
+           jsonb_build_object('nama', 'Mengenal pasti nombor besar dalam kehidupan seharian',
+                              'sub', true),
+           jsonb_build_object('nama', 'Penerangan nilai tempat menggunakan carta digit'),
+           jsonb_build_object('nama', 'Saling mengajar dalam kumpulan', 'sub', true),
+           jsonb_build_object('nama', 'PdPc: agihan lembaran kerja & pemerhatian'),
+           jsonb_build_object('nama', 'Menyelesaikan 5 soalan nombor hingga 100,000', 'sub', true),
+           jsonb_build_object('nama', 'Penutup: kuiz pantas')
          ),
-         'emk', jsonb_build_array('Kerjasama', 'Kreativiti', 'Nilai Murni: Amanah'),
-         'kbat', 'Murid menganalisis nilai tempat bagi situasi sebenar.',
-         'refleksi', '7 daripada 28 murid keliru dengan nilai “puluhan”.',
-         'intervensi', 'Intervensi kumpulan kecil Khamis, 07:00-07:20.'
+         'refleksi', '7 daripada 28 murid keliru dengan nilai “puluhan”.'
        ),
        1, now()
 from erph.school s

@@ -11,7 +11,8 @@ import {
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseConfigured } from "@/lib/config";
-import { rphPayloadSchema } from "@/lib/schemas/rph";
+import { hariName, weekdayIndex } from "@/lib/date";
+import { rphPayloadSchema, temaLengkap } from "@/lib/schemas/rph";
 import { requireUser } from "@/lib/server/auth/guard";
 import { resolveSchool } from "@/lib/server/school";
 import { DB_SCHEMA } from "@/lib/supabase/schema";
@@ -39,6 +40,9 @@ const bodySchema = z.object({
   planDate: z.string().optional(),
   className: z.string().optional(),
   subjectName: z.string().optional(),
+  /** Masa Mula / Masa Tamat — both are printed, so both are carried through. */
+  slotTime: z.string().optional(),
+  slotTimeEnd: z.string().optional(),
   /**
    * The seal, carried through to the printed document.
    *
@@ -113,6 +117,8 @@ export async function POST(request: NextRequest) {
   }
 
   const { payload, session, teacherName, planDate, className, subjectName } = parsed.data;
+  const slotTime = parsed.data.slotTime ?? "07:30";
+  const slotTimeEnd = parsed.data.slotTimeEnd ?? "12:40";
   // The school's name on a printed RPH comes from the row the administrator
   // edits, not from the build — otherwise the document and the screen it was
   // previewed on could name different schools. Resolved here rather than as a
@@ -162,77 +168,92 @@ export async function POST(request: NextRequest) {
             spacing: { after: 240 },
           }),
 
+          // The header block the school's form uses: one two-column table,
+          // label then value, in the order the paper prints them.
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             rows: [
               new TableRow({
                 children: [
-                  cell("Mata Pelajaran", { bold: true, width: 20 }),
-                  cell(subjectName ?? "—", { width: 30 }),
-                  cell("Kelas", { bold: true, width: 20 }),
-                  cell(className ?? "—", { width: 30 }),
+                  cell("NAMA", { bold: true, width: 22 }),
+                  cell(teacherName, { width: 78 }),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("Tarikh", { bold: true }),
-                  cell(planDate ?? "—"),
-                  cell("Standard Kandungan", { bold: true }),
-                  cell(payload.standard_kandungan || "—"),
+                  cell("Subjek", { bold: true, width: 22 }),
+                  cell(subjectName || "—", { width: 28 }),
+                  cell("Nama Kelas", { bold: true, width: 22 }),
+                  cell(className || "—", { width: 28 }),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("Standard Pembelajaran", { bold: true }),
-                  cell(payload.standard_pembelajaran || "—"),
-                  cell("Bilangan Murid", { bold: true }),
-                  cell(String(payload.bilangan_murid ?? "—")),
+                  cell("Hari", { bold: true, width: 22 }),
+                  cell(planDate ? `${weekdayIndex(planDate)}. ${hariName(planDate)}` : "—", {
+                    width: 28,
+                  }),
+                  cell("Tarikh", { bold: true, width: 22 }),
+                  cell(planDate || "—", { width: 28 }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("Masa Mula", { bold: true, width: 22 }),
+                  cell(slotTime || "—", { width: 28 }),
+                  cell("Masa Tamat", { bold: true, width: 22 }),
+                  cell(slotTimeEnd || "—", { width: 28 }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  cell("Tema / Bidang / Tajuk", { bold: true, width: 22 }),
+                  cell(temaLengkap(payload) || "—", { width: 78 }),
                 ],
               }),
             ],
           }),
 
-          ...section("Objektif Pembelajaran", payload.objektif, nonEmpty(payload.objektif)),
+          ...section(
+            "Standard Kandungan",
+            payload.standard_kandungan,
+            nonEmpty(payload.standard_kandungan),
+          ),
+          ...section(
+            "Standard Pembelajaran",
+            payload.standard_pembelajaran,
+            nonEmpty(payload.standard_pembelajaran),
+          ),
+          ...section("Objektif", payload.objektif, nonEmpty(payload.objektif)),
+          ...section(
+            "Kriteria Kejayaan",
+            payload.kriteria_kejayaan,
+            nonEmpty(payload.kriteria_kejayaan),
+          ),
 
+          // A list of names, as the paper form prints it — not a timed table.
+          // The school's activities are ordered items, some indented beneath a
+          // heading, and rendering them as a three-column grid would invent
+          // columns the submitted document does not have.
           new Paragraph({
-            children: [
-              new TextRun({ text: "Aktiviti Pengajaran & Pembelajaran", bold: true, size: 20 }),
-            ],
+            children: [new TextRun({ text: "Aktiviti PdPC", bold: true, size: 20 })],
             spacing: { before: 200 },
           }),
           payload.aktiviti.length > 0
             ? new Table({
                 width: { size: 100, type: WidthType.PERCENTAGE },
-                rows: [
-                  new TableRow({
-                    children: [
-                      cell("Masa", { bold: true, width: 12 }),
-                      cell("Aktiviti Guru", { bold: true, width: 44 }),
-                      cell("Aktiviti Murid", { bold: true, width: 44 }),
-                    ],
-                  }),
-                  ...payload.aktiviti.map(
-                    (a) =>
-                      new TableRow({
-                        children: [cell(a.masa), cell(a.aktiviti_guru), cell(a.aktiviti_murid)],
-                      }),
-                  ),
-                ],
+                rows: payload.aktiviti.map(
+                  (a) =>
+                    new TableRow({
+                      children: [cell(a.sub ? `- ${a.nama}` : a.nama)],
+                    }),
+                ),
               })
             : new Paragraph({
                 children: [new TextRun({ text: "— belum diisi —", size: 20 })],
               }),
 
-          ...section(
-            "EMK / Nilai",
-            [payload.emk.join(" · "), payload.kbat ? `KBAT: ${payload.kbat}` : ""]
-              .filter(Boolean)
-              .join("\n"),
-            payload.emk.length > 0 || nonEmpty(payload.kbat),
-          ),
-
           ...section("Refleksi", payload.refleksi, nonEmpty(payload.refleksi)),
-          ...section("Intervensi", payload.intervensi, nonEmpty(payload.intervensi)),
 
           // The reviewer's line is a blank to sign when nothing has been sealed.
           // Once something has, the seal takes its place and carries the name,

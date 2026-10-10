@@ -2,221 +2,200 @@ import type * as React from "react";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { SignatureSeal } from "@/components/rph/signature-seal";
 import { cn } from "@/lib/cn";
+import { hariName, weekdayIndex, weekRangeLabel } from "@/lib/date";
 import type { SignatureState } from "@/lib/hooks/use-signature";
 import type { RphPayload } from "@/lib/schemas/rph";
+import { temaLengkap } from "@/lib/schemas/rph";
 import { currentSchool } from "@/lib/school";
 
 /**
- * The A4-shaped KPM RPH document.
+ * The school's RPH, as it is actually submitted.
  *
- * Rendered from the same JSON as the editor form — one source of truth, so what
- * a teacher sees on screen is byte-identical to what prints and what the
- * reviewer grades. This is what has to survive inspection under Peraturan 8,
- * Akta Pendidikan 1996.
+ * Built against the template this school sends to its district — one table,
+ * pale-green label cells, a fixed set of rows — rather than the generic KPM
+ * form. The differences are the ones a teacher would notice immediately if
+ * they were wrong: activities are a **list of names** (with indented
+ * sub-items) rather than a timed table, **Kriteria Kejayaan** has its own row,
+ * and there is no EMK, KBAT or Intervensi section because the printed form has
+ * none.
+ *
+ * Rendered from the same JSON as the editor — one source of truth, so what a
+ * teacher sees on screen is what prints and what the reviewer grades. This is
+ * what has to survive inspection under Peraturan 8, Akta Pendidikan 1996.
  *
  * The signature is passed in rather than fetched here: this component is also
  * rendered on the export path, where the caller has already verified it, and a
  * second round trip would be a second failure mode for something that has to be
  * on the page.
  */
-export function RphPaper({
-  payload,
-  className,
-  teacherName = "Nurul Aisyah binti Rahim",
-  schoolName = currentSchool().name,
-  session,
-  signature,
-  signatureState = "none",
-}: {
+
+/** Label cell — the pale green the school's form uses. */
+const LABEL_BG = "#d9ead3";
+const RULE = "#a6a6a6";
+
+function Label({ children, span = 1 }: { children: React.ReactNode; span?: number }) {
+  return (
+    <td
+      colSpan={span}
+      className="border px-2.5 py-1.5 text-right align-middle font-medium"
+      style={{ background: LABEL_BG, borderColor: RULE, width: span === 1 ? "20%" : undefined }}
+    >
+      {children}
+    </td>
+  );
+}
+
+function Value({ children, span = 1 }: { children: React.ReactNode; span?: number }) {
+  return (
+    <td
+      colSpan={span}
+      className="border px-2.5 py-1.5 align-middle whitespace-pre-wrap break-words"
+      style={{ borderColor: RULE }}
+    >
+      {children}
+    </td>
+  );
+}
+
+/** Empty cells print as a dash, the way the paper form does. */
+const or = (s: string) => (s.trim() ? s.trim() : "—");
+
+interface Props {
   payload: RphPayload;
+  /** CSS class for the sheet itself — not the school's class. */
   className?: string;
   teacherName?: string;
   schoolName?: string;
   session: string;
+  planClassName?: string;
+  subjectName?: string;
+  planDate?: string;
+  slotTime?: string;
+  slotTimeEnd?: string;
+  weekNo?: number;
   /** Verified material, or null when the plan carries no seal. */
   signature?: SignaturePayload | null;
   signatureState?: SignatureState;
-}) {
+}
+
+export function RphPaper({
+  payload,
+  className: sheetClass,
+  teacherName = "Nurul Aisyah binti Rahim",
+  schoolName = currentSchool().name,
+  session,
+  planClassName,
+  subjectName,
+  planDate,
+  slotTime = "07:30",
+  slotTimeEnd = "12:40",
+  weekNo,
+  signature,
+  signatureState = "none",
+}: Props) {
+  // "2. Isnin" — the school's form numbers the day, and derives it from the
+  // date rather than asking, so a plan cannot claim a Monday that is a Tuesday.
+  const hari = planDate ? `${weekdayIndex(planDate)}. ${hariName(planDate)}` : "—";
+
   return (
     <article
       className={cn(
-        "relative rounded-lg border border-[#e4e7ec] bg-white p-6 text-[12.5px] text-[#1d2939] shadow-lg",
-        "before:absolute before:top-0 before:right-0 before:left-0 before:h-1 before:bg-gradient-to-r before:from-[#175cd3] before:to-[#53b1fd]",
-        className,
+        "rounded-lg bg-white p-6 text-[12.5px] leading-[1.5] text-[#1d2939] shadow-lg",
+        sheetClass,
       )}
     >
-      <h4 className="text-center text-[13.5px] font-bold tracking-[0.5px] uppercase">
-        Rancangan Pengajaran Harian
-      </h4>
-      <p className="mb-4 text-center text-[11.5px] text-[#667085]">
-        {schoolName} · {session} · Guru: {teacherName}
+      {/* Faint identifiers, as the paper form prints them: a page separated
+          from its week should still say which plan it is. */}
+      <p className="text-center text-[10px] tracking-[0.4px] text-[#b0b7c3]">
+        {schoolName} · {session}
+        {weekNo ? ` · ${weekRangeLabel(weekNo)}` : ""}
       </p>
 
-      <Meta payload={payload} />
+      <h2 className="mt-2 mb-3 text-center text-[17px] font-normal tracking-[0.3px]">
+        RANCANGAN PENGAJARAN HARIAN
+      </h2>
 
-      <Section title="Objektif Pembelajaran" done={payload.objektif.trim() !== ""}>
-        {payload.objektif || "—"}
-      </Section>
-
-      <Section
-        title="Aktiviti Pengajaran & Pembelajaran"
-        done={payload.aktiviti.length > 0}
-        hint={payload.aktiviti.length > 0 ? `${payload.aktiviti.length} aktiviti` : undefined}
+      <table
+        className="w-full table-fixed border-collapse"
+        style={{ border: `1px solid ${RULE}` }}
       >
-        {payload.aktiviti.length > 0 ? (
-          <ActivityTable payload={payload} />
-        ) : (
-          <span className="text-[#98a2b3] italic">— belum diisi —</span>
-        )}
-      </Section>
-
-      <Section title="EMK / Nilai" done={payload.emk.length > 0 || payload.kbat.trim() !== ""}>
-        {payload.emk.length > 0 ? payload.emk.join(" · ") : "—"}
-        {payload.kbat.trim() !== "" && (
-          <p className="mt-1 text-[#475467]">KBAT: {payload.kbat}</p>
-        )}
-      </Section>
-
-      <Section
-        title="Refleksi & Intervensi"
-        done={payload.refleksi.trim() !== "" && payload.intervensi.trim() !== ""}
-      >
-        {payload.refleksi.trim() !== "" ? (
-          <>
-            <p>{payload.refleksi}</p>
-            {payload.intervensi.trim() !== "" && (
-              <p className="mt-1.5 text-[#475467]">
-                <strong>Intervensi:</strong> {payload.intervensi}
-              </p>
-            )}
-          </>
-        ) : (
-          <span className="text-[#98a2b3] italic">— belum diisi —</span>
-        )}
-      </Section>
-
-      <div className="mt-4 flex gap-6">
-        <span className="flex-1 border-t-[1.5px] border-dashed border-[#d7dce5] pt-1.5 text-center text-[11px] text-[#98a2b3]">
-          Tandatangan Guru
-        </span>
-        {/* The reviewer's line is a placeholder until someone seals the plan.
-            Once they have, the seal replaces it — carrying the name, the moment
-            and the key fingerprint a reader needs to check it against. */}
-        {!signature && (
-          <span className="flex-1 border-t-[1.5px] border-dashed border-[#d7dce5] pt-1.5 text-center text-[11px] text-[#98a2b3]">
-            Semakan Pentadbir
-          </span>
-        )}
-      </div>
+        <tbody>
+          <tr>
+            <Label>NAMA</Label>
+            <Value span={3}>{or(teacherName)}</Value>
+          </tr>
+          <tr>
+            <Label>Subjek</Label>
+            <Value>{or(subjectName ?? "")}</Value>
+            <Label>Nama Kelas</Label>
+            <Value>{or(planClassName ?? "")}</Value>
+          </tr>
+          <tr>
+            <Label>Hari</Label>
+            <Value>{hari}</Value>
+            <Label>Tarikh</Label>
+            <Value>{or(planDate ?? "")}</Value>
+          </tr>
+          <tr>
+            <Label>Masa Mula</Label>
+            <Value>{or(slotTime.slice(0, 5))}</Value>
+            <Label>Masa Tamat</Label>
+            <Value>{or(slotTimeEnd.slice(0, 5))}</Value>
+          </tr>
+          <tr>
+            <Label>Tema / Bidang / Tajuk</Label>
+            <Value span={3}>{or(temaLengkap(payload))}</Value>
+          </tr>
+          <tr>
+            <Label>Standard Kandungan</Label>
+            <Value span={3}>{or(payload.standard_kandungan)}</Value>
+          </tr>
+          <tr>
+            <Label>Standard Pembelajaran</Label>
+            <Value span={3}>{or(payload.standard_pembelajaran)}</Value>
+          </tr>
+          <tr>
+            <Label>Objektif</Label>
+            <Value span={3}>{or(payload.objektif)}</Value>
+          </tr>
+          <tr>
+            <Label>Kriteria Kejayaan</Label>
+            <Value span={3}>{or(payload.kriteria_kejayaan)}</Value>
+          </tr>
+          <tr>
+            <Label>Aktiviti PdPC</Label>
+            <Value span={3}>
+              {payload.aktiviti.length === 0 ? (
+                <span className="italic text-[#98a2b3]">— belum diisi —</span>
+              ) : (
+                payload.aktiviti.map((a, i) => (
+                  <span
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: append-only,
+                       never reordered, no per-item state — the rule guards against
+                       state following an item across a reorder, which cannot
+                       happen on a static printed list. */
+                    key={`${a.nama}-${i}`}
+                    className={cn("block", a.sub && "pl-5 before:mr-1 before:content-['-']")}
+                  >
+                    {or(a.nama)}
+                  </span>
+                ))
+              )}
+            </Value>
+          </tr>
+          <tr>
+            <Label>Refleksi</Label>
+            <Value span={3}>{or(payload.refleksi)}</Value>
+          </tr>
+        </tbody>
+      </table>
 
       <SignatureSeal
         signature={signature ?? null}
         state={signatureState}
         variant="print"
-        className="mt-2"
+        className="mt-3"
       />
     </article>
-  );
-}
-
-function Meta({ payload }: { payload: RphPayload }) {
-  const cell = "border border-[#d7dce5] px-2 py-1.5";
-  const head = cn(cell, "bg-[#f7f9fc] text-left text-[12px] font-semibold text-[#344054]");
-
-  return (
-    <table className="mb-3 w-full border-collapse">
-      <tbody>
-        <tr>
-          <th className={cn(head, "w-[148px]")} scope="row">
-            Standard Kandungan
-          </th>
-          <td className={cell} colSpan={3}>
-            {payload.standard_kandungan || (
-              <span className="text-[#98a2b3] italic">— belum dipilih —</span>
-            )}
-          </td>
-        </tr>
-        <tr>
-          <th className={head} scope="row">
-            Standard Pembelajaran
-          </th>
-          <td className={cell} colSpan={3}>
-            {payload.standard_pembelajaran || (
-              <span className="text-[#98a2b3] italic">— belum dipilih —</span>
-            )}
-          </td>
-        </tr>
-        <tr>
-          <th className={head} scope="row">
-            Fasa / Tema
-          </th>
-          <td className={cell}>{payload.fasa_tema || "—"}</td>
-          <th className={cn(head, "w-[148px]")} scope="row">
-            Bilangan Murid
-          </th>
-          <td className={cn(cell, "num")}>{payload.bilangan_murid ?? "—"}</td>
-        </tr>
-      </tbody>
-    </table>
-  );
-}
-
-function ActivityTable({ payload }: { payload: RphPayload }) {
-  const cell = "border border-[#d7dce5] px-2 py-1.5";
-  const head = cn(cell, "bg-[#fbfcfe] text-left text-[11.5px] font-semibold text-[#344054]");
-  return (
-    <table className="w-full border-collapse">
-      <thead>
-        <tr>
-          <th className={cn(head, "w-[58px]")} scope="col">
-            Masa
-          </th>
-          <th className={head} scope="col">
-            Guru
-          </th>
-          <th className={head} scope="col">
-            Murid
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {payload.aktiviti.map((a, i) => (
-          <tr key={`${a.masa}-${i}`}>
-            <td className={cn(cell, "num")}>{a.masa}</td>
-            <td className={cell}>{a.aktiviti_guru}</td>
-            <td className={cell}>{a.aktiviti_murid}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function Section({
-  title,
-  done,
-  hint,
-  children,
-}: {
-  title: string;
-  done: boolean;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="mb-2.5 overflow-hidden rounded-[3px] border border-[#d7dce5]">
-      <div className="flex items-center justify-between border-b border-[#d7dce5] bg-[#f7f9fc] px-2.5 py-1.5 text-[11.5px] font-semibold text-[#344054]">
-        <span>{title}</span>
-        <span
-          className={cn(
-            "text-[10px] font-semibold",
-            done ? "text-[#067647]" : "text-[#98a2b3]",
-          )}
-        >
-          {hint ?? (done ? "✓ lengkap" : "belum diisi")}
-        </span>
-      </div>
-      <div className="px-2.5 py-2 leading-[1.55]">{children}</div>
-    </div>
   );
 }

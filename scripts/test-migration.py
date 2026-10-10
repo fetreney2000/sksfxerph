@@ -51,6 +51,9 @@ def main() -> int:
     delta6 = (ROOT / "db" / "migrations" / "006_google_identity.sql").read_text(
         encoding="utf-8"
     )
+    delta7 = (ROOT / "db" / "migrations" / "007_school_template.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -153,8 +156,9 @@ def main() -> int:
             run(delta4, "004")
             run(delta5, "005")
             run(delta6, "006")
+            run(delta7, "007")
         print(
-            "  [OK ] migration applied (001a→006, old signature pre-installed)"
+            "  [OK ] migration applied (001a→007, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -453,6 +457,55 @@ def main() -> int:
             check("google_sub is uniquely constrained", cur.fetchone()[0] == 1)
     except Exception as e:  # noqa: BLE001
         check("006 google identity", False, str(e).splitlines()[0][:140])
+
+    # ── 007: the school's own RPH template ───────────────────────────────────
+    try:
+        with conn.cursor() as cur:
+            # Masa Tamat is printed, so it has to be stored. The default matters
+            # as much as the column: without it every plan written before this
+            # migration would print a dash where a time belongs.
+            cur.execute(
+                "select column_default from information_schema.columns "
+                "where table_schema='erph' and table_name='rph_document' "
+                "and column_name='slot_time_end'"
+            )
+            row = cur.fetchone()
+            check(
+                "rph_document gained slot_time_end, defaulted",
+                row is not None and "12:40" in (row[0] or ""),
+                str(row[0]) if row else "missing",
+            )
+
+            # Kriteria Kejayaan replaces Intervensi/EMK. A payload that fills
+            # every printed row scores 100 with no intervensi anywhere in it…
+            cur.execute(
+                "select erph.rph_completeness(jsonb_build_object("
+                "'standard_kandungan','x','standard_pembelajaran','y',"
+                "'objektif','z','kriteria_kejayaan','k',"
+                "'aktiviti', jsonb_build_array(jsonb_build_object('nama','a')),"
+                "'refleksi','r'))"
+            )
+            check(
+                "007 completeness scores Kriteria Kejayaan → 100",
+                cur.fetchone()[0] == 100,
+            )
+
+            # …and a payload that carries a full Intervensi but no Kriteria
+            # Kejayaan stops at 75. That is the whole point of the redefinition:
+            # content the printed form never shows must not be worth points.
+            cur.execute(
+                "select erph.rph_completeness(jsonb_build_object("
+                "'standard_kandungan','x','standard_pembelajaran','y',"
+                "'objektif','z','intervensi','i','emk', jsonb_build_array('e'),"
+                "'aktiviti', jsonb_build_array(jsonb_build_object('nama','a')),"
+                "'refleksi','r'))"
+            )
+            check(
+                "007 Intervensi/EMK no longer score → 75",
+                cur.fetchone()[0] == 75,
+            )
+    except Exception as e:  # noqa: BLE001
+        check("007 school template", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

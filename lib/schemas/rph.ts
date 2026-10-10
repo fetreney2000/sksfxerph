@@ -3,18 +3,42 @@ import { z } from "zod";
 /**
  * eRPH payload — the JSONB `payload` column of `rph_document` (db/schema.sql).
  *
- * `payload_version` exists because KPM changes the form shape between circulars;
- * bump it and add a migration when that happens.
+ * ## This is the school's form, not the KPM circular
+ *
+ * Shaped against the template the school actually submits — a cover sheet plus
+ * one page per plan, with pale-green label cells — rather than the generic KPM
+ * RPH. The differences are not cosmetic and they are not mine to keep:
+ *
+ *   · activities are a **list of names**, some indented as sub-items, not a
+ *     timed table of teacher/student actions;
+ *   · **Kriteria Kejayaan** is a field and the KPM form has no such section;
+ *   · EMK, KBAT, Intervensi, murid berkeperluan khas and the Kod SK/SP codes
+ *     are not on the printed form at all, so requiring them would make a
+ *     teacher fill in content nobody will ever see.
+ *
+ * `payload_version` is bumped because of that reshape. Old documents keep their
+ * keys — zod strips what it does not know — so nothing written before this
+ * change is unreadable, it simply carries less than a new one.
  */
-export const PAYLOAD_VERSION = 1;
+export const PAYLOAD_VERSION = 2;
 
-/* ── Primitive schemas ─────────────────────────────────────────────────────── */
+/* ── Primitive schemas ──────────────────────────────────────────────────── */
 
-/** A single PdPc activity row (the mini-table inside the RPH paper). */
+/**
+ * One entry of "Aktiviti PdPC".
+ *
+ * A name, optionally an indented sub-item — which is what the printed form
+ * does: a heading, then hyphen-prefixed entries beneath it ("Permainan
+ * Dalaman" → "- Catur", "- Congkak").
+ */
 export const aktivitiSchema = z.object({
-  masa: z.string().min(1, "Masa diperlukan"),
-  aktiviti_guru: z.string().min(1, "Aktiviti guru diperlukan"),
-  aktiviti_murid: z.string().min(1, "Aktiviti murid diperlukan"),
+  nama: z.string().min(1, "Nama aktiviti diperlukan"),
+  /**
+   * Printed indented behind a hyphen rather than flush. Optional rather than
+   * defaulted, so an activity saved before this field existed still parses —
+   * every one of them is a top-level entry, which is what `undefined` means.
+   */
+  sub: z.boolean().optional(),
 });
 
 export type Aktiviti = z.infer<typeof aktivitiSchema>;
@@ -29,69 +53,73 @@ export type Aktiviti = z.infer<typeof aktivitiSchema>;
 export const rphPayloadSchema = z.object({
   payload_version: z.number().int().default(PAYLOAD_VERSION),
 
-  // ── Profil (Step 1) ──
-  bilangan_murid: z.number().int().min(0).max(100).optional(),
-  fasa_tema: z.string().optional(),
+  // ── Profil ───────────────────────────────────────────────────────────────
+  // Printed together as the single "Tema/Bidang/Tajuk" row. Kept as three
+  // fields rather than one so an existing plan's `fasa_tema` and `bidang`
+  // survive the reshape, and a teacher can fill whichever the school uses.
+  fasa_tema: z.string().default(""),
+  bidang: z.string().default(""),
+  tajuk: z.string().default(""),
 
-  // ── DSKP (Step 2) ──
-  kod_sk: z.string().optional(),
+  // ── DSKP ─────────────────────────────────────────────────────────────────
   standard_kandungan: z.string().default(""),
-  kod_sp: z.string().optional(),
   standard_pembelajaran: z.string().default(""),
-  bidang: z.string().optional(),
   objektif: z.string().default(""),
 
-  // ── PdPc (Step 3) ──
+  // ── PdPc ─────────────────────────────────────────────────────────────────
   aktiviti: z.array(aktivitiSchema).default([]),
-  emk: z.array(z.string()).default([]),
-  kbat: z.string().default(""),
+  kriteria_kejayaan: z.string().default(""),
 
-  // ── Refleksi (Step 4) ──
+  // ── Refleksi ─────────────────────────────────────────────────────────────
   refleksi: z.string().default(""),
-  intervensi: z.string().default(""),
 });
 
 export type RphPayload = z.infer<typeof rphPayloadSchema>;
 
 export const emptyPayload = (): RphPayload => rphPayloadSchema.parse({});
 
-/* ── KPM completeness rules ────────────────────────────────────────────────── */
+/** "Tema/Bidang/Tajuk" is one printed cell; the three parts are joined here. */
+export const temaLengkap = (p: RphPayload): string =>
+  [p.fasa_tema, p.bidang, p.tajuk]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(" / ");
+
+/* ── KPM completeness rules ─────────────────────────────────────────────── */
 
 /**
  * Four 25-point checks = 0..100.
  *
- * MUST stay byte-for-byte equivalent to `rph_completeness()` in db/schema.sql —
- * tests/unit/completeness.test.ts runs the same fixtures through both rules so
- * the editor's meter and `submit_rph`'s server gate can never disagree.
+ * MUST stay byte-for-byte equivalent to `rph_completeness()` in db/schema.sql
+ * — tests/unit/completeness.test.ts runs the same fixtures through both rules
+ * so the editor's meter and `submit_rph`'s server gate can never disagree.
  *
- *   1. profil        → standard_kandungan + standard_pembelajaran + objektif
- *   2. aktiviti      → non-empty array whose first row has an aktiviti_guru
- *   3. refleksi      → non-empty
- *   4. intervensi    → non-empty  OR  emk has at least one element
+ * The four checkpoints are the four things the printed form cannot be issued
+ * without:
+ *
+ *   1. Standard Kandungan + Standard Pembelajaran
+ *   2. Objektif + Kriteria Kejayaan
+ *   3. at least one Aktiviti PdPC
+ *   4. Refleksi
  */
 export function completeness(payload: RphPayload): 0 | 25 | 50 | 75 | 100 {
   let score = 0;
 
   const nonEmpty = (s: string | undefined) => s !== undefined && s.trim() !== "";
 
-  if (
-    nonEmpty(payload.standard_kandungan) &&
-    nonEmpty(payload.standard_pembelajaran) &&
-    nonEmpty(payload.objektif)
-  ) {
+  if (nonEmpty(payload.standard_kandungan) && nonEmpty(payload.standard_pembelajaran)) {
     score += 25;
   }
 
-  const first = payload.aktiviti[0];
-  if (payload.aktiviti.length > 0 && first && nonEmpty(first.aktiviti_guru)) {
+  if (nonEmpty(payload.objektif) && nonEmpty(payload.kriteria_kejayaan)) {
+    score += 25;
+  }
+
+  if (payload.aktiviti.some((a) => nonEmpty(a.nama))) {
     score += 25;
   }
 
   if (nonEmpty(payload.refleksi)) {
-    score += 25;
-  }
-
-  if (nonEmpty(payload.intervensi) || payload.emk.length > 0) {
     score += 25;
   }
 
@@ -101,21 +129,16 @@ export function completeness(payload: RphPayload): 0 | 25 | 50 | 75 | 100 {
 /** Step-level completion flags — drives the stepper and the checklist. */
 export function stepStatus(payload: RphPayload) {
   const ne = (s: string) => s.trim() !== "";
-  const first = payload.aktiviti[0];
   return {
     profil: ne(payload.standard_kandungan) && ne(payload.standard_pembelajaran),
     dskp:
       ne(payload.standard_kandungan) &&
       ne(payload.standard_pembelajaran) &&
       ne(payload.objektif),
-    pdpc:
-      payload.aktiviti.length > 0 &&
-      !!first &&
-      ne(first.aktiviti_guru) &&
-      ne(first.aktiviti_murid),
-    refleksi: ne(payload.refleksi) && (ne(payload.intervensi) || payload.emk.length > 0),
+    pdpc: payload.aktiviti.some((a) => ne(a.nama)) && ne(payload.kriteria_kejayaan),
+    refleksi: ne(payload.refleksi),
   } as const;
 }
 
-/** KPM FAQ requires all four sections before a clean submit. */
+/** The printed form needs all four sections before a clean submit. */
 export const isComplete = (p: RphPayload) => completeness(p) === 100;

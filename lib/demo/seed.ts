@@ -30,63 +30,41 @@ export const SUBJECTS = [
 /** A complete plan — completeness = 100, ready to demonstrate the submit gate. */
 const completePayload = () => ({
   ...emptyPayload(),
-  standard_kandungan: "Mengenal, membaca dan menulis semula nombor hingga 100,000",
-  kod_sk: "3.1",
+  fasa_tema: "Nombor & Operasi",
+  bidang: "Nilai tempat",
+  tajuk: "Nombor hingga 100,000",
+  standard_kandungan:
+    "3.1 Menulis semula nombor hingga 100,000 dalam bentuk angka dan perkataan",
   standard_pembelajaran:
     "3.1.1 Menulis semula nombor hingga 100,000 dalam bentuk angka dan perkataan",
-  kod_sp: "3.1.1",
   objektif:
     "Murid dapat menulis semula nombor hingga 100,000 dalam bentuk angka dan perkataan dengan ketepatan 80%.",
   aktiviti: [
-    {
-      masa: "10 minit",
-      aktiviti_guru: "Set induksi: slaid nombor harian (harga barang, bilangan penduduk)",
-      aktiviti_murid: "Mengenal pasti nombor besar dalam kehidupan seharian",
-    },
-    {
-      masa: "20 minit",
-      aktiviti_guru: "Penerangan nilai tempat menggunakan carta digit interaktif",
-      aktiviti_murid: "Saling mengajar dalam kumpulan; melengkapkan carta",
-    },
-    {
-      masa: "15 minit",
-      aktiviti_guru: "PdM: agihan lembaran kerja & pemerhatian",
-      aktiviti_murid: "Menyelesaikan 5 soalan nombor hingga 100,000",
-    },
-    {
-      masa: "5 minit",
-      aktiviti_guru: "Penutup: kuiz pantas “beri contoh nombor 4 angka”",
-      aktiviti_murid: "Menjawab melalui aplikasi papan putih",
-    },
+    { nama: "Set induksi: slaid nombor harian (harga barang, bilangan penduduk)" },
+    { nama: "Mengenal pasti nombor besar dalam kehidupan seharian", sub: true },
+    { nama: "Penerangan nilai tempat menggunakan carta digit interaktif" },
+    { nama: "Saling mengajar dalam kumpulan; melengkapkan carta", sub: true },
+    { nama: "PdPc: agihan lembaran kerja & pemerhatian" },
+    { nama: "Menyelesaikan 5 soalan nombor hingga 100,000", sub: true },
+    { nama: "Penutup: kuiz pantas \u201cberi contoh nombor 4 angka\u201d" },
   ],
-  emk: ["Kerjasama", "Kreativiti", "Nilai Murni: Amanah"],
-  kbat: "Murid menganalisis nilai tempat bagi situasi sebenar.",
+  kriteria_kejayaan:
+    "Murid menulis semula nombor hingga 100,000 dengan ketepatan 80% dalam lembaran kerja.",
   refleksi:
-    "7 daripada 28 murid keliru dengan nilai “puluhan”; kebanyakan boleh diperbaiki melalui penerangan berulang.",
-  intervensi: "Intervensi kumpulan kecil Khamis, 07:00–07:20 untuk 7 murid tersebut.",
-  bilangan_murid: 28,
-  fasa_tema: "Nombor & Operasi",
+    "7 daripada 28 murid keliru dengan nilai \u201cpuluhan\u201d; kebanyakan boleh diperbaiki melalui penerangan berulang.",
 });
 
-/** A partial plan — completeness = 50, demonstrates the submit gate blocking. */
+/**
+ * A partial plan — completeness = 25, so the submit gate blocks on it.
+ *
+ * Only the two DSKP rows are filled. That is deliberate: it is the fixture
+ * that proves `submit_rph` refuses an incomplete plan, and a half-filled plan
+ * that happens to score 100 would stop proving it the moment the rules change.
+ */
 const partialPayload = () => ({
   ...emptyPayload(),
   standard_kandungan: "Pecahan setara dan ringkas",
-  kod_sk: "2.4",
-  standard_pembelajaran: "2.4.1 Membandingkan pecahan setara",
-  kod_sp: "2.4.1",
-  objektif: "Murid dapat mengenal pasti pecahan setara.",
-  aktiviti: [
-    {
-      masa: "15 minit",
-      aktiviti_guru: "Penerangan pecahan setara dengan gambar",
-      aktiviti_murid: "Menyusun kad pecahan",
-    },
-  ],
-  emk: [],
-  refleksi: "",
-  intervensi: "",
-  bilangan_murid: 30,
+  standard_pembelajaran: "2.4.1 Menyatakan pecahan yang setara",
 });
 
 export interface SeedPlan {
@@ -96,6 +74,7 @@ export interface SeedPlan {
   subjectName: string;
   dayIndex: number;
   time: string;
+  endTime: string;
   status: RphDocument["status"];
   grade?: 0 | 1;
   /**
@@ -117,6 +96,7 @@ const PLAN_SEED: SeedPlan[] = [
     subjectName: "Matematik",
     dayIndex: 0,
     time: "07:30",
+    endTime: "12:40",
     status: "approved",
     grade: 1,
     makePayload: completePayload,
@@ -128,6 +108,7 @@ const PLAN_SEED: SeedPlan[] = [
     subjectName: "Matematik",
     dayIndex: 0,
     time: "09:15",
+    endTime: "12:40",
     status: "approved",
     grade: 1,
     makePayload: completePayload,
@@ -139,6 +120,7 @@ const PLAN_SEED: SeedPlan[] = [
     subjectName: "Matematik",
     dayIndex: 2,
     time: "07:30",
+    endTime: "12:40",
     status: "draft",
     makePayload: partialPayload,
   },
@@ -149,6 +131,7 @@ const PLAN_SEED: SeedPlan[] = [
     subjectName: "Matematik",
     dayIndex: 3,
     time: "09:15",
+    endTime: "12:40",
     status: "returned",
     makePayload: partialPayload,
   },
@@ -159,6 +142,7 @@ const PLAN_SEED: SeedPlan[] = [
     subjectName: "Matematik",
     dayIndex: 4,
     time: "11:00",
+    endTime: "12:40",
     status: "submitted",
     makePayload: completePayload,
   },
@@ -195,6 +179,7 @@ export async function seedLocalData(weekNo: number): Promise<void> {
         weekNo,
         planDate,
         slotTime: seed.time,
+        slotTimeEnd: seed.endTime,
         status: seed.status,
         payload: seed.makePayload(),
         version: 1,

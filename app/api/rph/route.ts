@@ -26,6 +26,7 @@ export interface DocumentRow {
   week_no: number;
   plan_date: string;
   slot_time: string | null;
+  slot_time_end: string | null;
   status: string;
   payload: unknown;
   version: number;
@@ -51,9 +52,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { data, error } = await gate.db
     .from("rph_document")
     .select(
-      "id, class_id, subject_code, session, week_no, plan_date, slot_time, status, " +
-        "payload, version, content_hash, created_at, updated_at, submitted_at, deleted_at, " +
-        "grade, reviewed_at, class:class_id(nama), subject:subject_code(nama)",
+      "id, class_id, subject_code, session, week_no, plan_date, slot_time, " +
+        "slot_time_end, status, payload, version, content_hash, created_at, " +
+        "updated_at, submitted_at, deleted_at, grade, reviewed_at, " +
+        "class:class_id(nama), subject:subject_code(nama)",
     )
     .eq("school_id", schoolId)
     .eq("owner_id", gate.user.id)

@@ -13,108 +13,94 @@ import {
  * `completeness()` must agree with `rph_completeness()` in db/schema.sql —
  * the client shows the teacher a meter, the server gates submission on the
  * same number, and a disagreement would mean the editor promises something
- * `submit_rph()` then refuses. Each case below documents its SQL equivalent.
+ * `submit_rph()` then refuses.
+ *
+ * The four checks are the four rows the school's printed form cannot be issued
+ * without, and they were redefined along with the template: Kriteria Kejayaan
+ * is scored, and EMK / KBAT / Intervensi — not on the printed form at all —
+ * no longer are.
  */
 const payload = (over: Partial<RphPayload>): RphPayload => ({
   ...emptyPayload(),
   ...over,
 });
 
-const FULL_PROFILE = {
-  standard_kandungan: "Nombor hingga 100,000",
-  standard_pembelajaran: "3.1.1 Menulis semula nombor",
-  objektif: "Murid dapat menulis semula nombor hingga 100,000.",
+/** Checkpoint 1 — the two DSKP rows, and nothing else. */
+const DSKP = {
+  standard_kandungan: "3.1 Menulis semula nombor hingga 100,000",
+  standard_pembelajaran: "3.1.1 Menulis semula nombor hingga 100,000",
 };
 
-const FULL_ACTIVITY = {
-  aktiviti: [{ masa: "10 minit", aktiviti_guru: "Set induksi", aktiviti_murid: "Menjawab" }],
+/** Checkpoint 2 — Objektif *and* Kriteria Kejayaan, together. */
+const OBJEKTIF = {
+  objektif: "Murid dapat menulis semula nombor hingga 100,000.",
+  kriteria_kejayaan: "Murid menulis semula nombor dengan betul.",
 };
+
+/** Checkpoint 3 — at least one activity carrying a name. */
+const AKTIVITI = { aktiviti: [{ nama: "Set induksi kad nilai tempat" }] };
+
+/** Checkpoint 4. */
+const REFLEKSI = { refleksi: "7 daripada 28 murid keliru nilai puluhan." };
+
+const FULL = { ...DSKP, ...OBJEKTIF, ...AKTIVITI, ...REFLEKSI };
 
 describe("completeness — four 25-point checks", () => {
   it("empty payload scores 0 (all four SQL conditions false)", () => {
     expect(completeness(emptyPayload())).toBe(0);
   });
 
-  it("profil only: SK + SP + objektif → 25", () => {
-    expect(completeness(payload(FULL_PROFILE))).toBe(25);
+  it("the two DSKP rows alone → 25", () => {
+    expect(completeness(payload(DSKP))).toBe(25);
   });
 
-  it("profil is NOT satisfied when only SK and SP are present", () => {
-    // SQL: requires all three non-empty — a missing objektif must not score.
+  it("objektif without Kriteria Kejayaan does not score", () => {
+    // The printed form has a Kriteria Kejayaan row. A plan without it is
+    // incomplete however good the objektif is — SQL checks both.
     expect(
       completeness(
         payload({
-          standard_kandungan: "x",
-          standard_pembelajaran: "y",
-          objektif: "",
-        }),
-      ),
-    ).toBe(0);
-  });
-
-  it("profil + aktiviti → 50", () => {
-    expect(completeness(payload({ ...FULL_PROFILE, ...FULL_ACTIVITY }))).toBe(50);
-  });
-
-  it("an aktiviti array with an empty aktiviti_guru does not score", () => {
-    // SQL checks `(v_act->0)->>'aktiviti_guru'` is non-blank specifically —
-    // a row with only murid text must not count as a plan.
-    expect(
-      completeness(
-        payload({
-          ...FULL_PROFILE,
-          aktiviti: [{ masa: "10 minit", aktiviti_guru: "   ", aktiviti_murid: "jawab" }],
+          ...DSKP,
+          objektif: "Murid dapat…",
+          kriteria_kejayaan: "   ",
         }),
       ),
     ).toBe(25);
   });
 
-  it("profil + aktiviti + refleksi → 75", () => {
+  it("all three filled → 75", () => {
+    expect(completeness(payload({ ...DSKP, ...OBJEKTIF, ...AKTIVITI }))).toBe(75);
+  });
+
+  it("an activity with a blank name does not score", () => {
+    // SQL asks whether *any* element carries a `nama`, not whether the first
+    // does — an activity list whose first row is a blank separator still has
+    // activities in it, and refusing to submit would be a gate that cannot be
+    // satisfied by filling the form correctly.
     expect(
-      completeness(payload({ ...FULL_PROFILE, ...FULL_ACTIVITY, refleksi: "Murid faham." })),
+      completeness(
+        payload({ ...DSKP, ...OBJEKTIF, aktiviti: [{ nama: "" }, { nama: "Catur" }] }),
+      ),
+    ).toBe(75);
+    expect(completeness(payload({ ...DSKP, ...OBJEKTIF, aktiviti: [{ nama: "   " }] }))).toBe(
+      50,
+    );
+  });
+
+  it("sub-activities count like any other", () => {
+    expect(
+      completeness(
+        payload({ ...DSKP, ...OBJEKTIF, aktiviti: [{ nama: "Congkak", sub: true }] }),
+      ),
     ).toBe(75);
   });
 
-  it("intervensi alone completes the fourth check → 100", () => {
-    expect(
-      completeness(
-        payload({
-          ...FULL_PROFILE,
-          ...FULL_ACTIVITY,
-          refleksi: "ok",
-          intervensi: "Intervensi kumpulan kecil.",
-        }),
-      ),
-    ).toBe(100);
-  });
-
-  it("EMK alone also completes the fourth check (SQL: OR emk length > 0)", () => {
-    expect(
-      completeness(
-        payload({
-          ...FULL_PROFILE,
-          ...FULL_ACTIVITY,
-          refleksi: "ok",
-          emk: ["Kerjasama"],
-        }),
-      ),
-    ).toBe(100);
-  });
-
   it("whitespace-only refleksi does not score", () => {
-    expect(
-      completeness(payload({ ...FULL_PROFILE, ...FULL_ACTIVITY, refleksi: "   \n  " })),
-    ).toBe(50);
+    expect(completeness(payload({ ...FULL, refleksi: "   \n  " }))).toBe(75);
   });
 
   it("fully complete payload → 100 and isComplete() true", () => {
-    const full = payload({
-      ...FULL_PROFILE,
-      ...FULL_ACTIVITY,
-      refleksi: "7 daripada 28 murid keliru nilai puluhan.",
-      intervensi: "Intervensi kumpulan kecil Khamis.",
-      emk: ["Kerjasama", "Kreativiti"],
-    });
+    const full = payload(FULL);
     expect(completeness(full)).toBe(100);
     expect(isComplete(full)).toBe(true);
   });
@@ -122,9 +108,10 @@ describe("completeness — four 25-point checks", () => {
   it("always returns a multiple of 25 (never a partial score)", () => {
     const cases: RphPayload[] = [
       emptyPayload(),
-      payload(FULL_PROFILE),
-      payload({ ...FULL_PROFILE, ...FULL_ACTIVITY }),
-      payload({ ...FULL_PROFILE, refleksi: "x" }),
+      payload(DSKP),
+      payload({ ...DSKP, ...AKTIVITI }),
+      payload({ ...DSKP, ...OBJEKTIF, refleksi: "x" }),
+      payload(FULL),
     ];
     for (const c of cases) {
       expect(completeness(c) % 25).toBe(0);
@@ -133,16 +120,8 @@ describe("completeness — four 25-point checks", () => {
 });
 
 describe("stepStatus — drives the stepper and the reviewer checklist", () => {
-  const full = payload({
-    ...FULL_PROFILE,
-    ...FULL_ACTIVITY,
-    refleksi: "ok",
-    intervensi: "ok",
-    emk: ["Kerjasama"],
-  });
-
   it("reports every section complete for a finished plan", () => {
-    expect(stepStatus(full)).toEqual({
+    expect(stepStatus(payload(FULL))).toEqual({
       profil: true,
       dskp: true,
       pdpc: true,
@@ -151,17 +130,20 @@ describe("stepStatus — drives the stepper and the reviewer checklist", () => {
   });
 
   it("flags the missing section rather than failing the whole plan", () => {
-    const s = stepStatus(payload(FULL_PROFILE));
-    expect(s.dskp).toBe(true);
+    const s = stepStatus(payload({ ...DSKP, objektif: "", kriteria_kejayaan: "" }));
+    expect(s.profil).toBe(true);
+    expect(s.dskp).toBe(false);
     expect(s.pdpc).toBe(false);
     expect(s.refleksi).toBe(false);
   });
 
-  it("requires aktiviti_murid as well as aktiviti_guru", () => {
+  it("needs Kriteria Kejayaan as well as activities for PdPc", () => {
     const s = stepStatus(
       payload({
-        ...FULL_PROFILE,
-        aktiviti: [{ masa: "10 minit", aktiviti_guru: "Terang", aktiviti_murid: "" }],
+        ...DSKP,
+        ...OBJEKTIF,
+        aktiviti: [{ nama: "Senamrobik" }],
+        kriteria_kejayaan: "   ",
       }),
     );
     expect(s.pdpc).toBe(false);

@@ -347,8 +347,9 @@ def main() -> int:
         full = r.one(
             """select erph.rph_completeness(jsonb_build_object(
                  'standard_kandungan','x','standard_pembelajaran','y','objektif','z',
-                 'aktiviti', jsonb_build_array(jsonb_build_object('aktiviti_guru','a')),
-                 'refleksi','r','intervensi','i'))"""
+                 'kriteria_kejayaan','k',
+                 'aktiviti', jsonb_build_array(jsonb_build_object('nama','a')),
+                 'refleksi','r'))"""
         )[0]
         ok = empty == 0 and full == 100
         print(f"  [{'OK ' if ok else 'FAIL'}] rph_completeness 0 -> 100 (got {empty} -> {full})")

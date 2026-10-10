@@ -11,8 +11,8 @@ describe("hashPayload", () => {
   });
 
   it("includes nested keys (regression: JSON.stringify replacer dropped them)", () => {
-    const one = { aktiviti: [{ aktiviti_guru: "A", aktiviti_murid: "B" }] };
-    const two = { aktiviti: [{ aktiviti_guru: "A", aktiviti_murid: "C" }] };
+    const one = { aktiviti: [{ nama: "Set induksi", sub: false }] };
+    const two = { aktiviti: [{ nama: "Set induksi", sub: true }] };
     expect(hashPayload(one)).not.toBe(hashPayload(two));
   });
 
