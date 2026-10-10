@@ -43,6 +43,7 @@ import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data
 import { useSession } from "@/lib/hooks/use-session";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { ms } from "@/lib/i18n/ms";
+import { takeImport } from "@/lib/import/pending";
 import { RpcError, submitRph } from "@/lib/rpc";
 import {
   type Aktiviti,
@@ -297,10 +298,16 @@ export function RphEditor({ docId }: { docId?: string }) {
     let cancelled = false;
     void (async () => {
       const params = new URLSearchParams(window.location.search);
-      const seed = await loadSeed(
-        params.get("template") ?? undefined,
-        params.get("reuse") === "1",
-      );
+      // An imported .docx wins over a template or last week's plan: the
+      // teacher chose that file moments ago, which is more specific than
+      // anything else that could be offered here.
+      const imported = takeImport();
+      // `loadSeed` is skipped entirely when an import is present, so the two
+      // never both contribute a field and leave the teacher wondering which
+      // one a value came from.
+      const loaded = imported
+        ? null
+        : await loadSeed(params.get("template") ?? undefined, params.get("reuse") === "1");
       if (cancelled) return;
 
       const now = Date.now();
@@ -313,17 +320,17 @@ export function RphEditor({ docId }: { docId?: string }) {
         ownerId: LOCAL_OWNER_ID,
         classId: cls.id,
         className: cls.nama,
-        subjectCode: seed?.subjectCode ?? subject?.code ?? "MAT",
-        subjectName: seed?.subjectName ?? subject?.nama ?? "Matematik",
+        subjectCode: loaded?.subjectCode ?? subject?.code ?? "MAT",
+        subjectName: loaded?.subjectName ?? subject?.nama ?? "Matematik",
         session: currentSession(),
         weekNo: currentWeek(),
         planDate: mytIso(),
-        slotTime: "07:30",
-        slotTimeEnd: "12:40",
+        slotTime: imported?.slotTime ?? "07:30",
+        slotTimeEnd: imported?.slotTimeEnd ?? "12:40",
         status: "draft",
         // A template or last week's plan arrives *here*, not in the database —
         // readable, editable and discardable before anything exists.
-        payload: seed?.payload ?? emptyPayload(),
+        payload: imported?.payload ?? loaded?.payload ?? emptyPayload(),
         version: 1,
         clientUpdatedAt: now,
         createdAt: now,

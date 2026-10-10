@@ -15,7 +15,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type * as React from "react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { WeekSheets } from "@/components/rph/week-sheets";
@@ -41,6 +41,8 @@ import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data
 import { useSignature } from "@/lib/hooks/use-signature";
 import { useWeek } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
+import { parseDocx } from "@/lib/import/docx";
+import { stashImport } from "@/lib/import/pending";
 import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
 
@@ -97,6 +99,28 @@ export default function MingguPage() {
   const printable = week.documents.filter((d) => d.status !== "draft");
 
   const onPrint = () => window.print();
+
+  /**
+   * Bring an existing .docx RPH into the penyunting.
+   *
+   * The parse is heuristic — Word documents disagree about labels — so
+   * nothing is saved here. The file is read, stashed and handed to the
+   * penyunting, where the teacher corrects it and presses Simpan like any
+   * other plan. Importing a file must not leave a draft behind if they
+   * look at the result and decide against it.
+   */
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onImportFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const imported = await parseDocx(file);
+      stashImport(imported);
+      router.push("/editor");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Fail ini tidak dapat dibaca.");
+    }
+  };
 
   return (
     <>
@@ -378,10 +402,23 @@ export default function MingguPage() {
                 tag="Beta"
                 onClick={() => toast("Pilih kelas → objektif & aktiviti dijana automatik")}
               />
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="sr-only"
+                onChange={(e) => {
+                  // Reset after handling: without it, choosing the same file
+                  // twice fires nothing, and a teacher correcting a document
+                  // and re-uploading it is exactly the case that matters.
+                  void onImportFile(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
               <Shortcut
                 icon={<Upload className="h-4 w-4" />}
                 label="Masukkan RPH sedia ada"
-                onClick={() => toast("Muat naik .docx sedia ada — dipecahkan kepada medan RPH")}
+                onClick={() => fileRef.current?.click()}
               />
               <Shortcut
                 icon={<Layers className="h-4 w-4" />}
@@ -394,22 +431,6 @@ export default function MingguPage() {
                 label="Eksport PDF minggu ini"
                 onClick={() => toast("RPH minggu ini dijana sebagai PDF…")}
               />
-              <div className="mt-1 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
-                <svg
-                  className="mt-0.5 h-4 w-4 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  aria-hidden
-                >
-                  <path d="M2 2l20 20M8.6 16.6a5 5 0 0 1 6.8 0M5 12.5a10 10 0 0 1 4-2.4M15 10a10 10 0 0 1 4 2.5M12 20h.01" />
-                </svg>
-                <span>
-                  Boleh disediakan <b>secara luar talian</b> — disimpan pada peranti,
-                  disegerakkan automatik apabila capaian internet kembali.
-                </span>
-              </div>
             </CardContent>
           </Card>
         </div>

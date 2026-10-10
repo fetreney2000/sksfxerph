@@ -4,7 +4,6 @@ import { Command, Moon, Search, Sun } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { ROUTE_META } from "@/components/shell/nav";
 import { NotificationBell } from "@/components/shell/notifications";
-import { SyncChip } from "@/components/shell/sync-chip";
 import { useTheme } from "@/components/shell/theme";
 import { initialsOf, useUser } from "@/components/shell/user-context";
 import { currentWeek } from "@/lib/config";
@@ -54,8 +53,6 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
             ⌘K
           </kbd>
         </button>
-
-        <SyncChip />
 
         <button
           type="button"

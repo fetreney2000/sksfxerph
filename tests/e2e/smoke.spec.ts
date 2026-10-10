@@ -264,20 +264,6 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("sync chip reports local mode, not a stuck queue", async ({ page }) => {
-    const errors = collectErrors(page);
-    await page.goto("/minggu");
-
-    // Local mode must never show a phantom "n belum diselesaikan" — Dexie already holds
-    // the data, so there is nothing pending.
-    await expect(page.getByRole("status")).toHaveText(/Disegerakkan/, {
-      timeout: 15_000,
-    });
-    await expect(page.getByRole("status")).not.toHaveText(/belum diselesaikan/);
-
-    expect(errors, errors.join("\n")).toEqual([]);
-  });
-
   test("offline edit survives a reload (Dexie, not component state)", async ({
     page,
     context,
@@ -296,14 +282,13 @@ test.describe("eRPH smoke", () => {
     const box = page.getByPlaceholder(/Apa yang berlaku/);
     await expect(box).toBeVisible();
 
-    // 2. Cut the network — the whole point of the local-first design.
+    // 2. Cut the network — the whole point of the local-first design. The UI
+    //    no longer says so anywhere; what proves it is that the next steps
+    //    work with the network down.
     await context.setOffline(true);
-    await expect(page.getByText(/Luar talian|belum diselesaikan/).first()).toBeVisible({
-      timeout: 15_000,
-    });
 
     // 3. Edit while offline. This must not throw, warn, or lose the keystrokes.
-    const marker = `Intervensi luar talian ${Date.now()}`;
+    const marker = `Refleksi luar talian ${Date.now()}`;
     await box.fill(marker);
     await expect(box).toHaveValue(marker);
 
