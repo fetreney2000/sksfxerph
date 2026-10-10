@@ -19,7 +19,7 @@ import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
-import { completeness, stepStatus } from "@/lib/schemas/rph";
+import { completeness, normalisePayload, stepStatus } from "@/lib/schemas/rph";
 import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review";
 
 /**
@@ -290,22 +290,21 @@ export default function SemakanPage() {
                     // issued without — not the editor's step grouping, which
                     // is about where a teacher is in the form rather than
                     // what the reviewer will actually receive.
-                    (
-                      [
-                        ["Standard Kandungan", item.payload.standard_kandungan.trim() !== ""],
-                        [
-                          "Standard Pembelajaran",
-                          item.payload.standard_pembelajaran.trim() !== "",
-                        ],
-                        ["Objektif", item.payload.objektif.trim() !== ""],
-                        ["Kriteria Kejayaan", item.payload.kriteria_kejayaan.trim() !== ""],
-                        [
-                          "Aktiviti PdPC",
-                          item.payload.aktiviti.some((a) => a.nama.trim() !== ""),
-                        ],
-                        ["Refleksi", item.payload.refleksi.trim() !== ""],
-                      ] as [string, boolean][]
-                    ).map(([label, ok]) => (
+                    (() => {
+                      // Queue rows arrive straight off the wire, so a plan
+                      // written before the template reshape has no
+                      // `kriteria_kejayaan`. Normalise once here rather than
+                      // guarding six separate field reads.
+                      const p = normalisePayload(item.payload);
+                      return [
+                        ["Standard Kandungan", p.standard_kandungan.trim() !== ""],
+                        ["Standard Pembelajaran", p.standard_pembelajaran.trim() !== ""],
+                        ["Objektif", p.objektif.trim() !== ""],
+                        ["Kriteria Kejayaan", p.kriteria_kejayaan.trim() !== ""],
+                        ["Aktiviti PdPC", p.aktiviti.some((a) => a.nama.trim() !== "")],
+                        ["Refleksi", p.refleksi.trim() !== ""],
+                      ] as [string, boolean][];
+                    })().map(([label, ok]) => (
                       <div
                         key={label}
                         className="flex justify-between border-b border-dashed border-border py-2 text-[13px] last:border-b-0"

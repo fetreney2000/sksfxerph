@@ -2,7 +2,7 @@ import type { DocumentRow } from "@/app/api/rph/route";
 import { schoolCode, supabaseConfigured } from "@/lib/config";
 import { db } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
-import type { RphPayload } from "@/lib/schemas/rph";
+import { normalisePayload } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
 
@@ -100,7 +100,7 @@ function toLocal(row: DocumentRow): RphDocument {
     slotTime: (row.slot_time ?? "07:30").slice(0, 5),
     slotTimeEnd: (row.slot_time_end ?? "12:40").slice(0, 5),
     status: row.status as RphDocument["status"],
-    payload: row.payload as RphPayload,
+    payload: normalisePayload(row.payload),
     version: row.version,
     clientUpdatedAt: new Date(row.updated_at).getTime(),
     createdAt: new Date(row.created_at).getTime(),

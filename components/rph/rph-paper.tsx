@@ -58,8 +58,14 @@ export function Value({ children, span = 1 }: { children: React.ReactNode; span?
   );
 }
 
-/** Empty cells print as a dash, the way the paper form does. */
-const or = (s: string) => (s.trim() ? s.trim() : "—");
+/**
+ * Empty cells print as a dash, the way the paper form does.
+ *
+ * Null-safe on purpose: a document read straight out of storage may predate
+ * the field, and a printed page must never crash on missing data — it prints
+ * the dash and gets on with it.
+ */
+const or = (s: string | null | undefined) => (s?.trim() ? s.trim() : "—");
 
 interface Props {
   payload: RphPayload;

@@ -48,6 +48,7 @@ import {
   type Aktiviti,
   completeness,
   emptyPayload,
+  normalisePayload,
   type RphPayload,
   stepStatus,
 } from "@/lib/schemas/rph";
@@ -262,7 +263,13 @@ export function RphEditor({ docId }: { docId?: string }) {
     // penyunting must never leave a document behind that nobody chose to write.
     if (!id) return { state: "unsaved" as const };
     const doc = await db.documents.get(id);
-    return doc ? { state: "ok" as const, doc } : { state: "missing" as const };
+    // Normalised on read. Dexie holds whatever was saved, and a plan written
+    // before the template reshape carries no `kriteria_kejayaan` — which is
+    // how opening an existing RPH from the archive crashed the editor on the
+    // first field that assumed it existed.
+    return doc
+      ? { state: "ok" as const, doc: { ...doc, payload: normalisePayload(doc.payload) } }
+      : { state: "missing" as const };
   }, [id]);
 
   const persisted = found?.state === "ok" ? found.doc : undefined;

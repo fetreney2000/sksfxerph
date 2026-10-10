@@ -81,7 +81,9 @@ export const emptyPayload = (): RphPayload => rphPayloadSchema.parse({});
 /** "Tema/Bidang/Tajuk" is one printed cell; the three parts are joined here. */
 export const temaLengkap = (p: RphPayload): string =>
   [p.fasa_tema, p.bidang, p.tajuk]
-    .map((s) => s.trim())
+    // Null-safe: a document read straight out of storage may predate any of
+    // these, and the printed cell must still render.
+    .map((s) => s?.trim() ?? "")
     .filter(Boolean)
     .join(" / ");
 
@@ -142,3 +144,58 @@ export function stepStatus(payload: RphPayload) {
 
 /** The printed form needs all four sections before a clean submit. */
 export const isComplete = (p: RphPayload) => completeness(p) === 100;
+
+/* ── Reading old documents ──────────────────────────────────────────────── */
+
+/**
+ * Bring a payload read out of storage or off the wire up to the current shape.
+ *
+ * This exists because zod's defaults only apply if something *parses*, and a
+ * document read straight out of Dexie or a JSONB column never does. Without
+ * it, every plan written before the school's template reshape crashed the
+ * editor on `payload.kriteria_kejayaan.trim()` — a v1 document simply has no
+ * such key.
+ *
+ * Deliberately not `rphPayloadSchema.parse`. The activity schema requires a
+ * non-empty name, which is right for *saving* — a teacher should not submit a
+ * blank row — but wrong for *reading*: a half-typed activity is work in
+ * progress, and failing the whole document to complain about it would trade a
+ * crash for data loss. So this reads fields one at a time and never throws.
+ *
+ * v1 activities are migrated rather than dropped. Their content lived in
+ * `aktiviti_guru`; v2 calls it `nama`. An old plan's teacher actions *were*
+ * its activity names, so dropping them would turn a filled page into an empty
+ * one the next time it printed.
+ */
+export function normalisePayload(input: unknown): RphPayload {
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const rows = Array.isArray(raw.aktiviti) ? raw.aktiviti : [];
+
+  return {
+    payload_version:
+      typeof raw.payload_version === "number" ? raw.payload_version : PAYLOAD_VERSION,
+
+    fasa_tema: str(raw.fasa_tema),
+    bidang: str(raw.bidang),
+    tajuk: str(raw.tajuk),
+
+    standard_kandungan: str(raw.standard_kandungan),
+    standard_pembelajaran: str(raw.standard_pembelajaran),
+    objektif: str(raw.objektif),
+
+    // `nama` first, `aktiviti_guru` as the fallback — rather than branching on
+    // `payload_version`, so a plan edited across the change keeps whichever
+    // half it actually has. Blank rows are dropped here rather than rejected
+    // by zod, for the reason above.
+    aktiviti: rows
+      .map((a) => {
+        const row = (a ?? {}) as Record<string, unknown>;
+        return { nama: str(row.nama) || str(row.aktiviti_guru), sub: row.sub === true };
+      })
+      .filter((a) => a.nama.trim() !== ""),
+
+    kriteria_kejayaan: str(raw.kriteria_kejayaan),
+    refleksi: str(raw.refleksi),
+  };
+}

@@ -6,6 +6,7 @@ import { schoolDays } from "@/lib/date";
 import { db, documentsForWeek } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSession } from "@/lib/hooks/use-session";
+import { normalisePayload } from "@/lib/schemas/rph";
 import type { RphDocument } from "@/lib/types";
 
 export const WEEK = currentWeek();
@@ -94,9 +95,13 @@ export function useArchive() {
         .where("[ownerId+session]")
         .equals([LOCAL_OWNER_ID, session])
         .toArray();
-      return all.sort((a, b) =>
-        a.planDate < b.planDate ? 1 : a.planDate > b.planDate ? -1 : 0,
-      );
+      // Normalised on the way out, not on the way in: Dexie holds whatever
+      // was written, including plans saved before the template reshape, and
+      // a reader that assumes the current shape crashes on them. One place
+      // to normalise beats every screen remembering to.
+      return all
+        .map((d) => ({ ...d, payload: normalisePayload(d.payload) }))
+        .sort((a, b) => (a.planDate < b.planDate ? 1 : a.planDate > b.planDate ? -1 : 0));
     },
     [session],
     [] as RphDocument[],
