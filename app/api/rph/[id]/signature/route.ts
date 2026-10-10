@@ -49,7 +49,11 @@ export async function GET(
     .select("id, school_id, owner_id")
     .eq("id", id)
     .eq("school_id", schoolId)
-    .eq("deleted_at", false)
+    // `.is(…, null)`, not `.eq(…, false)`. `deleted_at` is a timestamptz —
+    // PostgREST rejects a boolean against it outright, so the comparison never
+    // reached the database and every call answered 500, including on a document
+    // that plainly exists.
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (docErr) {

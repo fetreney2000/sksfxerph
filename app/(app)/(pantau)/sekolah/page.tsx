@@ -292,7 +292,16 @@ export default function SekolahPage() {
         <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Prestasi guru</h2>
         <span className="h-px flex-1 bg-border" />
         <span className="num text-xs text-ink-3">
-          Memaparkan {rows.length} daripada {s.activeTeachers} guru
+          {/* Not "…daripada 42 guru". That denominator came from the bundled
+              demo figure, which `useSchoolStats` never overrode — so it sat
+              beside live rows claiming a school-wide total, and for a GPK it
+              was wrong twice over: not the school, and not their scope either.
+              `pantau_teachers` returns the full set this reviewer may see, so
+              the list *is* the population; there is no honest denominator to
+              add. */}
+          {supabaseConfigured
+            ? `${rows.length} guru`
+            : `Memaparkan ${rows.length} daripada ${s.activeTeachers} guru`}
         </span>
       </div>
 
