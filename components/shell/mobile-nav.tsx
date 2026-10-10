@@ -40,6 +40,7 @@ export function MobileNav() {
 
   return (
     <nav
+      data-print="chrome"
       aria-label="Navigasi utama mudah alih"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-[var(--topbar-bg)] pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
     >

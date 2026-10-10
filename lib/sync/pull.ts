@@ -109,5 +109,27 @@ function toLocal(row: DocumentRow): RphDocument {
     // Narrowed explicitly: the column is `smallint`, the document type is
     // `0 | 1`, and nothing between the two should be guessed at.
     ...(row.grade === 1 ? { grade: 1 as const } : row.grade === 0 ? { grade: 0 as const } : {}),
+    // The newest catatan the reviewer left. Ordered here rather than trusted
+    // from the wire: PostgREST's default order for an embedded collection is
+    // not a promise, and printing an older comment than the one that governed
+    // the current status would tell a teacher to fix the wrong thing.
+    ...(latestComment(row) ? { reviewComment: latestComment(row) } : {}),
   };
+}
+
+/** Newest non-empty `rph_review.comment`, or null when the reviewer wrote none. */
+function latestComment(row: {
+  rph_review?: { comment: string | null; created_at: string }[] | null;
+}): string | null {
+  const rows = [...(row.rph_review ?? [])].sort(
+    (a, b) =>
+      // Newest first; a missing/invalid timestamp sorts last rather than
+      // throwing, because a bad row must not take the whole pull down.
+      Date.parse(b.created_at) - Date.parse(a.created_at),
+  );
+  for (const r of rows) {
+    const text = r.comment?.trim();
+    if (text) return r.comment;
+  }
+  return null;
 }

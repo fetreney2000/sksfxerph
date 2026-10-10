@@ -42,6 +42,7 @@ export const ms = {
     onTime: "Ketepatan masa",
     weeklySchedule: "Jadual PdP minggu ini",
     newRph: "RPH baharu",
+    printWeek: "Cetak minggu",
     reuseLast: "Guna semula minggu lepas",
     shortcuts: "Pintasan",
     activity: "Aktiviti semakan terkini",

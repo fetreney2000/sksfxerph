@@ -8,14 +8,17 @@ import {
   Download,
   Layers,
   Plus,
+  Printer,
   Target,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type * as React from "react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/rph/status-badge";
+import { WeekSheets } from "@/components/rph/week-sheets";
 import { givenName, useUser } from "@/components/shell/user-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -35,8 +38,10 @@ import { currentWeek, weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel } from "@/lib/date";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
+import { useSignature } from "@/lib/hooks/use-signature";
 import { useWeek } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
+import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
 
 const WEEK = currentWeek();
@@ -70,306 +75,361 @@ export default function MingguPage() {
     );
   };
 
+  /**
+   * The week's pentadbir, for the cover sheet.
+   *
+   * Signatures are per plan, but the cover carries one — and every plan in a
+   * week is sealed by the same person, so any of them speaks for the sheet.
+   * The newest is taken rather than the first: if the week was returned and
+   * then re-approved, the cover should carry the approval that stands, not
+   * the rejection that preceded it.
+   */
+  const sealedPlan = useMemo(() => {
+    const approved = week.documents.filter((d) => d.status === "approved");
+    if (approved.length === 0) return undefined;
+    return approved.reduce((a, b) => (a.clientUpdatedAt >= b.clientUpdatedAt ? a : b));
+  }, [week.documents]);
+  const weekSignature = useSignature(sealedPlan?.id, sealedPlan?.payload);
+
+  // The whole week, or nothing: a stack with one plan missing is a stack the
+  // district will send back, so it is better for the teacher to see the gap
+  // here than on paper.
+  const printable = week.documents.filter((d) => d.status !== "draft");
+
+  const onPrint = () => window.print();
+
   return (
     <>
-      {/* ── Greeting ─────────────────────────────────────────────────────── */}
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-[21px] font-extrabold tracking-[-0.6px]">
-            {ms.dashboard.greeting}, {givenName(me.fullName)}
-          </h2>
-          <p className="text-[13px] text-ink-3">
-            Anda sudah menghantar{" "}
-            <b className="text-ink">
-              {week.submitted} daripada {week.total || "—"}
-            </b>{" "}
-            RPH minggu ini.
-            {week.drafts > 0 && ` Tinggal ${week.drafts} sebelum Jumaat.`}
-          </p>
-        </div>
-        {/* Wraps on a narrow screen rather than pushing the page sideways:
+      {/* Screen-only. `@media print` drops this and shows the sheets below
+          instead, so printing the week does not also print the dashboard the
+          teacher was looking at when they pressed the button. */}
+      <div data-print="screen">
+        {/* ── Greeting ─────────────────────────────────────────────────────── */}
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-[21px] font-extrabold tracking-[-0.6px]">
+              {ms.dashboard.greeting}, {givenName(me.fullName)}
+            </h2>
+            <p className="text-[13px] text-ink-3">
+              Anda sudah menghantar{" "}
+              <b className="text-ink">
+                {week.submitted} daripada {week.total || "—"}
+              </b>{" "}
+              RPH minggu ini.
+              {week.drafts > 0 && ` Tinggal ${week.drafts} sebelum Jumaat.`}
+            </p>
+          </div>
+          {/* Wraps on a narrow screen rather than pushing the page sideways:
             two long Malay labels side by side measure more than a 375px phone
             has after the page's own padding, and a flex row does not wrap or
             shrink on its own. */}
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <Button variant="secondary" className="flex-1 sm:flex-none" onClick={onReuse}>
-            <Layers className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-            {ms.dashboard.reuseLast}
-          </Button>
-          <Button className="flex-1 sm:flex-none" onClick={onNew}>
-            <Plus className="h-4 w-4" strokeWidth={2.2} aria-hidden />
-            {ms.dashboard.newRph}
-          </Button>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <Button variant="secondary" className="flex-1 sm:flex-none" onClick={onReuse}>
+              <Layers className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              {ms.dashboard.reuseLast}
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1 sm:flex-none"
+              onClick={onPrint}
+              // Nothing to print yet. A cover sheet over an empty week is a page
+              // that says a teacher teaches nothing.
+              disabled={printable.length === 0}
+            >
+              <Printer className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              {ms.dashboard.printWeek}
+            </Button>
+            <Button className="flex-1 sm:flex-none" onClick={onNew}>
+              <Plus className="h-4 w-4" strokeWidth={2.2} aria-hidden />
+              {ms.dashboard.newRph}
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* ── Deadline banner ──────────────────────────────────────────────── */}
-      <div className="relative mb-4 flex items-center gap-4 overflow-hidden rounded-[14px] border border-primary-soft-2 bg-gradient-to-r from-primary-soft to-surface p-4">
-        <span className="grid h-10.5 w-10.5 shrink-0 place-items-center rounded-[11px] border border-primary-soft-2 bg-surface text-primary shadow-xs">
-          <Clock3 className="h-5 w-5" strokeWidth={1.8} aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h4 className="text-sm font-bold tracking-[-0.15px]">
-            {ms.dashboard.deadline}: <span className="num">{deadlineLabel(deadline)}</span>
-          </h4>
-          <p className="text-[12.8px] text-ink-2">
-            {week.drafts > 0 ? (
-              <>
-                <b>{week.drafts} RPH</b> belum dihantar untuk Minggu {WEEK}.{" "}
-              </>
-            ) : null}
-            <b>{ms.dashboard.noPrint}</b>
-          </p>
-          <Progress
-            value={pct}
-            tone={pct >= 80 ? "success" : "primary"}
-            className="mt-2 max-w-[420px]"
+        {/* ── Deadline banner ──────────────────────────────────────────────── */}
+        <div className="relative mb-4 flex items-center gap-4 overflow-hidden rounded-[14px] border border-primary-soft-2 bg-gradient-to-r from-primary-soft to-surface p-4">
+          <span className="grid h-10.5 w-10.5 shrink-0 place-items-center rounded-[11px] border border-primary-soft-2 bg-surface text-primary shadow-xs">
+            <Clock3 className="h-5 w-5" strokeWidth={1.8} aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-sm font-bold tracking-[-0.15px]">
+              {ms.dashboard.deadline}: <span className="num">{deadlineLabel(deadline)}</span>
+            </h4>
+            <p className="text-[12.8px] text-ink-2">
+              {week.drafts > 0 ? (
+                <>
+                  <b>{week.drafts} RPH</b> belum dihantar untuk Minggu {WEEK}.{" "}
+                </>
+              ) : null}
+              <b>{ms.dashboard.noPrint}</b>
+            </p>
+            <Progress
+              value={pct}
+              tone={pct >= 80 ? "success" : "primary"}
+              className="mt-2 max-w-[420px]"
+            />
+          </div>
+          <Link
+            href="/editor"
+            className="hidden shrink-0 sm:block"
+            onClick={(e) => {
+              e.preventDefault();
+              void onNew();
+            }}
+          >
+            <Button>
+              {ms.dashboard.newRph}
+              <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </Button>
+          </Link>
+        </div>
+
+        {/* ── Stats ────────────────────────────────────────────────────────── */}
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label={`${ms.dashboard.submitted} · Minggu ${WEEK}`}
+            value={`${week.submitted}`}
+            sub={` / ${week.total}`}
+            icon={<CheckCircle2 className="h-4 w-4" strokeWidth={2} />}
+            tone="ok"
+            footer={<Progress value={pct} tone="success" />}
+          />
+          <StatCard
+            label={ms.dashboard.waiting}
+            value={String(week.waiting)}
+            icon={<Clock3 className="h-4 w-4" strokeWidth={2} />}
+            badge={week.waiting > 0 ? <Badge variant="info">Dihantar</Badge> : undefined}
+          />
+          <StatCard
+            label={ms.dashboard.needsAction}
+            value={String(week.returned)}
+            icon={<Bolt className="h-4 w-4" strokeWidth={2} />}
+            tone="bad"
+            badge={
+              week.returned > 0 ? <Badge variant="danger">Dikembalikan · GPK</Badge> : undefined
+            }
+          />
+          <StatCard
+            label={ms.dashboard.onTime}
+            value={week.onTimePct === null ? "—" : String(week.onTimePct)}
+            sub={week.onTimePct === null ? "" : "%"}
+            icon={<Target className="h-4 w-4" strokeWidth={2} />}
+            tone={week.onTimePct === null || week.onTimePct >= 80 ? "ok" : "bad"}
           />
         </div>
-        <Link
-          href="/editor"
-          className="hidden shrink-0 sm:block"
-          onClick={(e) => {
-            e.preventDefault();
-            void onNew();
-          }}
-        >
-          <Button>
-            {ms.dashboard.newRph}
-            <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
-          </Button>
-        </Link>
-      </div>
 
-      {/* ── Stats ────────────────────────────────────────────────────────── */}
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label={`${ms.dashboard.submitted} · Minggu ${WEEK}`}
-          value={`${week.submitted}`}
-          sub={` / ${week.total}`}
-          icon={<CheckCircle2 className="h-4 w-4" strokeWidth={2} />}
-          tone="ok"
-          footer={<Progress value={pct} tone="success" />}
-        />
-        <StatCard
-          label={ms.dashboard.waiting}
-          value={String(week.waiting)}
-          icon={<Clock3 className="h-4 w-4" strokeWidth={2} />}
-          badge={week.waiting > 0 ? <Badge variant="info">Dihantar</Badge> : undefined}
-        />
-        <StatCard
-          label={ms.dashboard.needsAction}
-          value={String(week.returned)}
-          icon={<Bolt className="h-4 w-4" strokeWidth={2} />}
-          tone="bad"
-          badge={
-            week.returned > 0 ? <Badge variant="danger">Dikembalikan · GPK</Badge> : undefined
-          }
-        />
-        <StatCard
-          label={ms.dashboard.onTime}
-          value={week.onTimePct === null ? "—" : String(week.onTimePct)}
-          sub={week.onTimePct === null ? "" : "%"}
-          icon={<Target className="h-4 w-4" strokeWidth={2} />}
-          tone={week.onTimePct === null || week.onTimePct >= 80 ? "ok" : "bad"}
-        />
-      </div>
-
-      {/* ── School totals ─────────────────────────────────────────────────
+        {/* ── School totals ─────────────────────────────────────────────────
           Aggregates only — `school_week_stats` returns counts, never names.
           Every role may see this; the per-teacher table, the reminders and
           the exports live behind `/sekolah`, which needs `pantau`. */}
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 py-3.5">
-          <div className="min-w-[176px]">
-            <p className="text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase">
-              Sekolah · Minggu {WEEK}
-            </p>
-            <p className="mt-0.5 text-[13.5px] text-ink-2">
-              <b className="num text-ink">{stats.submitted}</b>
-              <span className="text-ink-4"> / {stats.totalExpected}</span> RPH dihantar
-            </p>
-          </div>
-          <div className="min-w-[180px] flex-1">
-            <p className="mb-1.5 text-[12.5px] text-ink-3">
-              <b className="num text-ink">{stats.compliancePct}%</b> pematuhan sekolah
-            </p>
-            <Progress value={stats.compliancePct} tone="success" />
-          </div>
-          {can(me.role, "pantau") && (
-            <Button variant="secondary" size="sm" onClick={() => router.push("/sekolah")}>
-              Paparan Sekolah
-              <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Weekly schedule ──────────────────────────────────────────────── */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
-          {ms.dashboard.weeklySchedule}
-        </h2>
-        <span className="h-px flex-1 bg-border" />
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2">
-          {classes.length} kelas · {subjects.length} subjek
-        </span>
-      </div>
-
-      <Card className="mb-4">
-        <TableContainer>
-          <Table>
-            <THead>
-              <tr>
-                <TH>Kelas &amp; Subjek</TH>
-                <TH>Tarikh / Masa</TH>
-                <TH>Standard Kandungan</TH>
-                <TH>Status</TH>
-                <TH>Penyemak</TH>
-                <TH className="text-right">Tindakan</TH>
-              </tr>
-            </THead>
-            <TBody>
-              {week.loading && (
-                <tr>
-                  <TD colSpan={6} className="py-8 text-center text-ink-4">
-                    Memuatkan…
-                  </TD>
-                </tr>
-              )}
-              {!week.loading && week.documents.length === 0 && (
-                <tr>
-                  <TD colSpan={6} className="py-10 text-center">
-                    <p className="mb-3 text-ink-3">Tiada RPH lagi untuk Minggu {WEEK}.</p>
-                    <Button size="sm" onClick={() => void onNew()}>
-                      <Plus className="h-4 w-4" aria-hidden /> {ms.dashboard.newRph}
-                    </Button>
-                  </TD>
-                </tr>
-              )}
-              {week.documents.map((doc) => (
-                <PlanRow key={doc.id} doc={doc} />
-              ))}
-            </TBody>
-          </Table>
-        </TableContainer>
-      </Card>
-
-      {/* ── Feed + shortcuts ─────────────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_348px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>{ms.dashboard.activity}</CardTitle>
-            <CardDescription>Kemas kini langsung</CardDescription>
-            <span className="ml-auto">
-              <Badge variant="success">Masa nyata</Badge>
-            </span>
-          </CardHeader>
-          <CardContent className="pt-1 pb-2">
-            <ul className="list-none">
-              {week.documents
-                .filter((d) => d.status !== "draft")
-                .slice(0, 4)
-                .map((d) => (
-                  <li
-                    key={d.id}
-                    className="flex gap-3 border-b border-dashed border-border py-3 last:border-b-0"
-                  >
-                    <Avatar initials="ZR" tone="teal" />
-                    <div className="min-w-0">
-                      <p className="text-[12.8px] leading-[1.5] text-ink-2">
-                        <b className="text-ink">Zulkifli (GPK)</b>{" "}
-                        {d.status === "approved"
-                          ? "mengesahkan"
-                          : d.status === "returned"
-                            ? "mengembalikan"
-                            : d.status === "forwarded"
-                              ? "meneruskan kepada Guru Besar"
-                              : "menerima"}{" "}
-                        <b className="text-ink">
-                          RPH {d.className} · {d.subjectName}
-                        </b>{" "}
-                        <span
-                          className="font-bold"
-                          style={{
-                            color:
-                              d.status === "approved"
-                                ? "var(--color-success-ink)"
-                                : d.status === "returned"
-                                  ? "var(--color-danger-ink)"
-                                  : "var(--color-info-ink)",
-                          }}
-                        >
-                          {d.status === "approved"
-                            ? ms.status.approved
-                            : d.status === "returned"
-                              ? "Tidak lengkap (0)"
-                              : d.status === "forwarded"
-                                ? ms.status.forwarded
-                                : ms.status.submitted}
-                        </span>
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-ink-4">
-                        {daySlot(d.planDate, d.slotTime)}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              {week.documents.filter((d) => d.status !== "draft").length === 0 && (
-                <li className="py-6 text-center text-[13px] text-ink-4">
-                  Belum ada aktiviti semakan minggu ini.
-                </li>
-              )}
-            </ul>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{ms.dashboard.shortcuts}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2.5">
-            <Shortcut
-              icon={<Bolt className="h-4 w-4 text-primary" />}
-              label="Jana RPH dengan AI"
-              tag="Beta"
-              onClick={() => toast("Pilih kelas → objektif & aktiviti dijana automatik")}
-            />
-            <Shortcut
-              icon={<Upload className="h-4 w-4" />}
-              label="Masukkan RPH sedia ada"
-              onClick={() => toast("Muat naik .docx sedia ada — dipecahkan kepada medan RPH")}
-            />
-            <Shortcut
-              icon={<Layers className="h-4 w-4" />}
-              label="Templat sekolah"
-              count={8}
-              onClick={() => (window.location.href = "/templat")}
-            />
-            <Shortcut
-              icon={<Download className="h-4 w-4" />}
-              label="Eksport PDF minggu ini"
-              onClick={() => toast("RPH minggu ini dijana sebagai PDF…")}
-            />
-            <div className="mt-1 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
-              <svg
-                className="mt-0.5 h-4 w-4 shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                aria-hidden
-              >
-                <path d="M2 2l20 20M8.6 16.6a5 5 0 0 1 6.8 0M5 12.5a10 10 0 0 1 4-2.4M15 10a10 10 0 0 1 4 2.5M12 20h.01" />
-              </svg>
-              <span>
-                Boleh disediakan <b>secara luar talian</b> — disimpan pada peranti, disegerakkan
-                automatik apabila capaian internet kembali.
-              </span>
+        <Card className="mb-4">
+          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 py-3.5">
+            <div className="min-w-[176px]">
+              <p className="text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase">
+                Sekolah · Minggu {WEEK}
+              </p>
+              <p className="mt-0.5 text-[13.5px] text-ink-2">
+                <b className="num text-ink">{stats.submitted}</b>
+                <span className="text-ink-4"> / {stats.totalExpected}</span> RPH dihantar
+              </p>
             </div>
+            <div className="min-w-[180px] flex-1">
+              <p className="mb-1.5 text-[12.5px] text-ink-3">
+                <b className="num text-ink">{stats.compliancePct}%</b> pematuhan sekolah
+              </p>
+              <Progress value={stats.compliancePct} tone="success" />
+            </div>
+            {can(me.role, "pantau") && (
+              <Button variant="secondary" size="sm" onClick={() => router.push("/sekolah")}>
+                Paparan Sekolah
+                <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
+              </Button>
+            )}
           </CardContent>
         </Card>
+
+        {/* ── Weekly schedule ──────────────────────────────────────────────── */}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
+            {ms.dashboard.weeklySchedule}
+          </h2>
+          <span className="h-px flex-1 bg-border" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2">
+            {classes.length} kelas · {subjects.length} subjek
+          </span>
+        </div>
+
+        <Card className="mb-4">
+          <TableContainer>
+            <Table>
+              <THead>
+                <tr>
+                  <TH>Kelas &amp; Subjek</TH>
+                  <TH>Tarikh / Masa</TH>
+                  <TH>Standard Kandungan</TH>
+                  <TH>Status</TH>
+                  <TH>Penyemak</TH>
+                  <TH className="text-right">Tindakan</TH>
+                </tr>
+              </THead>
+              <TBody>
+                {week.loading && (
+                  <tr>
+                    <TD colSpan={6} className="py-8 text-center text-ink-4">
+                      Memuatkan…
+                    </TD>
+                  </tr>
+                )}
+                {!week.loading && week.documents.length === 0 && (
+                  <tr>
+                    <TD colSpan={6} className="py-10 text-center">
+                      <p className="mb-3 text-ink-3">Tiada RPH lagi untuk Minggu {WEEK}.</p>
+                      <Button size="sm" onClick={() => void onNew()}>
+                        <Plus className="h-4 w-4" aria-hidden /> {ms.dashboard.newRph}
+                      </Button>
+                    </TD>
+                  </tr>
+                )}
+                {week.documents.map((doc) => (
+                  <PlanRow key={doc.id} doc={doc} />
+                ))}
+              </TBody>
+            </Table>
+          </TableContainer>
+        </Card>
+
+        {/* ── Feed + shortcuts ─────────────────────────────────────────────── */}
+        <div className="grid gap-4 lg:grid-cols-[1fr_348px]">
+          <Card>
+            <CardHeader>
+              <CardTitle>{ms.dashboard.activity}</CardTitle>
+              <CardDescription>Kemas kini langsung</CardDescription>
+              <span className="ml-auto">
+                <Badge variant="success">Masa nyata</Badge>
+              </span>
+            </CardHeader>
+            <CardContent className="pt-1 pb-2">
+              <ul className="list-none">
+                {week.documents
+                  .filter((d) => d.status !== "draft")
+                  .slice(0, 4)
+                  .map((d) => (
+                    <li
+                      key={d.id}
+                      className="flex gap-3 border-b border-dashed border-border py-3 last:border-b-0"
+                    >
+                      <Avatar initials="ZR" tone="teal" />
+                      <div className="min-w-0">
+                        <p className="text-[12.8px] leading-[1.5] text-ink-2">
+                          <b className="text-ink">Zulkifli (GPK)</b>{" "}
+                          {d.status === "approved"
+                            ? "mengesahkan"
+                            : d.status === "returned"
+                              ? "mengembalikan"
+                              : d.status === "forwarded"
+                                ? "meneruskan kepada Guru Besar"
+                                : "menerima"}{" "}
+                          <b className="text-ink">
+                            RPH {d.className} · {d.subjectName}
+                          </b>{" "}
+                          <span
+                            className="font-bold"
+                            style={{
+                              color:
+                                d.status === "approved"
+                                  ? "var(--color-success-ink)"
+                                  : d.status === "returned"
+                                    ? "var(--color-danger-ink)"
+                                    : "var(--color-info-ink)",
+                            }}
+                          >
+                            {d.status === "approved"
+                              ? ms.status.approved
+                              : d.status === "returned"
+                                ? "Tidak lengkap (0)"
+                                : d.status === "forwarded"
+                                  ? ms.status.forwarded
+                                  : ms.status.submitted}
+                          </span>
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-ink-4">
+                          {daySlot(d.planDate, d.slotTime)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                {week.documents.filter((d) => d.status !== "draft").length === 0 && (
+                  <li className="py-6 text-center text-[13px] text-ink-4">
+                    Belum ada aktiviti semakan minggu ini.
+                  </li>
+                )}
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{ms.dashboard.shortcuts}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2.5">
+              <Shortcut
+                icon={<Bolt className="h-4 w-4 text-primary" />}
+                label="Jana RPH dengan AI"
+                tag="Beta"
+                onClick={() => toast("Pilih kelas → objektif & aktiviti dijana automatik")}
+              />
+              <Shortcut
+                icon={<Upload className="h-4 w-4" />}
+                label="Masukkan RPH sedia ada"
+                onClick={() => toast("Muat naik .docx sedia ada — dipecahkan kepada medan RPH")}
+              />
+              <Shortcut
+                icon={<Layers className="h-4 w-4" />}
+                label="Templat sekolah"
+                count={8}
+                onClick={() => (window.location.href = "/templat")}
+              />
+              <Shortcut
+                icon={<Download className="h-4 w-4" />}
+                label="Eksport PDF minggu ini"
+                onClick={() => toast("RPH minggu ini dijana sebagai PDF…")}
+              />
+              <div className="mt-1 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
+                <svg
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  aria-hidden
+                >
+                  <path d="M2 2l20 20M8.6 16.6a5 5 0 0 1 6.8 0M5 12.5a10 10 0 0 1 4-2.4M15 10a10 10 0 0 1 4 2.5M12 20h.01" />
+                </svg>
+                <span>
+                  Boleh disediakan <b>secara luar talian</b> — disimpan pada peranti,
+                  disegerakkan automatik apabila capaian internet kembali.
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      {/* The artefact. `hidden` on screen — it is not a preview, it is the
+          thing the printer takes — and `@media print` in globals.css makes it
+          the whole page. */}
+      {printable.length > 0 && (
+        <div data-print="page" className="hidden">
+          <WeekSheets
+            weekNo={WEEK}
+            session={currentSession()}
+            teacherName={me.fullName}
+            documents={printable}
+            signature={weekSignature.signature}
+            signatureState={weekSignature.state}
+          />
+        </div>
+      )}
     </>
   );
 }

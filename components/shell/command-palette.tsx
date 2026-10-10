@@ -125,6 +125,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   return (
     <div
+      data-print="chrome"
       className="fixed inset-0 z-[100] flex items-start justify-center bg-[rgba(10,16,28,0.55)] pt-[14vh] backdrop-blur-[3px] erph-fade-in"
       role="dialog"
       aria-modal="true"

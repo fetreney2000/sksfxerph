@@ -19,3 +19,9 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# The school's reference template. Kept locally as the source the RPH was
+# shaped against; not something this repo should carry — the form it
+# describes is in components/rph/.
+contoh template.pdf
+template-extract.txt

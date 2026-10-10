@@ -87,7 +87,7 @@ export function RphCover({
   return (
     <article
       className={cn(
-        "rounded-lg bg-white p-6 text-[12.5px] leading-[1.5] text-[#1d2939] shadow-lg",
+        "erph-sheet rounded-lg bg-white p-6 text-[12.5px] leading-[1.5] text-[#1d2939] shadow-lg",
         className,
       )}
     >

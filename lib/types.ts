@@ -58,6 +58,15 @@ export interface RphDocument {
   submittedAt?: number;
   reviewedAt?: number;
   grade?: 0 | 1;
+  /**
+   * The reviewer's catatan, from the newest `rph_review` row.
+   *
+   * Carried on the document rather than fetched alongside it because the cover
+   * sheet needs it at the same moment it needs the signature — and because a
+   * plan that has been returned once already should show the teacher what they
+   * were told, not send them back to the queue to find out.
+   */
+  reviewComment?: string | null;
   createdAt: number;
 }
 

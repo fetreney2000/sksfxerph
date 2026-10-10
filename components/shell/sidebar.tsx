@@ -61,6 +61,7 @@ export function Sidebar({
 
   return (
     <aside
+      data-print="chrome"
       className="sticky top-0 z-40 hidden h-dvh w-63 shrink-0 flex-col border-r border-[rgba(255,255,255,0.07)] bg-gradient-to-b from-[#0c1d33] to-[#0a1729] lg:flex"
       aria-label={ms.a11y.mainNavigation}
     >

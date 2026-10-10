@@ -24,7 +24,10 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
   const meta = ROUTE_META[pathname] ?? { title: "eRPH", crumb: "" };
 
   return (
-    <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-border bg-[var(--topbar-bg)] px-4 py-3 backdrop-blur-md sm:px-6">
+    <header
+      data-print="chrome"
+      className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-border bg-[var(--topbar-bg)] px-4 py-3 backdrop-blur-md sm:px-6"
+    >
       <div className="min-w-0">
         <h1 className="truncate text-[16.5px] font-bold tracking-[-0.35px]">{meta.title}</h1>
         <p className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-ink-3">

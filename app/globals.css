@@ -225,3 +225,54 @@ body {
 .erph-pulse {
   animation: erph-pulse 1.1s ease-in-out infinite;
 }
+
+/* ============================================================================
+   Printing
+   ========================================================================== */
+
+/*
+ * The app is a way to reach a document; the document is what goes on paper.
+ *
+ * `window.print()` prints the rendered page, so every piece of chrome the
+ * teacher navigates with — sidebar, topbar, bottom nav, palette — has to be
+ * told it is not part of the artefact. Tagging the elements rather than
+ * styling around their existing classes keeps this independent of what they
+ * look like: a sidebar that changes colour must not start printing.
+ *
+ * `[data-print="page"]` is the inverse. It is `hidden` on screen and becomes
+ * visible only when printing, which is how a week's cover sheet plus its
+ * daily pages come out without the dashboard around them — and why it cannot
+ * simply be another element on the page, since there is no version of that
+ * which hides the dashboard and keeps the sheets on screen.
+ */
+@media print {
+  [data-print="chrome"] {
+    display: none !important;
+  }
+
+  /* The page's own content. Tagged separately from the chrome because it is
+     not chrome — it is the screen the teacher was working on — but on a page
+     that prints a document, it still has no business on the paper. */
+  [data-print="screen"] {
+    display: none !important;
+  }
+
+  [data-print="page"] {
+    display: block !important;
+  }
+
+  /* The main column is sized for a screen: max-width for readability, padding
+     to clear a sidebar that will not be there. Paper needs neither. */
+  main#main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* One sheet, one page. A plan that splits across two sheets is a plan that
+     has to be reprinted, and the reviewer reading page 2 cannot tell what the
+     header on page 1 said. */
+  .erph-sheet {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
