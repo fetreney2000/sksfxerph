@@ -464,10 +464,41 @@ export function RphEditor({ docId }: { docId?: string }) {
     if (!pending || persisted || creating) return;
     setCreating(true);
     try {
-      await commit({ ...pending, payload: payloadRef.current });
+      const draft = { ...pending, payload: payloadRef.current };
+
+      // `rph_document` is keyed on teacher×class×subject×session×week×date, so
+      // a second plan for the same slot does not coexist — the server resolves
+      // it onto the first and the teacher's work silently becomes someone
+      // else's row, with no warning anywhere.
+      //
+      // Dexie holds the server's plans too now (`lib/sync/pull`), so this
+      // catches a plan written on another device as well as this one. Offering
+      // the existing plan is better than refusing outright: the common case is
+      // a teacher who forgot they already started it.
+      const clash = await db.documents
+        .where("[ownerId+session+weekNo+planDate]")
+        .equals([draft.ownerId, draft.session, draft.weekNo, draft.planDate])
+        .filter(
+          (d) =>
+            d.id !== draft.id &&
+            d.classId === draft.classId &&
+            d.subjectCode === draft.subjectCode,
+        )
+        .first();
+
+      if (clash) {
+        toast.error(
+          `Anda sudah mempunyai RPH untuk ${draft.className} · ${draft.subjectName} pada ` +
+            `${draft.planDate}. Buka yang sedia ada, atau tukar kelas, subjek atau tarikh.`,
+        );
+        router.push(`/editor/${clash.id}`);
+        return;
+      }
+
       // Carry the id into the URL so a refresh, a bookmark or a share lands on
       // the row that now exists rather than back on the blank editor.
-      router.replace(`/editor/${pending.id}`);
+      await commit(draft);
+      router.replace(`/editor/${draft.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan rancangan");
     } finally {
