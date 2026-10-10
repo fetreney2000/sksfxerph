@@ -25,6 +25,13 @@ export interface SignaturePayload {
   alg: string;
   signedAt: string;
   signerName: string | null;
+  /**
+   * The signer's jawatan — "PK KO", "Guru Besar". Printed beneath their name on
+   * the cover sheet: a signature with a name but no office under it is a name
+   * anyone could have typed, and the district reading the sheet has no way to
+   * tell which.
+   */
+  signerTitle: string | null;
 }
 
 export async function GET(
@@ -78,7 +85,9 @@ export async function GET(
 
   const { data, error } = await gate.db
     .from("rph_signature")
-    .select("envelope, signature, public_key, alg, signed_at, signer:signer_id(full_name)")
+    .select(
+      "envelope, signature, public_key, alg, signed_at, signer_id, signer:signer_id(full_name)",
+    )
     .eq("document_id", id)
     .order("signed_at", { ascending: false })
     .limit(1)
@@ -95,10 +104,22 @@ export async function GET(
     public_key: string;
     alg: string;
     signed_at: string;
+    signer_id: string;
     signer: { full_name: string } | null;
   } | null;
 
   if (!sig) return NextResponse.json({ signature: null });
+
+  // The jawatan lives on school_member — the school's row for this user — not
+  // on the user, so it cannot ride along on the join above and costs one more
+  // query. It is worth the round trip for the reason in SignaturePayload: the
+  // cover sheet is read by people who have never met the signer.
+  const { data: member } = await gate.db
+    .from("school_member")
+    .select("title")
+    .eq("school_id", schoolId)
+    .eq("user_id", sig.signer_id)
+    .maybeSingle();
 
   const payload: SignaturePayload = {
     envelope: sig.envelope,
@@ -107,6 +128,7 @@ export async function GET(
     alg: sig.alg,
     signedAt: sig.signed_at,
     signerName: sig.signer?.full_name ?? null,
+    signerTitle: (member as { title: string | null } | null)?.title ?? null,
   };
 
   return NextResponse.json({ signature: payload });

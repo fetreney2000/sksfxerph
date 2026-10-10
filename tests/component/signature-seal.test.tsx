@@ -23,6 +23,7 @@ const SEAL: SignaturePayload = {
   alg: "ES256",
   signedAt: "2026-10-10T08:14:02.000Z",
   signerName: "Ramlan bin Yusof",
+  signerTitle: "PK KO",
 };
 
 describe("signature seal", () => {

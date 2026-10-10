@@ -29,11 +29,12 @@ import { currentSchool } from "@/lib/school";
  * on the page.
  */
 
-/** Label cell — the pale green the school's form uses. */
-const LABEL_BG = "#d9ead3";
-const RULE = "#a6a6a6";
+/** Label cell — the pale green the school's form uses. Shared with the cover
+ *  sheet: if the district's green ever changes, it changes in one place. */
+export const LABEL_BG = "#d9ead3";
+export const RULE = "#a6a6a6";
 
-function Label({ children, span = 1 }: { children: React.ReactNode; span?: number }) {
+export function Label({ children, span = 1 }: { children: React.ReactNode; span?: number }) {
   return (
     <td
       colSpan={span}
@@ -45,7 +46,7 @@ function Label({ children, span = 1 }: { children: React.ReactNode; span?: numbe
   );
 }
 
-function Value({ children, span = 1 }: { children: React.ReactNode; span?: number }) {
+export function Value({ children, span = 1 }: { children: React.ReactNode; span?: number }) {
   return (
     <td
       colSpan={span}
