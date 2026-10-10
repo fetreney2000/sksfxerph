@@ -161,6 +161,25 @@ async function verifyAndStore(
     return refuse("Tandatangan tidak sah");
   }
 
+  // `unique (document_id, document_version, signer_id)` makes a second request
+  // for the same decision fail the insert — so a double-click on "Sahkan"
+  // reported a 500 while the first request had in fact succeeded, and the
+  // reviewer was told an approval had failed when it had gone through.
+  //
+  // Reusing the row already there is correct rather than permissive: it is the
+  // same signer, the same version and the same content we have just verified,
+  // and `sahkan_rph` would accept it regardless.
+  const { data: existing } = await gate.db
+    .from("rph_signature")
+    .select("id")
+    .eq("document_id", documentId)
+    .eq("document_version", doc.version)
+    .eq("signer_id", gate.user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return null;
+
   const { error: insertErr } = await gate.db.from("rph_signature").insert({
     document_id: documentId,
     document_version: doc.version,

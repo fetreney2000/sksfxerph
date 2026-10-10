@@ -14,6 +14,12 @@ import { ms } from "@/lib/i18n/ms";
  * which is not discoverable at 6am on a 5-inch screen. Up to five destinations,
  * filtered through `navFor()` so the reviewer pair never appears for a Guru
  * Biasa, ≥48px touch targets.
+ *
+ * Labels come from `NavItem.short`, because five items across 375px is ~75px
+ * each and "Perpustakaan Templat" measures 126px. `min-w-0` on the item and
+ * the anchor is the part that makes `truncate` actually work: a flex item
+ * will not shrink below its content width without it, so the label used to
+ * push the whole bar past the viewport rather than ellipsize.
  */
 const PRIMARY = [
   "/utama",
@@ -42,13 +48,13 @@ export function MobileNav() {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return (
-            <li key={item.href} className="flex-1">
+            <li key={item.href} className="min-w-0 flex-1">
               <a
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   // 48px meets the ≥44px touch-target minimum in §4.2(9).
-                  "flex h-14 flex-col items-center justify-center gap-1 px-1 text-[10.5px] font-semibold transition-colors",
+                  "flex h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10.5px] font-semibold transition-colors",
                   active ? "text-primary-ink" : "text-ink-3",
                 )}
               >
@@ -60,9 +66,7 @@ export function MobileNav() {
                 >
                   <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden />
                 </span>
-                <span className="max-w-full truncate px-0.5">
-                  {item.label.replace(" & Arkib", "").replace(" & Eksport", "")}
-                </span>
+                <span className="block w-full truncate px-0.5">{item.short ?? item.label}</span>
               </a>
             </li>
           );

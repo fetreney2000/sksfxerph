@@ -26,6 +26,15 @@ export interface NavItem {
   perm: Permission;
   /** Optional live badge source, resolved by the sidebar. */
   badge?: "drafts" | "pending";
+  /**
+   * Abbreviation for the bottom bar.
+   *
+   * Five destinations across 375px is ~75px each, and "Perpustakaan Templat"
+   * measures 126px — so without this the label either truncates to something
+   * unreadable or pushes the bar past the viewport, which is exactly what it
+   * was doing. The sidebar keeps the full label; only the mobile bar uses this.
+   */
+  short?: string;
 }
 
 export interface NavGroup {
@@ -37,16 +46,29 @@ export const NAV: NavGroup[] = [
   {
     label: ms.nav.guru,
     items: [
-      { href: "/minggu", label: ms.nav.minggu, icon: LayoutGrid, perm: "rph" },
+      {
+        href: "/minggu",
+        label: ms.nav.minggu,
+        short: "Minggu",
+        icon: LayoutGrid,
+        perm: "rph",
+      },
       {
         href: "/editor",
         label: ms.nav.editor,
+        short: "Tulis",
         icon: PenLine,
         perm: "rph",
         badge: "drafts",
       },
-      { href: "/templat", label: ms.nav.templat, icon: BookOpen, perm: "templat" },
-      { href: "/arkib", label: ms.nav.arkib, icon: History, perm: "rph" },
+      {
+        href: "/templat",
+        label: ms.nav.templat,
+        short: "Templat",
+        icon: BookOpen,
+        perm: "templat",
+      },
+      { href: "/arkib", label: ms.nav.arkib, short: "Arkib", icon: History, perm: "rph" },
     ],
   },
   {
@@ -55,17 +77,42 @@ export const NAV: NavGroup[] = [
       // The Administrator's home. Listed first because it *is* their landing
       // page — for every other role `navFor` filters it out and the group
       // still reads correctly.
-      { href: "/utama", label: ms.nav.utama, icon: LayoutGrid, perm: "pentadbir" },
+      {
+        href: "/utama",
+        label: ms.nav.utama,
+        short: "Utama",
+        icon: LayoutGrid,
+        perm: "pentadbir",
+      },
       {
         href: "/semakan",
         label: ms.nav.semakan,
+        short: "Semak",
         icon: ScrollText,
         perm: "semak",
         badge: "pending",
       },
-      { href: "/sekolah", label: ms.nav.sekolah, icon: School, perm: "pantau" },
-      { href: "/laporan", label: "Laporan & Eksport", icon: FileText, perm: "laporan" },
-      { href: "/pentadbiran", label: ms.nav.urus, icon: Settings2, perm: "pentadbir" },
+      {
+        href: "/sekolah",
+        label: ms.nav.sekolah,
+        short: "Sekolah",
+        icon: School,
+        perm: "pantau",
+      },
+      {
+        href: "/laporan",
+        label: "Laporan & Eksport",
+        short: "Laporan",
+        icon: FileText,
+        perm: "laporan",
+      },
+      {
+        href: "/pentadbiran",
+        label: ms.nav.urus,
+        short: "Urus",
+        icon: Settings2,
+        perm: "pentadbir",
+      },
     ],
   },
 ];

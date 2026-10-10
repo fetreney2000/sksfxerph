@@ -87,12 +87,16 @@ export default function MingguPage() {
             {week.drafts > 0 && ` Tinggal ${week.drafts} sebelum Jumaat.`}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onReuse}>
+        {/* Wraps on a narrow screen rather than pushing the page sideways:
+            two long Malay labels side by side measure more than a 375px phone
+            has after the page's own padding, and a flex row does not wrap or
+            shrink on its own. */}
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Button variant="secondary" className="flex-1 sm:flex-none" onClick={onReuse}>
             <Layers className="h-4 w-4" strokeWidth={1.9} aria-hidden />
             {ms.dashboard.reuseLast}
           </Button>
-          <Button onClick={onNew}>
+          <Button className="flex-1 sm:flex-none" onClick={onNew}>
             <Plus className="h-4 w-4" strokeWidth={2.2} aria-hidden />
             {ms.dashboard.newRph}
           </Button>

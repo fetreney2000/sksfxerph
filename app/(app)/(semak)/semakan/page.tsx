@@ -47,6 +47,15 @@ export default function SemakanPage() {
   const [graded, setGraded] = React.useState<Record<string, 0 | 1>>({});
   const [comment, setComment] = React.useState("");
   const [filter, setFilter] = React.useState<"belum" | "semua">("belum");
+  /**
+   * Latches the decision controls while a request is in flight.
+   *
+   * Without it, a second click on "Sahkan" signs and posts again — and before
+   * the server-side fix, the loser of that race reported a 500 for an approval
+   * that had in fact gone through. The queue advances optimistically, so this
+   * only re-enables the buttons once the first request has actually settled.
+   */
+  const [deciding, setDeciding] = React.useState(false);
 
   // Selection must follow the data: the queue resolves asynchronously in
   // synced mode, so a value captured at first render can be stale.
@@ -63,7 +72,8 @@ export default function SemakanPage() {
 
   const decide = React.useCallback(
     (decision: ReviewDecision) => {
-      if (!item) return;
+      if (!item || deciding) return;
+      setDeciding(true);
 
       // Server owns the decision when configured: sahkan_rph / hantar_balik_rph
       // write the review, the notification to the teacher and the audit row,
@@ -84,9 +94,11 @@ export default function SemakanPage() {
             toast.error(
               `Gagal menyemak: ${err instanceof Error ? err.message : "ralat rangkaian"}`,
             ),
-          );
+          )
+          .finally(() => setDeciding(false));
       } else {
         toast.success(decisionMessage(decision));
+        setDeciding(false);
       }
 
       setGraded((g) => ({ ...g, [item.id]: decision === "sahkan" ? 1 : 0 }));
@@ -95,7 +107,7 @@ export default function SemakanPage() {
       const next = QUEUE.find((q) => !(q.id in graded) && q.id !== item.id);
       if (next) setSelected(next.id);
     },
-    [item, graded, comment, QUEUE, meId],
+    [item, deciding, graded, comment, QUEUE, meId],
   );
 
   React.useEffect(() => {
@@ -340,14 +352,24 @@ export default function SemakanPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Button size="lg" variant="success" onClick={() => decide("sahkan")}>
+                  <Button
+                    size="lg"
+                    variant="success"
+                    disabled={deciding}
+                    onClick={() => decide("sahkan")}
+                  >
                     <Check className="h-4 w-4" strokeWidth={2.4} aria-hidden />
                     {ms.review.approve}
                     <kbd className="rounded border border-white/25 bg-white/20 px-1.5 font-mono text-[11px]">
                       1
                     </kbd>
                   </Button>
-                  <Button size="lg" variant="danger" onClick={() => decide("hantar_balik")}>
+                  <Button
+                    size="lg"
+                    variant="danger"
+                    disabled={deciding}
+                    onClick={() => decide("hantar_balik")}
+                  >
                     <Undo2 className="h-4 w-4" strokeWidth={2.1} aria-hidden />
                     {ms.review.return}
                     <kbd className="rounded border border-black/10 bg-black/10 px-1.5 font-mono text-[11px]">
