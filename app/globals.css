@@ -1,6 +1,39 @@
 @import "tailwindcss";
 
 /* ============================================================================
+   Cursor
+   ==========================================================================
+
+   Tailwind v4's preflight dropped `cursor: pointer` from buttons — a
+   deliberate v4 change, and one this app does not want.
+
+   Every control here is a real <button> or <a>, and the hand cursor is how a
+   teacher tells a control apart from the text sitting next to it. Without it a
+   row of icon buttons reads as decoration until you happen to hover each one
+   in turn.
+
+   Links already get the browser's own pointer; what needs saying is the
+   button, which every browser draws with the default arrow.
+
+   ========================================================================== */
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"]:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* ============================================================================
    eRPH design tokens — ported 1:1 from the original design mockup into Tailwind
    v4's CSS-first config. No tailwind.config.js: v4 reads these directly.
    ========================================================================== */

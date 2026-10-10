@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/rph/status-badge";
-import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter } from "@/components/ui/card";
 import {
@@ -19,11 +18,9 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { removePlan } from "@/lib/actions/plans";
-import { schoolDays, weekRangeLabel } from "@/lib/date";
+import { longDate, schoolDays, weekRangeLabel } from "@/lib/date";
 import { useArchive } from "@/lib/hooks/use-week";
 import type { RphDocument } from "@/lib/types";
-
-const REVIEWER = { initials: "ZR", name: "Zulkifli · GPK" };
 
 export default function ArkibPage() {
   const router = useRouter();
@@ -63,7 +60,7 @@ export default function ArkibPage() {
                 <TH>Tarikh</TH>
                 <TH>RPH dihantar</TH>
                 <TH>Status semakan</TH>
-                <TH>Penyemak</TH>
+                <TH>Disemak</TH>
                 <TH className="text-right">Tindakan</TH>
               </tr>
             </THead>
@@ -77,6 +74,12 @@ export default function ArkibPage() {
               )}
               {weeks.map((w) => {
                 const rows = byWeek.get(w) ?? [];
+                // Newest review in the week. Absent rather than zero when
+                // nothing has been decided yet.
+                const reviewed = rows
+                  .map((r) => r.reviewedAt)
+                  .filter((t): t is number => typeof t === "number")
+                  .sort((a, b) => b - a)[0];
                 const approved = rows.filter((r) => r.status === "approved").length;
                 const returned = rows.filter((r) => r.status === "returned").length;
                 const submitted = rows.filter((r) => r.status !== "draft").length;
@@ -109,10 +112,19 @@ export default function ArkibPage() {
                       )}
                     </TD>
                     <TD>
-                      <div className="flex items-center gap-2.5">
-                        <Avatar initials={REVIEWER.initials} tone="teal" small />
-                        <span className="text-[12.5px]">{REVIEWER.name}</span>
-                      </div>
+                      {/* The document records *when* it was reviewed, but not
+                          who did it — the reviewer's name lives on the
+                          signature, which is fetched per plan and is not on
+                          this list query. A date is real; a name here would be
+                          one the school never gave us, printed next to work it
+                          may have had nothing to do with. */}
+                      {reviewed ? (
+                        <span className="num text-[12.5px] text-ink-2">
+                          {longDate(new Date(reviewed).toISOString().slice(0, 10))}
+                        </span>
+                      ) : (
+                        <span className="text-[12.5px] text-ink-4">Belum disemak</span>
+                      )}
                     </TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">

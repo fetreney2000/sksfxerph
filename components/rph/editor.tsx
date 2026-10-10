@@ -1094,7 +1094,11 @@ export function RphEditor({ docId }: { docId?: string }) {
           <DialogBody>
             <dl className="text-[13.5px]">
               <Row k="Bahagian lengkap" v={`${doneCount} / 4`} />
-              <Row k="Penyemak" v="Zulkifli · GPK Pentadbiran" />
+              {/* The role, not a person. Who specifically reviews is not on
+                  this record — it depends on the supervision assignment, and
+                  naming an individual here would promise the teacher a reader
+                  they may not get. */}
+              <Row k="Dihantar kepada" v="GPK sekolah" />
               <Row k="Kesiapan" v={`${score}%`} tone={ready ? "ok" : "warn"} />
             </dl>
             {/* Generated from the same list the form shows — the two can never

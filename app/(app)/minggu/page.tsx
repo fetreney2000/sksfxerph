@@ -38,7 +38,7 @@ import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui
 import { reuseLastWeek } from "@/lib/actions/plans";
 import { can } from "@/lib/auth/permissions";
 import { currentWeek, weekDeadline } from "@/lib/config";
-import { daySlot, deadlineLabel } from "@/lib/date";
+import { daySlot, deadlineLabel, longDate } from "@/lib/date";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSignature } from "@/lib/hooks/use-signature";
@@ -295,7 +295,7 @@ export default function MingguPage() {
                   <TH>Tarikh / Masa</TH>
                   <TH>Standard Kandungan</TH>
                   <TH>Status</TH>
-                  <TH>Penyemak</TH>
+                  <TH>Disemak</TH>
                   <TH className="text-right">Tindakan</TH>
                 </tr>
               </THead>
@@ -345,39 +345,25 @@ export default function MingguPage() {
                       key={d.id}
                       className="flex gap-3 border-b border-dashed border-border py-3 last:border-b-0"
                     >
-                      <Avatar initials="ZR" tone="teal" />
+                      {/* The document's own status, not a person's face. The
+                          reviewer's name is not on this record — it lives on
+                          the signature, fetched per plan — and a feed that
+                          attributes a decision to a named colleague who may
+                          never have seen the plan is worse than one that
+                          simply does not say who. */}
+                      <StatusBadge status={d.status} grade={d.grade} />
                       <div className="min-w-0">
                         <p className="text-[12.8px] leading-[1.5] text-ink-2">
-                          <b className="text-ink">Zulkifli (GPK)</b>{" "}
-                          {d.status === "approved"
-                            ? "mengesahkan"
-                            : d.status === "returned"
-                              ? "mengembalikan"
-                              : d.status === "forwarded"
-                                ? "meneruskan kepada Guru Besar"
-                                : "menerima"}{" "}
                           <b className="text-ink">
                             RPH {d.className} · {d.subjectName}
                           </b>{" "}
-                          <span
-                            className="font-bold"
-                            style={{
-                              color:
-                                d.status === "approved"
-                                  ? "var(--color-success-ink)"
-                                  : d.status === "returned"
-                                    ? "var(--color-danger-ink)"
-                                    : "var(--color-info-ink)",
-                            }}
-                          >
-                            {d.status === "approved"
-                              ? ms.status.approved
-                              : d.status === "returned"
-                                ? "Tidak lengkap (0)"
-                                : d.status === "forwarded"
-                                  ? ms.status.forwarded
-                                  : ms.status.submitted}
-                          </span>
+                          {d.status === "approved"
+                            ? "telah disahkan"
+                            : d.status === "returned"
+                              ? "dikembalikan untuk dibaiki"
+                              : d.status === "forwarded"
+                                ? "diteruskan kepada Guru Besar"
+                                : "dihantar untuk semakan"}
                         </p>
                         <p className="mt-0.5 text-[11px] text-ink-4">
                           {daySlot(d.planDate, d.slotTime)}
@@ -513,13 +499,16 @@ function PlanRow({ doc }: { doc: RphDocument }) {
         <StatusBadge status={doc.status} grade={doc.grade} />
       </TD>
       <TD>
-        {doc.status === "draft" ? (
-          <span className="text-[12.5px] text-ink-4">—</span>
+        {/* When, not who. The reviewer's name is on the signature, fetched
+            per plan — it is not a column this list carries, and inventing a
+            colleague's name here would put their reputation next to work they
+            may never have seen. */}
+        {doc.reviewedAt ? (
+          <span className="num text-[12.5px] text-ink-2">
+            {longDate(new Date(doc.reviewedAt).toISOString().slice(0, 10))}
+          </span>
         ) : (
-          <div className="flex items-center gap-2.5">
-            <Avatar initials="ZR" tone="teal" small />
-            <span className="text-[12.5px]">Zulkifli · GPK</span>
-          </div>
+          <span className="text-[12.5px] text-ink-4">—</span>
         )}
       </TD>
       <TD className="text-right">
