@@ -100,6 +100,50 @@ function when(iso: string | null): string {
   }).format(d);
 }
 
+/**
+ * Who may be this member's penyelia — the level above, and only the level
+ * above.
+ *
+ * A Guru Biasa's work is overseen by a GPK or the Guru Besar. A GPK's own RPH
+ * is reviewed by a Guru Besar, so that is the whole list for a GPK: a peer GPK
+ * cannot review it. A Guru Besar answers to another Guru Besar, and if the
+ * school has one, only. The pentadbir holds no office and writes no RPH, so
+ * theirs has nobody and says so.
+ *
+ * That the Guru Besar already reaches every plan in the school is the reason
+ * assigning one to a GPK changes no access — it records who reviews that
+ * person's work, which is what the column is for, rather than granting it.
+ */
+function supervisorsFor(m: Member, items: Member[]): Member[] {
+  const above: readonly MemberRole[] =
+    m.role === "guru_biasa"
+      ? (["gpk", "guru_besar"] as const)
+      : m.role === "gpk" || m.role === "guru_besar"
+        ? (["guru_besar"] as const)
+        : [];
+  if (above.length === 0) return [];
+  // `is_active`, because SQL refuses an inactive supervisor and a picker that
+  // offers one would only produce an error the administrator cannot act on.
+  return items.filter((s) => s.user_id !== m.user_id && s.is_active && above.includes(s.role));
+}
+
+/** What the row says when there is nobody above this one to choose. */
+function noSupervisorText(role: MemberRole): string {
+  if (role === "guru_biasa") return "Tiada GPK — hanya Guru Besar";
+  if (role === "gpk") return "Tiada Guru Besar";
+  if (role === "guru_besar") return "Tiada Guru Besar lain";
+  return "—";
+}
+
+/** The unassigned option. For a teacher it means the Guru Besar alone. */
+const UNASSIGNED: Record<MemberRole, string> = {
+  guru_biasa: "— Guru Besar sahaja —",
+  gpk: "— belum ditetapkan —",
+  guru_besar: "— belum ditetapkan —",
+  pentadbir: "—",
+  system: "—",
+};
+
 export function AccountsTab() {
   const { id: myId } = useUser();
   const { busy, save } = useAdminSave();
@@ -209,18 +253,18 @@ export function AccountsTab() {
                         () => void accounts.refetch(),
                       );
 
-                    // Only a GPK or the Guru Besar may supervise, so the list is
-                    // the members who are one — not every account on the roster.
-                    const supervisors = items.filter(
-                      (s) => s.role === "gpk" || s.role === "guru_besar",
-                    );
+                    // The level above this member, so a GPK's own RPH is not
+                    // left reviewable by a peer. See `supervisorsFor`.
+                    const supervisors = supervisorsFor(m, items);
 
                     const changeSupervisor = (supervisorId: string | null) =>
                       save(
                         () => setSupervisor(m.user_id, supervisorId),
                         supervisorId
                           ? `Penyelia ${m.full_name} dikemas kini`
-                          : `${m.full_name} kini hanya kelihatan kepada Guru Besar`,
+                          : m.role === "guru_biasa"
+                            ? `${m.full_name} kini hanya kelihatan kepada Guru Besar`
+                            : `Penyelia ${m.full_name} dikosongkan`,
                         () => void accounts.refetch(),
                       );
 
@@ -279,33 +323,30 @@ export function AccountsTab() {
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          {/* Scope, not decoration: this decides whose plans the
-                            GPK above them can open. A GPK's own scope is the
-                            Guru Besar, so the column is blank for anyone who
-                            is not a Guru Biasa. */}
-                          {m.role === "guru_biasa" ? (
-                            supervisors.length === 0 ? (
-                              <span className="text-[12px] text-ink-4">
-                                Tiada GPK — hanya Guru Besar
-                              </span>
-                            ) : (
-                              <Select
-                                aria-label={`Penyelia ${m.full_name}`}
-                                value={m.supervisor_id ?? ""}
-                                className="w-[190px] py-1.5 text-[12.5px]"
-                                disabled={busy}
-                                onChange={(e) => changeSupervisor(e.target.value || null)}
-                              >
-                                <option value="">— Guru Besar sahaja —</option>
-                                {supervisors.map((s) => (
-                                  <option key={s.user_id} value={s.user_id}>
-                                    {s.full_name} · {ms.roles[s.role]}
-                                  </option>
-                                ))}
-                              </Select>
-                            )
+                          {/* Scope, not decoration: this decides who may open
+                            and review this person's RPH. The list is the level
+                            above — a GPK's own work is reviewed by the Guru
+                            Besar, and a Guru Besar by another Guru Besar if
+                            the school has one. */}
+                          {supervisors.length === 0 ? (
+                            <span className="text-[12px] text-ink-4">
+                              {noSupervisorText(m.role)}
+                            </span>
                           ) : (
-                            <span className="text-[12.5px] text-ink-4">—</span>
+                            <Select
+                              aria-label={`Penyelia ${m.full_name}`}
+                              value={m.supervisor_id ?? ""}
+                              className="w-[190px] py-1.5 text-[12.5px]"
+                              disabled={busy}
+                              onChange={(e) => changeSupervisor(e.target.value || null)}
+                            >
+                              <option value="">{UNASSIGNED[m.role]}</option>
+                              {supervisors.map((s) => (
+                                <option key={s.user_id} value={s.user_id}>
+                                  {s.full_name} · {ms.roles[s.role]}
+                                </option>
+                              ))}
+                            </Select>
                           )}
                         </td>
                         <td className="px-4 py-2.5">

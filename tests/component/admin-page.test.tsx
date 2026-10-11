@@ -78,6 +78,23 @@ const MEMBERS: Member[] = [
     supervisor_id: "00000000-0000-4000-8000-000000000002",
     supervisor_name: "Ramlan bin Yusof",
   },
+  {
+    user_id: "00000000-0000-4000-8000-000000000004",
+    username: "zulkifli.rahman",
+    full_name: "Zulkifli bin Rahman",
+    email: null,
+    // The Guru Besar. Their own row has nobody above them — the school has
+    // one — so it must say that rather than offer an empty menu.
+    role: "guru_besar",
+    jawatan: "guru_besar",
+    is_active: true,
+    last_login_at: null,
+    locked_until: null,
+    failed_logins: 0,
+    password_changed_at: null,
+    supervisor_id: null,
+    supervisor_name: null,
+  },
 ];
 
 const CLASSES = {
@@ -228,23 +245,33 @@ describe("pentadbiran", () => {
     expect(screen.getByText("Buka kunci")).toBeTruthy();
 
     // One control per account, and every row offers a password reset.
-    expect(screen.getAllByLabelText(/^Peranan /).length).toBe(3);
-    expect(screen.getAllByText("Tetap semula kata laluan")).toHaveLength(3);
-    // Two of the three are active; the third is locked, not merely inactive.
-    expect(screen.getAllByText("Aktif")).toHaveLength(2);
+    expect(screen.getAllByLabelText(/^Peranan /).length).toBe(4);
+    expect(screen.getAllByText("Tetap semula kata laluan")).toHaveLength(4);
+    // Three of the four are active; the fourth is locked, not merely inactive.
+    expect(screen.getAllByText("Aktif")).toHaveLength(3);
     expect(screen.getByText("Dikunci")).toBeTruthy();
   });
 
-  it("offers the supervision assignment, and only to teachers", async () => {
+  it("offers the supervision assignment to everyone with someone above them", async () => {
     vi.stubGlobal("fetch", fakeFetch);
     await mount();
 
     await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
 
-    // Two Guru Biasa rows get a picker; the GPK does not — a GPK's scope is
-    // the Guru Besar, so there is nothing to choose for them.
-    expect(screen.getAllByLabelText(/^Penyelia /)).toHaveLength(2);
-    expect(screen.queryByLabelText("Penyelia Ramlan bin Yusof")).toBeNull();
+    // Three of the four rows get a picker — the two teachers and the GPK.
+    // The Guru Besar's own row has nobody above it in a school with one, and
+    // says so instead of offering an empty menu.
+    expect(screen.getAllByLabelText(/^Penyelia /)).toHaveLength(3);
+    expect(screen.getByText("Tiada Guru Besar lain")).toBeTruthy();
+    expect(screen.queryByLabelText("Penyelia Zulkifli bin Rahman")).toBeNull();
+
+    // A GPK's own RPH is reviewed by the Guru Besar, so that is the whole of
+    // their list — a peer GPK may not review it.
+    const gpk = screen.getByLabelText("Penyelia Ramlan bin Yusof") as HTMLSelectElement;
+    expect(Array.from(gpk.options).map((o) => o.textContent)).toEqual([
+      "— belum ditetapkan —",
+      "Zulkifli bin Rahman · Guru Besar",
+    ]);
 
     // Unassigned is a real state, not a missing value, so it reads as blank.
     // (`toHaveValue` is jest-dom's; this project registers no setup file, so
@@ -256,12 +283,17 @@ describe("pentadbiran", () => {
       (screen.getByLabelText("Penyelia Siti Rahmah binti Ali") as HTMLSelectElement).value,
     ).toBe("00000000-0000-4000-8000-000000000002");
 
-    // Only a GPK or the Guru Besar may supervise, so the GPK is offered and a
-    // third Guru Biasa in the list is not.
+    // Only the level above may supervise, so a Guru Besar is offered
+    // everywhere — teachers and the GPK — while a Guru Biasa is never
+    // offered to anyone.
     const offered = screen.getAllByRole("option", {
       name: /Ramlan bin Yusof · Guru Penolong Kanan/,
     });
     expect(offered.length).toBe(2);
+    const pgb = screen.getAllByRole("option", {
+      name: /Zulkifli bin Rahman · Guru Besar/,
+    });
+    expect(pgb.length).toBe(3);
     expect(screen.queryByRole("option", { name: /Siti Rahmah .*Guru Biasa/ })).toBeNull();
   });
 
@@ -272,8 +304,8 @@ describe("pentadbiran", () => {
     await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
 
     // One picker per row — and none for a role with no office to hold, which
-    // this roster happens not to contain.
-    expect(screen.getAllByLabelText(/^Jawatan /)).toHaveLength(3);
+    // this roster happens not to contain (the pentadbir's row is a dash).
+    expect(screen.getAllByLabelText(/^Jawatan /)).toHaveLength(4);
 
     // A GPK's menu is the three Penolong Kanan offices, not the single one a
     // Guru Biasa gets: the role cannot say which office this person holds.
