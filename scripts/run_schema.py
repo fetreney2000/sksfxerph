@@ -248,7 +248,9 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    check("33 functions in erph", n_funcs == 33, f"found {n_funcs}")
+    # Bump when adding a function — this count is a guard against one being
+    # lost, not a formality.
+    check("34 functions in erph", n_funcs == 34, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -560,6 +562,36 @@ def main() -> int:
         )
         conn.commit()
 
+        # ── a reminder reaches only the teachers the caller supervises ──────
+        # The write path is where scope has to live *inside* the function:
+        # SECURITY DEFINER means the caller's RLS is never consulted, so a
+        # handler that resolved the roster in JavaScript and posted ids would
+        # be one careless edit from a school-wide nudge.
+        act_as("gpk.uji")
+        reached = read_as_authenticated(
+            f"select erph.remind_teachers({SK}::uuid, '2026/2027'::text, 1::smallint)"
+        )
+        stage.append(
+            ("a GPK's reminder reaches their own teacher", reached == 1, f"got {reached}")
+        )
+        # Asked for by id, an out-of-scope target still does not match. The
+        # pentadbir shares the school but is not supervised by this GPK — and
+        # the id is inlined rather than selected, because `authenticated` is
+        # denied SELECT on erph.user by design.
+        act_as("gpk.uji")
+        admin_id = "00000000-0000-4000-8000-000000000001"
+        stray = read_as_authenticated(
+            f"select erph.remind_teachers({SK}::uuid, '2026/2027'::text, 1::smallint, "
+            f"array['{admin_id}']::uuid[])"
+        )
+        stage.append(("a GPK cannot remind outside their scope", stray == 0, f"got {stray}"))
+
+        # Tapping the button again the same week reaches nobody, so a Guru
+        # Besar cannot fill a teacher's bell with identical rows.
+        act_as("gpk.uji")
+        again = read_as_authenticated(f"select erph.remind_teachers({SK}::uuid, '2026/2027'::text, 1::smallint)")
+        stage.append(("the same week is nudged only once", again == 0, f"got {again}"))
+
         # ── a teacher may not decide their own work ─────────────────────────
         act_as("uji")
         msg = refused(f"select erph.sahkan_rph({DOC})")
@@ -622,7 +654,11 @@ def main() -> int:
 
         for item in stage:
             label, ok = item[0], item[1]
-            print(f"  [{'OK ' if ok else 'FAIL'}] {label}")
+            # Details were being dropped here even though the `checks` printer
+            # below shows them, which is why a failing assertion in this stage
+            # reported nothing but its own name.
+            detail = item[2] if len(item) > 2 else ""
+            print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" — {detail}" if detail else ""))
             errors += 0 if ok else 1
     except Exception as e:  # noqa: BLE001
         conn.rollback()

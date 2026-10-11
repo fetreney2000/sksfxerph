@@ -741,6 +741,82 @@ language sql stable security definer set search_path = erph, public as $$
    order by u.full_name;
 $$;
 
+-- Nudge the teachers the caller supervises who have not finished this week.
+--
+-- Scope is applied *inside* the function through `erph.may_supervise`, the
+-- same predicate `pantau_teachers` filters its result with. SECURITY DEFINER
+-- means the caller's RLS is not consulted at all, so a handler that resolved
+-- the roster in JavaScript and posted a list of ids would be one careless
+-- edit away from letting a GPK nudge every teacher in the district.
+--
+-- `p_targets` is honoured but never trusted: an id outside the caller's scope
+-- simply does not match. Passing nothing reminds everyone late.
+--
+-- Returns how many were notified, so the caller reports a fact rather than
+-- repeating a count the client happened to send.
+create or replace function erph.remind_teachers(p_school uuid, p_session text,
+                                                p_week smallint,
+                                                p_targets uuid[] default null)
+returns integer
+language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_actor  uuid := erph.actor();
+  v_title  text := format('Peringatan: RPH minggu %s belum lengkap', p_week);
+  v_count  integer;
+begin
+  if v_actor is null then
+    raise exception 'Belum log masuk';
+  end if;
+
+  with target as (
+    select m.user_id
+      from erph.school_member m
+     where m.school_id = p_school
+       and m.is_active
+       -- Nobody nudges themselves; the row is theirs to act on.
+       and m.user_id <> v_actor
+       and erph.may_supervise(p_school, m.user_id)
+       and (p_targets is null or m.user_id = any(p_targets))
+       -- "Late" is anything that is not fully approved: a week with no plan at
+       -- all, and a week whose plans exist but none are sealed. Both need the
+       -- same nudge; neither is the same as a teacher mid-task, whose plans
+       -- are simply still awaiting a decision.
+       and (
+             not exists (
+               select 1 from erph.rph_document d
+                where d.owner_id = m.user_id and d.school_id = p_school
+                  and d.session = p_session and d.deleted_at is null
+                  and d.week_no = p_week)
+          or exists (
+               select 1 from erph.rph_document d
+                where d.owner_id = m.user_id and d.school_id = p_school
+                  and d.session = p_session and d.deleted_at is null
+                  and d.week_no = p_week
+                  and d.status <> 'approved')
+       )
+       -- One nudge per teacher per week, however many times the button is
+       -- pressed. Without this a Guru Besar tapping repeatedly fills the
+       -- teacher's bell with identical rows, which is how a notification
+       -- system trains people to ignore it.
+       and not exists (
+             select 1 from erph.notification n
+              where n.user_id = m.user_id
+                and n.type = 'reminder'
+                and n.title = v_title)
+  ), inserted as (
+    insert into erph.notification (school_id, user_id, type, title, body, link_view)
+    select p_school, t.user_id, 'reminder'::erph.notification_type, v_title,
+           format('Sila lengkapkan dan hantar RPH untuk %s, minggu %s.',
+                  p_session, p_week),
+           'dashboard'
+      from target t
+    returning 1
+  )
+  select count(*) into v_count from inserted;
+
+  return v_count;
+end $$;
+
 create or replace function erph.my_schools()
 returns uuid[] language sql stable security definer set search_path = erph, public as $$
   select coalesce(array_agg(school_id) filter (where is_active), '{}')

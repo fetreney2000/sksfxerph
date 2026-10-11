@@ -135,6 +135,40 @@ export default function SekolahPage() {
   // is the same as a teacher who is simply mid-task, which is Menunggu.
   const lateCount = rows.filter((r) => r.week === "Lewat" || r.week === "Tiada").length;
 
+  /**
+   * Nudge the teachers who are late.
+   *
+   * The server decides who that is and reports how many it reached. Both
+   * buttons used to print a count the client had guessed — "3 peringatan
+   * dihantar" — and send nothing, so a Guru Besar was told their staff had
+   * been reminded while the staff heard nothing at all. Reporting the
+   * server's number also means a second tap against the same week says
+   * "tiada guru perlu diberi peringatan" rather than claiming a second round.
+   */
+  const remind = async (targets?: string[]) => {
+    if (!supabaseConfigured) {
+      toast("Peringatan hanya boleh dihantar dalam mod tersegerak.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(targets ? { targets } : {}),
+      });
+      const out = (await res.json()) as { notified?: number; error?: string };
+      if (!res.ok) throw new Error(out.error ?? "Gagal menghantar peringatan.");
+      toast.success(
+        out.notified
+          ? `Peringatan dihantar kepada ${out.notified} guru.`
+          : "Tiada guru yang perlu diberi peringatan.",
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghantar peringatan.");
+    }
+  };
+
   return (
     <>
       {/* ── Filter bar ───────────────────────────────────────────────────── */}
@@ -164,10 +198,7 @@ export default function SekolahPage() {
           >
             <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Eksport
           </Button>
-          <Button
-            size="sm"
-            onClick={() => toast("3 peringatan dihantar kepada guru yang belum menghantar")}
-          >
+          <Button size="sm" disabled={lateCount === 0} onClick={() => void remind()}>
             <Bell className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Hantar peringatan
           </Button>
         </span>
@@ -350,11 +381,9 @@ export default function SekolahPage() {
                       size="sm"
                       variant="ghost"
                       onClick={() =>
-                        toast(
-                          t.week === "Lewat" || t.week === "Tiada"
-                            ? `Peringatan dihantar kepada ${t.name}`
-                            : `Memanggil senarai RPH ${t.name}`,
-                        )
+                        t.week === "Lewat" || t.week === "Tiada"
+                          ? void remind([t.id])
+                          : toast(`Memanggil senarai RPH ${t.name}`)
                       }
                     >
                       {t.week === "Lewat" || t.week === "Tiada" ? "Peringat" : "Semak"}
