@@ -260,7 +260,8 @@ end $$;
 create or replace function erph.admin_set_setting(p_school uuid, p_weekday smallint,
                                                   p_time time,
                                                   p_require_complete boolean,
-                                                  p_session text default null)
+                                                  p_session text default null,
+                                                  p_rph_per_week smallint default null)
 returns void language plpgsql security definer set search_path = erph, public as $$
 begin
   if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
@@ -270,11 +271,15 @@ begin
   if p_session is not null and p_session !~ '^[0-9]{4}/[0-9]{4}$' then
     raise exception 'Sesi mesti dalam bentuk TTTT/TTTT';
   end if;
+  if p_rph_per_week is not null and p_rph_per_week not between 1 and 7 then
+    raise exception 'Bilangan RPH seminggu mesti antara 1 dan 7';
+  end if;
   update erph.school_setting
      set submit_weekday = p_weekday,
          submit_time = p_time,
          require_complete = p_require_complete,
-         current_session = coalesce(p_session, current_session)
+         current_session = coalesce(p_session, current_session),
+         rph_per_week = coalesce(p_rph_per_week, rph_per_week)
    where school_id = p_school;
 end $$;
 

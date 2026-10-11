@@ -65,6 +65,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   interface HistoryRow {
     week: number;
+    teachers: number;
     expected: number;
     submitted: number;
     approved: number;
@@ -80,6 +81,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     stats: (data ?? [])[0] ?? null,
     history: rows.map((r) => ({
       week: r.week,
+      // The headcount. `expected` is the number of RPH the school owes that
+      // week — teachers × the school's rph_per_week — so the two are no
+      // longer the same figure and a roster needs the first one.
+      teachers: r.teachers,
       expected: r.expected,
       submitted: r.submitted,
       approved: r.approved,

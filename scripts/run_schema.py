@@ -618,6 +618,44 @@ def main() -> int:
             )
         )
 
+        # ── the denominator is what the school owes, not who teaches ────────
+        # One active Guru Biasa in this school, and a school that runs Monday
+        # to Friday owes five RPH a week. The percentage used to divide
+        # approved *plans* by *teachers*, so a teacher who finished their week
+        # put the school at 500% and two teachers with six plans between them
+        # read as 300% — a figure nobody at the school recognised.
+        n_teachers = read_as_authenticated(
+            f"select teachers from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
+        )
+        owed = read_as_authenticated(
+            f"select expected from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
+        )
+        stage.append(
+            (
+                "the weekly expectation is teachers x RPH per week",
+                n_teachers == 1 and owed == 5,
+                f"{n_teachers} teacher(s) owe {owed}",
+            )
+        )
+        # And the school's own rule, rather than a constant: move it and the
+        # expectation must move with it. Written straight to the row because
+        # the gate on `admin_set_setting` belongs to the admin section below —
+        # here only the arithmetic is under test.
+        r.q(f"update erph.school_setting set rph_per_week = 4 where school_id = {SK}")
+        conn.commit()
+        owed_four = read_as_authenticated(
+            f"select expected from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
+        )
+        r.q(f"update erph.school_setting set rph_per_week = 5 where school_id = {SK}")
+        conn.commit()
+        stage.append(
+            (
+                "…and it is the school's own rule, not a constant",
+                owed_four == 4,
+                f"rph_per_week=4 → {owed_four}",
+            )
+        )
+
         # ── a teacher may not decide their own work ─────────────────────────
         act_as("uji")
         msg = refused(f"select erph.sahkan_rph({DOC})")
@@ -671,6 +709,20 @@ def main() -> int:
         conn.commit()
         status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
         stage.append(("sahkan -> approved", status == "approved"))
+
+        # One approved plan out of the five this school owes in week 1: 20%.
+        # Not 100%, and not 20% *of a headcount* — the number only means
+        # something beside the expectation it is measured against.
+        pct = read_as_authenticated(
+            f"select compliance from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
+        )
+        stage.append(
+            (
+                "one approved plan of five owed reads as 20%",
+                float(pct) == 20.0,
+                f"got {pct}",
+            )
+        )
 
         # ── a decided plan cannot be re-decided by replaying the call ───────
         msg = refused(f"select erph.sahkan_rph({DOC})")

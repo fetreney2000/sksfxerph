@@ -115,6 +115,7 @@ const SETTINGS = {
     submit_weekday: 5,
     submit_time: "16:00:00",
     require_complete: true,
+    rph_per_week: 5,
   },
   school: {
     id: "33333333-3333-4333-8333-333333333333",

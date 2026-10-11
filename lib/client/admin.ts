@@ -204,6 +204,12 @@ export interface SchoolSetting {
   submit_weekday: number;
   submit_time: string;
   require_complete: boolean;
+  /**
+   * How many RPH one teacher owes in a week — five for a school that runs
+   * Monday to Friday. This is what "pematuhan sekolah" divides by, so it is
+   * the school's rule rather than a constant in the code.
+   */
+  rph_per_week: number;
 }
 
 export interface SchoolInfo {
@@ -222,4 +228,5 @@ export const setSettings = (body: {
   submitTime: string;
   requireComplete: boolean;
   currentSession?: string;
+  rphPerWeek: number;
 }) => request<{ ok: boolean }>("/api/admin/settings", patch(body));

@@ -59,6 +59,9 @@ export function SettingsTab() {
   const [weekday, setWeekday] = React.useState(5);
   const [time, setTime] = React.useState("16:00");
   const [requireComplete, setRequireComplete] = React.useState(true);
+  // Five for a school that runs Monday to Friday — the school's own rule, and
+  // what "pematuhan sekolah" divides by.
+  const [rphPerWeek, setRphPerWeek] = React.useState(5);
   const [sessionInput, setSessionInput] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [adopted, setAdopted] = React.useState(false);
@@ -74,6 +77,7 @@ export function SettingsTab() {
     setWeekday(stored.submit_weekday);
     setTime(stored.submit_time.slice(0, 5));
     setRequireComplete(stored.require_complete);
+    setRphPerWeek(stored.rph_per_week);
     setSessionInput(stored.current_session);
     setAdopted(true);
   }, [stored, adopted]);
@@ -85,6 +89,10 @@ export function SettingsTab() {
       setError("Sesi mesti dalam bentuk TTTT/TTTT, contohnya 2026/2027.");
       return;
     }
+    if (!Number.isInteger(rphPerWeek) || rphPerWeek < 1 || rphPerWeek > 7) {
+      setError("Bilangan RPH seminggu mesti antara 1 dan 7.");
+      return;
+    }
     setError(null);
 
     save(
@@ -94,6 +102,7 @@ export function SettingsTab() {
           submitTime: time,
           requireComplete,
           currentSession: sessionInput,
+          rphPerWeek,
         }),
       sessionChanged ? `Sesi ditukar kepada ${sessionInput}` : "Tetapan sekolah dikemas kini",
       () => {
@@ -133,7 +142,7 @@ export function SettingsTab() {
         </CardHeader>
 
         <CardContent className="grid gap-4">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <Label htmlFor="f-sesi" required>
                 Sesi semasa
@@ -173,6 +182,25 @@ export function SettingsTab() {
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
               />
+            </div>
+            <div>
+              <Label htmlFor="f-rph">RPH seminggu</Label>
+              <Input
+                id="f-rph"
+                type="number"
+                min={1}
+                max={7}
+                className="num"
+                value={String(rphPerWeek)}
+                onChange={(e) => setRphPerWeek(Number(e.target.value))}
+                aria-describedby="rph-hint"
+              />
+              {/* This number is the denominator of the school's compliance
+                  percentage, so it is stated where it is set rather than
+                  buried in the calculation it feeds. */}
+              <p id="rph-hint" className="mt-1.5 text-[11.5px] text-ink-4">
+                Satu RPH bagi setiap hari persekolahan — asas kadar pematuhan sekolah.
+              </p>
             </div>
           </div>
 

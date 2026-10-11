@@ -26,6 +26,8 @@ const WEEK = currentWeek();
 export interface SchoolWeekPoint {
   week: number;
   /** Active guru_biasa that week. Historical membership is not recorded, so this is current headcount repeated. */
+  teachers: number;
+  /** RPH owed that week — teachers × the school's own `rph_per_week` (five for a Monday–Friday school). */
   expected: number;
   submitted: number;
   approved: number;
@@ -39,6 +41,8 @@ export interface SchoolWeekPoint {
 export interface SchoolStatsView {
   /** Active guru_biasa — the teaching headcount, not a tally of who has submitted. */
   activeTeachers: number;
+  /** RPH the school owes across the window: teachers × the school's weekly rule × the weeks in view. */
+  expected: number;
   submitted: number;
   approved: number;
   returned: number;
@@ -52,6 +56,7 @@ export interface SchoolStatsView {
 }
 
 interface WeekStatsRow {
+  teachers: number;
   expected: number;
   submitted: number;
   approved: number;
@@ -156,6 +161,7 @@ export function useSchoolStats(range?: { first: number; last: number }): SchoolS
 
   const base: SchoolStatsView = {
     activeTeachers: SCHOOL_STATS.activeTeachers,
+    expected: SCHOOL_STATS.weeks[0]?.expected ?? 0,
     submitted: SCHOOL_STATS.submitted,
     approved: SCHOOL_STATS.approved,
     returned: SCHOOL_STATS.returned,
@@ -185,22 +191,29 @@ export function useSchoolStats(range?: { first: number; last: number }): SchoolS
       ? null
       : timed.reduce((total, w) => total + (w.avgMinutes ?? 0), 0) / timed.length;
 
-  const expected = weeks[0]?.expected ?? 0;
+  // The headcount for the roster, and what the school actually owes — they
+  // stopped being the same number when the denominator was fixed. The
+  // teaching headcount, not a tally of who has submitted.
+  const teachers = weeks[0]?.teachers ?? 0;
+  const required = sum((w) => w.expected);
 
   return {
-    // The teaching headcount, not a tally of who has submitted — the previous
-    // sub-label claimed the latter, which the RPC does not compute.
-    activeTeachers: expected,
+    activeTeachers: teachers,
+    expected: required,
     submitted: sum((w) => w.submitted),
     approved: sum((w) => w.approved),
     returned: sum((w) => w.returned),
-    // Teachers x weeks in the window. A single week is the usual rate; a
-    // wider window asks how often each teacher's week was covered, which is
-    // the same question measured over more of it.
+    // Approved plans against the RPH the school owes across this window: the
+    // school's own weekly rule × the teachers × the weeks in view. Dividing by
+    // the headcount alone is what made a finished week read as 500%, and a
+    // school with two teachers and six approved plans between them as 300%.
+    // Capped at 100 for the same reason the SQL caps it — handing in more than
+    // the week requires has met the requirement, not exceeded it — and the
+    // counts on the same card still say exactly how many were approved.
     compliancePct:
-      expected === 0 || weeks.length === 0
+      required === 0 || weeks.length === 0
         ? 0
-        : Math.round((sum((w) => w.approved) / (expected * weeks.length)) * 1000) / 10,
+        : Math.min(100, Math.round((sum((w) => w.approved) / required) * 1000) / 10),
     // Null, not zero: a window with no decided plan has not stopped its
     // clock, and "0 minit" would read as a school that decided instantly.
     avgMinutes: mean,

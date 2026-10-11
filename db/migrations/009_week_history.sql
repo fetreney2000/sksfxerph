@@ -29,13 +29,19 @@
 create or replace function erph.school_week_history(p_school uuid, p_session text,
                                                     p_first_week smallint,
                                                     p_last_week smallint)
-returns table (week smallint, expected int, submitted int, approved int,
-               returned_t int, drafts int, compliance numeric,
+returns table (week smallint, teachers int, expected int, submitted int,
+               approved int, returned_t int, drafts int, compliance numeric,
                avg_minutes numeric)
 language sql stable security definer set search_path = erph, public as $$
   with active as (
     select count(*)::int n from erph.school_member
      where school_id = p_school and role = 'guru_biasa' and is_active
+  ), cfg as (
+    -- One row even when the settings row is missing, so the join never
+    -- drops a week: the default is the same five as the column's own.
+    select coalesce(max(rph_per_week), 5)::int per_week
+      from erph.school_setting
+     where school_id = p_school
   ), docs as (
     select week_no, status, grade, submitted_at, reviewed_at
       from erph.rph_document
@@ -45,18 +51,21 @@ language sql stable security definer set search_path = erph, public as $$
   )
   select w.week::smallint,
          a.n,
+         (a.n * c.per_week)::int,
          count(d.*) filter (where d.status <> 'draft')::int,
          count(d.*) filter (where d.grade = 1)::int,
          count(d.*) filter (where d.status = 'returned' or d.grade = 0)::int,
          count(d.*) filter (where d.status = 'draft')::int,
-         round(100.0 * count(d.*) filter (where d.grade = 1) / nullif(a.n, 0), 1),
+         least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
+               / nullif(a.n * c.per_week, 0), 1)),
          round(avg(extract(epoch from (d.reviewed_at - d.submitted_at)) / 60.0)
                filter (where d.reviewed_at is not null
                        and d.submitted_at is not null
                        and d.reviewed_at >= d.submitted_at), 1)
     from generate_series(p_first_week::int, p_last_week::int) w(week)
     cross join active a
+    cross join cfg c
     left join docs d on d.week_no = w.week
-   group by w.week, a.n
+   group by w.week, a.n, c.per_week
    order by w.week;
 $$;

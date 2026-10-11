@@ -20,14 +20,17 @@
 alter table erph.user         alter column role set default 'guru_biasa';
 alter table erph.school_member alter column role set default 'guru_biasa';
 
--- ── 2 · the office printed on the cover sheet ──────────────────────────────
--- `erph.jawatan` and the column that holds it. Created here, and not in the
--- migration that first needs it, because two definitions later in this chain
--- name the type *in a signature* — `admin_create_member`'s parameter (002)
--- and `admin_list_members`' return type (004) — and a signature is resolved
--- when the function is created. A database that already ran the original 001b
--- gets the same two statements from the later migration; both are guarded, so
+-- ── 2 · columns added after the original delta ──────────────────────────────
+-- Created here rather than in the migration that first needs them, because
+-- later definitions in this chain name them in a signature or in a body that
+-- is checked when the function is created: `admin_create_member`'s parameter
+-- and `admin_list_members`' return type name `erph.jawatan`, and
+-- `admin_set_setting`'s parameter and the two statistics functions read
+-- `school_setting.rph_per_week`. A database that already ran the original
+-- 001b gets both from the later migrations; every statement is guarded, so
 -- whichever runs second changes nothing.
+
+-- The office printed on the cover sheet.
 do $$
 begin
   if not exists (
@@ -43,6 +46,15 @@ end $$;
 
 alter table erph.user add column if not exists jawatan erph.jawatan;
 
+-- How many RPH one teacher owes in a week — the denominator behind
+-- "pematuhan sekolah", five for a school that runs Monday to Friday.
+alter table erph.school_setting
+  add column if not exists rph_per_week smallint not null default 5;
+
+alter table erph.school_setting drop constraint if exists school_setting_rph_per_week_check;
+alter table erph.school_setting add constraint school_setting_rph_per_week_check
+  check (rph_per_week between 1 and 7);
+
 -- ── 3 · the single-stage reviewer is gone ──────────────────────────────────
 drop function if exists erph.review_rph(uuid, smallint, text);
 
@@ -50,6 +62,7 @@ drop function if exists erph.review_rph(uuid, smallint, text);
 -- Shapes that changed: these cannot be `create or replace`d over.
 drop function if exists erph.admin_list_members(uuid);
 drop function if exists erph.admin_set_setting(uuid, smallint, time, boolean);
+drop function if exists erph.school_week_stats(uuid, text, smallint);
 
 
 create or replace function erph.is_staff(p_school uuid)
@@ -130,9 +143,12 @@ end $$;
 
 
 create or replace function erph.school_week_stats(p_school uuid, p_session text, p_week smallint)
-returns table (expected int, submitted int, approved int, returned_t int,
-               drafts int, compliance numeric)
+returns table (teachers int, expected int, submitted int, approved int,
+               returned_t int, drafts int, compliance numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
+declare
+  v_teachers int := 0;
+  v_per_week int := 5;
 begin
   -- Any member: this returns counts and a percentage and never a name, so a
   -- Guru Biasa can see how the school is doing without seeing who is behind
@@ -140,23 +156,32 @@ begin
   if not erph.is_member(p_school) and not erph.is_staff(p_school) then
     raise exception 'Tidak dibenarkan';
   end if;
+
+  select count(*)::int into v_teachers
+    from erph.school_member
+   where school_id = p_school and role = 'guru_biasa' and is_active;
+
+  -- The school's own rule, read rather than assumed. The default only ever
+  -- applies to a school whose settings row has not been created yet.
+  select coalesce(max(rph_per_week), 5)::int into v_per_week
+    from erph.school_setting
+   where school_id = p_school;
+
   return query
-  with t as (
-    select count(*)::int n from erph.school_member
-     where school_id = p_school and role = 'guru_biasa' and is_active
-  ), d as (
+  with d as (
     select status, grade from erph.rph_document
      where school_id = p_school and session = p_session
        and week_no = p_week and deleted_at is null
   )
   select
-    (select n from t),
+    v_teachers,
+    (v_teachers * v_per_week)::int,
     (select count(*)::int from d where status <> 'draft'),
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
-          / nullif((select n from t), 0), 1);
+    least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
+          / nullif(v_teachers * v_per_week, 0), 1));
 end $$;
 
 
@@ -192,7 +217,8 @@ end $$;
 create or replace function erph.admin_set_setting(p_school uuid, p_weekday smallint,
                                                   p_time time,
                                                   p_require_complete boolean,
-                                                  p_session text default null)
+                                                  p_session text default null,
+                                                  p_rph_per_week smallint default null)
 returns void language plpgsql security definer set search_path = erph, public as $$
 begin
   if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
@@ -202,11 +228,15 @@ begin
   if p_session is not null and p_session !~ '^[0-9]{4}/[0-9]{4}$' then
     raise exception 'Sesi mesti dalam bentuk TTTT/TTTT';
   end if;
+  if p_rph_per_week is not null and p_rph_per_week not between 1 and 7 then
+    raise exception 'Bilangan RPH seminggu mesti antara 1 dan 7';
+  end if;
   update erph.school_setting
      set submit_weekday = p_weekday,
          submit_time = p_time,
          require_complete = p_require_complete,
-         current_session = coalesce(p_session, current_session)
+         current_session = coalesce(p_session, current_session),
+         rph_per_week = coalesce(p_rph_per_week, rph_per_week)
    where school_id = p_school;
 end $$;
 

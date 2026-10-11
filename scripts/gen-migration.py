@@ -63,6 +63,15 @@ CHANGED_SHAPE = [
     "admin_set_setting(uuid, smallint, time, boolean)",
 ]
 
+# Dropped by 001b alone: 002 emits `CHANGED_SHAPE` and does not recreate what
+# it drops there, so a function that only 001b (and later 013) creates would
+# be left missing for the rest of the chain.
+ONLY_IN_001B = [
+    # The return type gained `teachers`; the baseline already has a
+    # `school_week_stats`, so `create or replace` refuses outright (42P13).
+    "school_week_stats(uuid, text, smallint)",
+]
+
 # DDL for migrations beyond 001, generated from the same source so nothing is
 # ever hand-copied out of schema.sql.
 ADMIN_FUNCTIONS = [
@@ -188,14 +197,17 @@ body = f"""-- ==================================================================
 alter table erph.user         alter column role set default 'guru_biasa';
 alter table erph.school_member alter column role set default 'guru_biasa';
 
--- ── 2 · the office printed on the cover sheet ──────────────────────────────
--- `erph.jawatan` and the column that holds it. Created here, and not in the
--- migration that first needs it, because two definitions later in this chain
--- name the type *in a signature* — `admin_create_member`'s parameter (002)
--- and `admin_list_members`' return type (004) — and a signature is resolved
--- when the function is created. A database that already ran the original 001b
--- gets the same two statements from the later migration; both are guarded, so
+-- ── 2 · columns added after the original delta ──────────────────────────────
+-- Created here rather than in the migration that first needs them, because
+-- later definitions in this chain name them in a signature or in a body that
+-- is checked when the function is created: `admin_create_member`'s parameter
+-- and `admin_list_members`' return type name `erph.jawatan`, and
+-- `admin_set_setting`'s parameter and the two statistics functions read
+-- `school_setting.rph_per_week`. A database that already ran the original
+-- 001b gets both from the later migrations; every statement is guarded, so
 -- whichever runs second changes nothing.
+
+-- The office printed on the cover sheet.
 do $$
 begin
   if not exists (
@@ -211,12 +223,21 @@ end $$;
 
 alter table erph.user add column if not exists jawatan erph.jawatan;
 
+-- How many RPH one teacher owes in a week — the denominator behind
+-- "pematuhan sekolah", five for a school that runs Monday to Friday.
+alter table erph.school_setting
+  add column if not exists rph_per_week smallint not null default 5;
+
+alter table erph.school_setting drop constraint if exists school_setting_rph_per_week_check;
+alter table erph.school_setting add constraint school_setting_rph_per_week_check
+  check (rph_per_week between 1 and 7);
+
 -- ── 3 · the single-stage reviewer is gone ──────────────────────────────────
 drop function if exists erph.review_rph(uuid, smallint, text);
 
 -- ── 4 · helpers, RPCs and the new admin set-up ─────────────────────────────
 -- Shapes that changed: these cannot be `create or replace`d over.
-{chr(10).join(f"drop function if exists erph.{sig};" for sig in CHANGED_SHAPE)}
+{chr(10).join(f"drop function if exists erph.{sig};" for sig in CHANGED_SHAPE + ONLY_IN_001B)}
 
 {chr(10).join(chr(10) + function(n) + chr(10) for n in FUNCTIONS)}
 -- ── 5 · policies embedding a role literal ─────────────────────────────────
@@ -844,3 +865,64 @@ drop function if exists erph.admin_create_member(uuid, text, text, erph.member_r
 
 OUT12.write_text(body12, encoding="utf-8")
 print(f"{OUT12.relative_to(root)} written ({len(body12)} chars)")
+
+# ---------------------------------------------------------------------------
+# 013: the denominator behind "pematuhan sekolah"
+# ---------------------------------------------------------------------------
+OUT13 = DIR / "013_week_expectation.sql"
+
+body13 = f"""-- ============================================================================
+-- eRPH ▸ MIGRATION 013 — the denominator behind "pematuhan sekolah"
+-- ============================================================================
+-- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010/011/012. Safe to run
+-- more than once.
+--
+-- The compliance percentage divided approved *plans* by the number of
+-- *teachers*. A school that runs Monday to Friday asks each teacher for five
+-- RPH, so a teacher who finished their week put the school at 500%, and two
+-- teachers with six approved plans between them read as 300% — a figure
+-- nobody at the school recognised, because it was measuring the wrong thing.
+--
+-- The denominator is now teachers × the school's own `rph_per_week` (five by
+-- default, editable on /pentadbiran), and both statistics functions return
+-- the headcount as well so the roster beside the chart still has it. The
+-- percentage is capped at 100: submitting more than the week requires has
+-- met the requirement, not exceeded it, and the counts beside it still say
+-- exactly how many plans were approved.
+--
+-- Both functions change their *return type* (a column each), which Postgres
+-- refuses to change in place (42P13) — so both are dropped first, along with
+-- `admin_set_setting`, which gained a parameter and would otherwise leave the
+-- old arity callable beside the new one.
+--
+-- `school_setting.rph_per_week` is created here for a database that ran the
+-- original 001b; a fresh chain already has it from 001b, and both statements
+-- below then change nothing.
+--
+-- Generated by scripts/gen-migration.py from db/schema.sql:
+--
+--   python scripts/gen-migration.py
+--
+-- ▸ 1 ▸ the school's own weekly rule ────────────────────────────────────────
+alter table erph.school_setting
+  add column if not exists rph_per_week smallint not null default 5;
+
+alter table erph.school_setting drop constraint if exists school_setting_rph_per_week_check;
+alter table erph.school_setting add constraint school_setting_rph_per_week_check
+  check (rph_per_week between 1 and 7);
+
+-- ▸ 2 ▸ shapes that changed ─────────────────────────────────────────────────
+drop function if exists erph.school_week_stats(uuid, text, smallint);
+drop function if exists erph.school_week_history(uuid, text, smallint, smallint);
+drop function if exists erph.admin_set_setting(uuid, smallint, time, boolean, text);
+
+-- ▸ 3 ▸ the functions ───────────────────────────────────────────────────────
+{function("school_week_stats")}
+
+{function("school_week_history")}
+
+{function("admin_set_setting")}
+"""
+
+OUT13.write_text(body13, encoding="utf-8")
+print(f"{OUT13.relative_to(root)} written ({len(body13)} chars)")

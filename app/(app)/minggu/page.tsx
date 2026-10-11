@@ -264,12 +264,17 @@ export default function MingguPage() {
                 Sekolah · Minggu {WEEK}
               </p>
               <p className="mt-0.5 text-[13.5px] text-ink-2">
-                {/* No denominator. "Expected RPH" would be teachers x classes,
-                    and teaching_assignment has no writer, so the number that
-                    used to sit here came from a bundled constant and read as
-                    this school's own. What is counted is counted. */}
-                <b className="num text-ink">{stats.submitted}</b>
-                <span className="text-ink-4"> · {stats.approved} diluluskan</span>
+                {/* The denominator is the school's own rule — teachers × the
+                    RPH each owes a week, five for a Monday-to-Friday school —
+                    stated beside the percentage so it can be checked by hand.
+                    It is deliberately not teachers × classes: that would need
+                    teaching_assignment, which has no writer, and a made-up
+                    denominator is worse than none. */}
+                <b className="num text-ink">{stats.approved}</b>
+                <span className="text-ink-4">
+                  {" "}
+                  daripada {stats.expected} RPH · {stats.submitted} dihantar
+                </span>
               </p>
             </div>
             <div className="min-w-[180px] flex-1">

@@ -335,6 +335,13 @@ create table erph.school_setting (
   submit_time     time not null default '16:00',
   timezone        text not null default 'Asia/Kuala_Lumpur',
   require_complete boolean not null default true,      -- block submit below 100%
+  -- How many RPH one teacher owes in a week: the school runs Monday to
+  -- Friday, so five. It is a *setting* because it is the denominator behind
+  -- "pematuhan sekolah" — hardcoded it would be one school's rule baked into
+  -- every deployment, and absent the percentage had no denominator at all
+  -- and divided approved plans by the teacher headcount, which is how two
+  -- teachers with six approved plans between them read as 300%.
+  rph_per_week    smallint not null default 5 check (rph_per_week between 1 and 7),
   updated_at      timestamptz not null default now()
 );
 
@@ -876,7 +883,14 @@ end $$;
 -- percentage, never a name, so any member may see the school's shape without
 -- seeing who is behind it.
 --
--- `expected` is the count of active guru_biasa *now*, not per week: historical
+-- `expected` is the number of RPH the school owes in that week — the active
+-- guru_biasa headcount times the school's own `rph_per_week` (five for a
+-- school that runs Monday to Friday) — and `teachers` is the headcount
+-- itself, which the roster beside this chart needs. They were one number
+-- until the denominator was fixed: dividing approved *plans* by *teachers*
+-- is what made a five-plan week read as 500%.
+--
+-- The headcount is the one counted *now*, not per week: historical
 -- membership is not recorded, so a teacher who left in week 3 would still be
 -- counted in week 1's denominator. That is stated rather than faked with a
 -- zero, and it only ever makes an older week look slightly worse than it was.
@@ -888,13 +902,19 @@ end $$;
 create or replace function erph.school_week_history(p_school uuid, p_session text,
                                                     p_first_week smallint,
                                                     p_last_week smallint)
-returns table (week smallint, expected int, submitted int, approved int,
-               returned_t int, drafts int, compliance numeric,
+returns table (week smallint, teachers int, expected int, submitted int,
+               approved int, returned_t int, drafts int, compliance numeric,
                avg_minutes numeric)
 language sql stable security definer set search_path = erph, public as $$
   with active as (
     select count(*)::int n from erph.school_member
      where school_id = p_school and role = 'guru_biasa' and is_active
+  ), cfg as (
+    -- One row even when the settings row is missing, so the join never
+    -- drops a week: the default is the same five as the column's own.
+    select coalesce(max(rph_per_week), 5)::int per_week
+      from erph.school_setting
+     where school_id = p_school
   ), docs as (
     select week_no, status, grade, submitted_at, reviewed_at
       from erph.rph_document
@@ -904,19 +924,22 @@ language sql stable security definer set search_path = erph, public as $$
   )
   select w.week::smallint,
          a.n,
+         (a.n * c.per_week)::int,
          count(d.*) filter (where d.status <> 'draft')::int,
          count(d.*) filter (where d.grade = 1)::int,
          count(d.*) filter (where d.status = 'returned' or d.grade = 0)::int,
          count(d.*) filter (where d.status = 'draft')::int,
-         round(100.0 * count(d.*) filter (where d.grade = 1) / nullif(a.n, 0), 1),
+         least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
+               / nullif(a.n * c.per_week, 0), 1)),
          round(avg(extract(epoch from (d.reviewed_at - d.submitted_at)) / 60.0)
                filter (where d.reviewed_at is not null
                        and d.submitted_at is not null
                        and d.reviewed_at >= d.submitted_at), 1)
     from generate_series(p_first_week::int, p_last_week::int) w(week)
     cross join active a
+    cross join cfg c
     left join docs d on d.week_no = w.week
-   group by w.week, a.n
+   group by w.week, a.n, c.per_week
    order by w.week;
 $$;
 
@@ -1305,10 +1328,25 @@ begin
 end $$;
 
 -- School compliance for one week (drives the admin dashboard in one round-trip)
+--
+-- `teachers` is the headcount and `expected` is how many RPH the school owes
+-- that week — teachers × the school's own `rph_per_week`, which is five for a
+-- school that runs Monday to Friday. The two used to be the same number, so
+-- the percentage divided approved *plans* by *teachers*: a teacher who
+-- finished their five put the school at 500%, and two teachers with six
+-- approved plans between them read as 300%.
+--
+-- `compliance` is capped at 100. A school that submits more than the week
+-- requires — one plan per class, say — has met its requirement rather than
+-- exceeded it, and the counts beside it still say exactly how many were
+-- approved.
 create or replace function erph.school_week_stats(p_school uuid, p_session text, p_week smallint)
-returns table (expected int, submitted int, approved int, returned_t int,
-               drafts int, compliance numeric)
+returns table (teachers int, expected int, submitted int, approved int,
+               returned_t int, drafts int, compliance numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
+declare
+  v_teachers int := 0;
+  v_per_week int := 5;
 begin
   -- Any member: this returns counts and a percentage and never a name, so a
   -- Guru Biasa can see how the school is doing without seeing who is behind
@@ -1316,23 +1354,32 @@ begin
   if not erph.is_member(p_school) and not erph.is_staff(p_school) then
     raise exception 'Tidak dibenarkan';
   end if;
+
+  select count(*)::int into v_teachers
+    from erph.school_member
+   where school_id = p_school and role = 'guru_biasa' and is_active;
+
+  -- The school's own rule, read rather than assumed. The default only ever
+  -- applies to a school whose settings row has not been created yet.
+  select coalesce(max(rph_per_week), 5)::int into v_per_week
+    from erph.school_setting
+   where school_id = p_school;
+
   return query
-  with t as (
-    select count(*)::int n from erph.school_member
-     where school_id = p_school and role = 'guru_biasa' and is_active
-  ), d as (
+  with d as (
     select status, grade from erph.rph_document
      where school_id = p_school and session = p_session
        and week_no = p_week and deleted_at is null
   )
   select
-    (select n from t),
+    v_teachers,
+    (v_teachers * v_per_week)::int,
     (select count(*)::int from d where status <> 'draft'),
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
-          / nullif((select n from t), 0), 1);
+    least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
+          / nullif(v_teachers * v_per_week, 0), 1));
 end $$;
 
 -- ── 10 · ADMIN (app set-up) ───────────────────────────────────────────────────
@@ -1551,14 +1598,20 @@ begin
   update erph.user set jawatan = p_jawatan where id = p_user;
 end $$;
 
--- The session is a real setting, not a build constant: turning the school year
--- over is the administrator's job, and it has to take effect for everyone at
--- once. Validated here because `school_setting.current_session` carries a CHECK
--- constraint that would otherwise surface to the UI as a raw Postgres error.
+-- The session and the weekly rule are real settings, not build constants:
+-- turning the school year over — or saying how many RPH one teacher owes a
+-- week — is the administrator's job, and it has to take effect for everyone
+-- at once. Validated here because the CHECKs on `school_setting` would
+-- otherwise surface to the UI as a raw Postgres error.
+--
+-- `p_rph_per_week` is what `pematuhan sekolah` divides by, which is why it is
+-- asked for rather than assumed: a school on a four-day week, or one that
+-- runs every day, must not be measured against somebody else's timetable.
 create or replace function erph.admin_set_setting(p_school uuid, p_weekday smallint,
                                                   p_time time,
                                                   p_require_complete boolean,
-                                                  p_session text default null)
+                                                  p_session text default null,
+                                                  p_rph_per_week smallint default null)
 returns void language plpgsql security definer set search_path = erph, public as $$
 begin
   if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
@@ -1568,11 +1621,15 @@ begin
   if p_session is not null and p_session !~ '^[0-9]{4}/[0-9]{4}$' then
     raise exception 'Sesi mesti dalam bentuk TTTT/TTTT';
   end if;
+  if p_rph_per_week is not null and p_rph_per_week not between 1 and 7 then
+    raise exception 'Bilangan RPH seminggu mesti antara 1 dan 7';
+  end if;
   update erph.school_setting
      set submit_weekday = p_weekday,
          submit_time = p_time,
          require_complete = p_require_complete,
-         current_session = coalesce(p_session, current_session)
+         current_session = coalesce(p_session, current_session),
+         rph_per_week = coalesce(p_rph_per_week, rph_per_week)
    where school_id = p_school;
 end $$;
 

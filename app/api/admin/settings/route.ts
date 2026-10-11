@@ -23,6 +23,12 @@ const patchSchema = z.object({
     .string()
     .regex(/^\d{4}\/\d{4}$/, "Sesi mesti dalam bentuk TTTT/TTTT")
     .optional(),
+  /**
+   * RPH per teacher per week. The denominator behind "pematuhan sekolah" —
+   * five for a school that runs Monday to Friday — so it is asked for rather
+   * than assumed, and bounded like the CHECK that stores it.
+   */
+  rphPerWeek: z.number().int().min(1, "Bilangan RPH: antara 1 dan 7").max(7),
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -35,7 +41,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const [{ data: setting }, { data: school }] = await Promise.all([
     gate.db
       .from("school_setting")
-      .select("current_session, submit_weekday, submit_time, require_complete")
+      .select("current_session, submit_weekday, submit_time, require_complete, rph_per_week")
       .eq("school_id", schoolId)
       .maybeSingle(),
     gate.db
@@ -76,6 +82,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     p_time: parsed.data.submitTime,
     p_require_complete: parsed.data.requireComplete,
     p_session: parsed.data.currentSession ?? null,
+    p_rph_per_week: parsed.data.rphPerWeek,
   });
   if (error) {
     console.error("[admin] set setting failed:", error.message);

@@ -69,6 +69,9 @@ def main() -> int:
     delta12 = (ROOT / "db" / "migrations" / "012_jawatan.sql").read_text(
         encoding="utf-8"
     )
+    delta13 = (ROOT / "db" / "migrations" / "013_week_expectation.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -177,8 +180,9 @@ def main() -> int:
             run(delta10, "010")
             run(delta11, "011")
             run(delta12, "012")
+            run(delta13, "013")
         print(
-            "  [OK ] migration applied (001a→012, old signature pre-installed)"
+            "  [OK ] migration applied (001a→013, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -670,6 +674,62 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         conn.rollback()
         check("012 role change and jawatan guard", False, str(e).splitlines()[0][:140])
+
+    # ── 013: the denominator behind "pematuhan sekolah" ─────────────────────
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select column_default from information_schema.columns "
+                "where table_schema='erph' and table_name='school_setting' "
+                "and column_name='rph_per_week'"
+            )
+            row = cur.fetchone()
+            check(
+                "013 school_setting gained rph_per_week, defaulted",
+                row is not None and "5" in (row[0] or ""),
+                str(row[0]) if row else "missing",
+            )
+
+            # A changed *return type* is the one thing `create or replace`
+            # refuses outright, so the drop is what makes the new column
+            # readable — and both statistics functions gained one. The third
+            # gained a parameter, which would otherwise leave the old arity
+            # callable beside it.
+            cur.execute(
+                "select pg_get_function_result(p.oid) from pg_proc p "
+                "join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='erph' and p.proname='school_week_stats'"
+            )
+            check(
+                "013 school_week_stats returns the headcount",
+                "teachers" in cur.fetchone()[0],
+            )
+            cur.execute(
+                "select pg_get_function_identity_arguments(p.oid) from pg_proc p "
+                "join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='erph' and p.proname='admin_set_setting'"
+            )
+            setting_args = cur.fetchone()[0]
+            check(
+                "013 admin_set_setting takes the weekly rule",
+                "rph_per_week" in setting_args,
+                setting_args,
+            )
+            cur.execute(
+                "select p.proname, count(*)::int from pg_proc p "
+                "join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='erph' and p.proname in "
+                "('school_week_stats','school_week_history','admin_set_setting') "
+                "group by 1 order by 1"
+            )
+            counts = dict(cur.fetchall())
+            check(
+                "013 leaves exactly one signature of each",
+                len(counts) == 3 and all(v == 1 for v in counts.values()),
+                str(counts),
+            )
+    except Exception as e:  # noqa: BLE001
+        check("013 week expectation", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:
