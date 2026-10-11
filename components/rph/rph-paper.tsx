@@ -71,7 +71,13 @@ interface Props {
   payload: RphPayload;
   /** CSS class for the sheet itself — not the school's class. */
   className?: string;
-  teacherName?: string;
+  /**
+   * No default. A default here rendered "Nurul Aisyah binti Rahim" on every
+   * preview whose caller forgot to pass one — a real-looking name for a teacher
+   * who had nothing to do with the plan, on the document that gets printed and
+   * filed. A blank cell is honest; a plausible stranger is not.
+   */
+  teacherName?: string | null;
   schoolName?: string;
   session: string;
   planClassName?: string;
@@ -88,7 +94,7 @@ interface Props {
 export function RphPaper({
   payload,
   className: sheetClass,
-  teacherName = "Nurul Aisyah binti Rahim",
+  teacherName,
   schoolName = currentSchool().name,
   session,
   planClassName,

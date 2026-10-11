@@ -105,6 +105,15 @@ describe("RphPaper — the school's form", () => {
     expect(screen.getByText(new RegExp(SESSION))).toBeTruthy();
   });
 
+  it("never invents a teacher", () => {
+    // The NAMA cell used to default to "Nurul Aisyah binti Rahim", so every
+    // preview whose caller forgot to pass a name printed a real-looking
+    // stranger on the document that gets filed under someone else's plan.
+    render(<RphPaper payload={full} session={SESSION} />);
+    expect(screen.queryByText(/Nurul/)).toBeNull();
+    expect(screen.getByText("NAMA").closest("tr")?.textContent).toBe("NAMA—");
+  });
+
   it("derives the day from the date rather than trusting it", () => {
     render(<RphPaper payload={full} session={SESSION} planDate="2026-01-12" />);
     // 12 January 2026 is a Monday.

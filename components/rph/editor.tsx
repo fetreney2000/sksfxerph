@@ -18,6 +18,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { RphPaper } from "@/components/rph/rph-paper";
+import { useUser } from "@/components/shell/user-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -399,6 +400,11 @@ export function RphEditor({ docId }: { docId?: string }) {
    * against what is actually on screen, not what React has caught up to.
    */
   const signature = useSignature(persisted?.id, payload);
+  // The plan being edited is always the signed-in teacher's own, so the
+  // printed NAMA comes from the session rather than from a stored owner id —
+  // and never from a default, which is how the preview ended up naming every
+  // teacher "Nurul Aisyah binti Rahim".
+  const me = useUser();
 
   /**
    * The A4 preview is a couple of hundred nodes; deferring it lets React paint
@@ -1038,6 +1044,7 @@ export function RphEditor({ docId }: { docId?: string }) {
             payload={deferredPayload}
             session={session}
             schoolName={school.name}
+            teacherName={me.fullName}
             signature={signature.signature}
             signatureState={signature.state}
           />
