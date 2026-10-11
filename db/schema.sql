@@ -713,6 +713,7 @@ create or replace function erph.pantau_teachers(p_school uuid, p_session text,
 returns table (user_id uuid, full_name text, role erph.member_role,
                week_total bigint, week_done bigint,
                session_total bigint, session_done bigint,
+               returned_total bigint, fixed_total bigint,
                last_reviewed_at timestamptz,
                classes text)
 language sql stable security definer set search_path = erph, public as $$
@@ -722,6 +723,27 @@ language sql stable security definer set search_path = erph, public as $$
                              and d.status = 'approved'),
          count(d.id),
          count(d.id) filter (where d.status = 'approved'),
+         -- Of the plans this teacher has had sent back, and how many are
+         -- approved now. This is the pair that separates a teacher who acts on
+         -- feedback from one who does not: `returned_t` alone counts who is
+         -- *currently* returned, so a teacher who fixes everything and one who
+         -- ignores every return look identical once the first is caught up.
+         --
+         -- Read from rph_review rather than the document, because the document
+         -- only ever carries the latest decision — the history of a plan that
+         -- was returned and then approved is exactly what makes it "fixed".
+         (select count(*) from erph.rph_document d2
+           where d2.owner_id = m.user_id and d2.school_id = p_school
+             and d2.session = p_session and d2.deleted_at is null
+             and exists (select 1 from erph.rph_review r
+                          where r.document_id = d2.id and r.grade = 0)),
+         (select count(*) from erph.rph_document d2
+           where d2.owner_id = m.user_id and d2.school_id = p_school
+             and d2.session = p_session and d2.deleted_at is null
+             and exists (select 1 from erph.rph_review r
+                          where r.document_id = d2.id and r.grade = 0)
+             and exists (select 1 from erph.rph_review r
+                          where r.document_id = d2.id and r.grade = 1)),
          max(d.reviewed_at),
          string_agg(distinct c.nama, ', ' order by c.nama)
     from erph.school_member m

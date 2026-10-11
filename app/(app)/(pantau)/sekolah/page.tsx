@@ -58,6 +58,9 @@ interface Row {
   classes: string;
   week: "Lengkap" | "Menunggu" | "Lewat" | "Tiada";
   compliance: number;
+  /** Sent back this session, and how many of those are approved now. */
+  returned: number;
+  fixed: number;
   last: string;
 }
 
@@ -129,7 +132,9 @@ function fromApi(r: TeacherRow): Row {
     classes: r.classes ?? "—",
     week: weekState(r.weekTotal, r.weekDone),
     compliance: r.sessionTotal === 0 ? 0 : Math.round((r.sessionDone / r.sessionTotal) * 100),
-    last: r.lastReviewedAt ? shortDate(r.lastReviewedAt) : "—",
+    returned: r.returnedTotal,
+    fixed: r.fixedTotal,
+    last: r.lastReviewedAt ? shortDate(r.lastReviewedAt) : "-",
   };
 }
 
@@ -179,6 +184,10 @@ export default function SekolahPage() {
         classes: t.panel,
         week: t.week,
         compliance: t.compliance,
+        // The bundled rows carry no review history, so the pair is shown as
+        // absent rather than as a teacher who was never sent anything back.
+        returned: 0,
+        fixed: 0,
         last: t.last,
       }));
 
@@ -459,8 +468,12 @@ export default function SekolahPage() {
               <tr>
                 <TH>Guru</TH>
                 <TH>Bidang / Kelas</TH>
-                <TH>Minggu {WEEK}</TH>
+                {/* Follows the loaded window. The roster counts the same weeks the
+              cards do, so a header naming one week over a total for four would
+              be the mismatch the range filter was fixed to remove. */}
+                <TH>{scope}</TH>
                 <TH>Pematuhan sesi</TH>
+                <TH>Dikembalikan → dibetulkan</TH>
                 <TH>Terakhir disemak</TH>
                 <TH className="text-right">Tindakan</TH>
               </tr>
@@ -490,6 +503,27 @@ export default function SekolahPage() {
                       />
                       <span className="num text-[12.5px] font-semibold">{t.compliance}%</span>
                     </div>
+                  </TD>
+                  <TD>
+                    {/* Of the plans sent back, how many are approved now. The
+                        pair is what separates a teacher who acts on feedback
+                        from one who does not — a count of who is *currently*
+                        returned cannot, because a teacher who fixes everything
+                        and one who ignores every return look identical once
+                        the first is caught up. Absent when nothing has ever
+                        been returned, rather than a flat 0/0. */}
+                    {t.returned === 0 ? (
+                      <span className="text-[12.5px] text-ink-4">—</span>
+                    ) : (
+                      <span className="num text-[12.5px]">
+                        {t.fixed} / {t.returned}
+                        {t.fixed < t.returned && (
+                          <span className="ml-1 text-danger-ink">
+                            ({t.returned - t.fixed} belum)
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </TD>
                   <TD className="num text-[12.5px] text-ink-3">{t.last}</TD>
                   <TD className="text-right">

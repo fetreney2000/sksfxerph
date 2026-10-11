@@ -15,6 +15,29 @@ import { resolveSession } from "@/lib/server/session";
  * value the dashboard's client-side queries use, so the queue and the teacher's
  * own list cannot drift into counting different school years.
  */
+/**
+ * How long a plan has been waiting, in the words a reviewer would use.
+ *
+ * The queue already prints the plan's date, so what is missing is not a
+ * timestamp but the thing a timestamp makes you work out: whether this has
+ * been sitting since this morning or since three weeks ago. The previous
+ * value was the constant "Menunggu semakan", which sat in a column that read
+ * like an age and was not one.
+ *
+ * A plan with no recorded submission is said to be unrecorded rather than
+ * given an age — guessing one would put a number in front of a reviewer that
+ * nobody measured.
+ */
+function waitingLabel(submittedAt: string | null): string {
+  if (!submittedAt) return "Hantar tidak direkodkan";
+  const elapsed = Date.now() - Date.parse(submittedAt);
+  if (!Number.isFinite(elapsed) || elapsed < 0) return "Baru sahaja";
+  const days = Math.floor(elapsed / 86_400_000);
+  if (days <= 0) return "Hari ini";
+  if (days === 1) return "1 hari menunggu";
+  return `${days} hari menunggu`;
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const gate = await requireReviewer(request);
   if ("error" in gate) return gate.error;
@@ -32,7 +55,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let query = gate.db
     .from("rph_document")
     .select(
-      "id, version, status, plan_date, slot_time, payload, owner_id, " +
+      "id, version, status, plan_date, slot_time, payload, owner_id, submitted_at, " +
         "class:class_id(nama), subject:subject_code(nama), owner:owner_id(full_name)",
     )
     .eq("school_id", schoolId)
@@ -86,6 +109,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     plan_date: string;
     slot_time: string | null;
     payload: QueueItem["payload"];
+    submitted_at: string | null;
     owner: { full_name: string } | null;
     class: { nama: string } | null;
     subject: { nama: string } | null;
@@ -106,7 +130,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       planDate: row.plan_date,
       slotTime: row.slot_time ?? "07:30",
       status: row.status,
-      ageLabel: "Menunggu semakan",
+      ageLabel: waitingLabel(row.submitted_at),
       payload: row.payload,
     };
   });

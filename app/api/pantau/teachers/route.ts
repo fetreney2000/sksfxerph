@@ -27,6 +27,15 @@ export interface TeacherRow {
   weekDone: number;
   sessionTotal: number;
   sessionDone: number;
+  /**
+   * Of the plans this teacher has had sent back, and how many are approved
+   * now. The pair separates a teacher who acts on feedback from one who does
+   * not — a count of who is *currently* returned cannot, because a teacher who
+   * fixes everything and one who ignores every return look identical once the
+   * first is caught up.
+   */
+  returnedTotal: number;
+  fixedTotal: number;
   lastReviewedAt: string | null;
   classes: string | null;
 }
@@ -67,6 +76,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     week_done: number;
     session_total: number;
     session_done: number;
+    returned_total: number;
+    fixed_total: number;
     last_reviewed_at: string | null;
     classes: string | null;
   }
@@ -81,6 +92,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     weekDone: Number(r.week_done ?? 0),
     sessionTotal: Number(r.session_total ?? 0),
     sessionDone: Number(r.session_done ?? 0),
+    returnedTotal: Number(r.returned_total ?? 0),
+    fixedTotal: Number(r.fixed_total ?? 0),
     lastReviewedAt: r.last_reviewed_at,
     classes: r.classes,
   }));
