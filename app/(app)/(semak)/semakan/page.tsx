@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Info, MessageSquare, Undo2 } from "lucide-react";
+import { Check, Info, Undo2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { RphPaper } from "@/components/rph/rph-paper";
@@ -38,6 +39,7 @@ function decisionMessage(decision: "sahkan" | "hantar_balik"): string {
 export default function SemakanPage() {
   // Remote when configured, bundled demo otherwise — same shape either way.
   const { id: meId, role } = useUser();
+  const router = useRouter();
   const session = useSession();
   const school = useSchool();
   const stage = reviewStageFor(role);
@@ -258,15 +260,12 @@ export default function SemakanPage() {
                 </p>
               </div>
               <span className="ml-auto flex gap-2">
-                <Button size="sm" variant="ghost" onClick={() => toast("Buka dokumen penuh")}>
-                  Buka penuh
-                </Button>
                 <Button
                   size="sm"
-                  variant="secondary"
-                  onClick={() => toast("Dijanakan semula sebagai PDF")}
+                  variant="ghost"
+                  onClick={() => router.push(`/editor/${item.id}`)}
                 >
-                  PDF
+                  Buka penuh
                 </Button>
               </span>
             </CardHeader>
@@ -385,13 +384,13 @@ export default function SemakanPage() {
                       0
                     </kbd>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => toast("Draf komen disimpan · teruskan ke RPH seterusnya")}
-                  >
-                    <MessageSquare className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-                    {ms.review.saveAndContinue} →
-                  </Button>
+                  {/* No "Simpan & teruskan". It claimed to save a comment
+                      draft and the app has nowhere to keep one - no draft
+                      table, no local store - so pressing it changed nothing.
+                      Both real actions above take the typed comment with the
+                      decision, which is what a reviewer actually needs; a
+                      third button that promises otherwise is worse than its
+                      absence. */}
                 </div>
 
                 <div className="mt-3 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">

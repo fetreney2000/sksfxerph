@@ -1,7 +1,7 @@
 "use client";
 
-import { FileSpreadsheet, FileText, Printer, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
+import { FileText, PenLine, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,50 +11,52 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { SCHOOL_STATS } from "@/lib/demo/review";
 
 /**
  * Reporting & export.
  *
- * Two obligations meet here:
- *   • the teacher's need to hand a printed plan to a superior on request, and
- *   • Peraturan 8, Akta Pendidikan 1996 — the record must be producible for
- *     inspection. Every export is logged (see `export_file` in schema.sql).
+ * Only what actually produces a document appears here, and each card takes
+ * the teacher to the screen that does the work rather than pretending to do
+ * it here. The export belongs with its context: the week's print needs the
+ * week, and a DOCX needs the plan it is being made from.
+ *
+ * An earlier version offered CSV, ZIP and compliance-report buttons that
+ * printed a success toast and generated nothing. On a page that opens by
+ * citing a statutory obligation, a button that claims to have produced a
+ * record and has not is worse than no button at all — it is a compliance
+ * claim, not a feature claim.
  */
 const EXPORTS = [
   {
     id: "week",
     icon: FileText,
     title: "RPH minggu semasa (PDF)",
-    desc: "Semua RPH Minggu 6 mengikut format KPM, sedia untuk dicetak.",
-    action: () => toast("Menjana PDF Minggu 6…"),
+    desc: "Cetak minggu menghasilkan kertas kulit mingguan dan satu halaman setiap RPH. Simpan sebagai PDF melalui dialog cetak.",
+    href: "/minggu",
+    cta: "Buka Minggu Ini",
   },
   {
-    id: "session",
-    icon: FileSpreadsheet,
-    title: "Ringkasan sesi (CSV)",
-    desc: `Senarai semua RPH sesi 2026/2027 · ${SCHOOL_STATS.submitted} rekod.`,
-    action: () => toast("Fail CSV dimuat turun"),
-  },
-  {
-    id: "compliance",
-    icon: Printer,
-    title: "Laporan pematuhan sekolah",
-    desc: "Prestasi mengikut guru, bidang dan minggu — untuk mesyuarat panitia.",
-    action: () => toast("Laporan pematuhan dijana"),
+    id: "plan",
+    icon: PenLine,
+    title: "RPH tunggal (DOCX)",
+    desc: "Penyunting mengeksport satu rancangan sebagai .docx, sedia untuk disunting di Word.",
+    href: "/editor",
+    cta: "Buka Penyunting",
   },
 ];
 
 export default function LaporanPage() {
+  const router = useRouter();
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Laporan &amp; Eksport</h2>
         <span className="h-px flex-1 bg-border" />
-        <Badge variant="success">Rekod berkanunan · Peraturan 8</Badge>
+        <Badge variant="neutral">Dua jenis eksport</Badge>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {EXPORTS.map((e) => {
           const Icon = e.icon;
           return (
@@ -73,8 +75,8 @@ export default function LaporanPage() {
                 <CardDescription className="mb-4 flex-1 leading-[1.55]">
                   {e.desc}
                 </CardDescription>
-                <Button onClick={e.action} className="w-full">
-                  Jana
+                <Button onClick={() => router.push(e.href)} className="w-full">
+                  {e.cta}
                 </Button>
               </CardContent>
             </Card>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Download, Users } from "lucide-react";
+import { Bell, Users } from "lucide-react";
 import { toast } from "sonner";
 import type { TeacherRow } from "@/app/api/pantau/teachers/route";
 import { Avatar } from "@/components/ui/avatar";
@@ -191,13 +191,6 @@ export default function SekolahPage() {
           ))}
         </div>
         <span className="ml-auto flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => toast("Eksport CSV / PDF laporan sekolah")}
-          >
-            <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Eksport
-          </Button>
           <Button size="sm" disabled={lateCount === 0} onClick={() => void remind()}>
             <Bell className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Hantar peringatan
           </Button>
@@ -377,17 +370,16 @@ export default function SekolahPage() {
                   </TD>
                   <TD className="num text-[12.5px] text-ink-3">{t.last}</TD>
                   <TD className="text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        t.week === "Lewat" || t.week === "Tiada"
-                          ? void remind([t.id])
-                          : toast(`Memanggil senarai RPH ${t.name}`)
-                      }
-                    >
-                      {t.week === "Lewat" || t.week === "Tiada" ? "Peringat" : "Semak"}
-                    </Button>
+                    {/* Offered only where it does something. A teacher who is
+                        up to date has nothing to nudge, and the branch this
+                        replaced printed a toast about calling up their plans
+                        and fetched nothing — so the control is absent rather
+                        than present and inert. */}
+                    {(t.week === "Lewat" || t.week === "Tiada") && (
+                      <Button size="sm" variant="ghost" onClick={() => void remind([t.id])}>
+                        Peringat
+                      </Button>
+                    )}
                   </TD>
                 </TR>
               ))}

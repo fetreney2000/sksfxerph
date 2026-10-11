@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -42,13 +42,6 @@ export default function ArkibPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Arkib mengikut minggu</h2>
         <span className="h-px flex-1 bg-border" />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => toast("Semua RPH sesi ini dieksport sebagai ZIP (PDF)")}
-        >
-          <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Eksport semua
-        </Button>
       </div>
 
       <Card>
@@ -146,13 +139,6 @@ export default function ArkibPage() {
                           }}
                         >
                           Buka
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => toast(`Memuat turun ${rows.length} RPH (PDF)…`)}
-                        >
-                          PDF
                         </Button>
                       </div>
                     </TD>
