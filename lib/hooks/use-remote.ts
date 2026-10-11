@@ -25,6 +25,8 @@ const WEEK = currentWeek();
 /** One point on the weekly trend. Every figure is counted, never modelled. */
 export interface SchoolWeekPoint {
   week: number;
+  /** Active guru_biasa that week. Historical membership is not recorded, so this is current headcount repeated. */
+  expected: number;
   submitted: number;
   approved: number;
   returned: number;
@@ -113,12 +115,34 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
  * them standing, which is the bug this replaced: byPanel, weeks and
  * avgMinutes survived every refresh and were then read as the school's own.
  */
-export function useSchoolStats(): SchoolStatsView {
+/**
+ * School figures for a week window, plus the weeks behind them.
+ *
+ * Every card is derived from the *same* rows the chart draws. That is the
+ * point: with the filter widening the window, a total computed from one
+ * source beside a chart drawn from another is a total that can disagree with
+ * the evidence next to it.
+ *
+ * Local mode has no backend, so the bundled demo figures stand in — and that
+ * is what local mode is. What must not happen is synced mode leaving some of
+ * them standing, which is the bug this replaced: byPanel, weeks and
+ * avgMinutes survived every refresh and were then read as the school's own.
+ */
+export function useSchoolStats(range?: { first: number; last: number }): SchoolStatsView {
   const session = useSession();
+  const first = range?.first ?? WEEK;
+  const last = range?.last ?? WEEK;
+
   const remote = useQuery<{ stats: WeekStatsRow | null; history: SchoolWeekPoint[] }>({
-    queryKey: ["school-stats", schoolCode, session, WEEK],
+    queryKey: ["school-stats", schoolCode, session, first, last],
     queryFn: async () => {
-      const res = await fetch("/api/stats", { credentials: "same-origin" });
+      // One week *before* the range is fetched and then dropped, so a
+      // single-week view still has something to state a change against.
+      // Without it, "Minggu 5" could never say whether it beat week 4 —
+      // week 4 was never asked for.
+      const res = await fetch(`/api/stats?first=${first - 1}&last=${last}`, {
+        credentials: "same-origin",
+      });
       const empty = { stats: null, history: [] as SchoolWeekPoint[] };
       if (handleExpiredSession(res.status)) return empty;
       if (!res.ok) return empty; // local mode (503), signed out (401), no school
@@ -144,22 +168,42 @@ export function useSchoolStats(): SchoolStatsView {
 
   if (!supabaseConfigured || !remote.data?.stats) return base;
 
-  const s = remote.data.stats;
-  const weeks = remote.data.history;
-  const here = weeks.find((w) => w.week === WEEK);
-  const before = weeks.find((w) => w.week === WEEK - 1);
+  const all = remote.data.history;
+  const weeks = all.filter((w) => w.week >= first && w.week <= last);
+  const before = all.find((w) => w.week === first - 1);
+
+  const sum = (pick: (w: SchoolWeekPoint) => number) =>
+    weeks.reduce((total, w) => total + pick(w), 0);
+
+  // Mean of the *weekly* averages, not of the plans: the RPC returns a
+  // per-week figure and nothing to weight it by. Averaging averages is a
+  // legitimate statistic and is what the card's sub-label says it is, but it
+  // is not "the average plan", so it is not presented as one.
+  const timed = weeks.filter((w) => w.avgMinutes !== null);
+  const mean =
+    timed.length === 0
+      ? null
+      : timed.reduce((total, w) => total + (w.avgMinutes ?? 0), 0) / timed.length;
+
+  const expected = weeks[0]?.expected ?? 0;
 
   return {
     // The teaching headcount, not a tally of who has submitted — the previous
     // sub-label claimed the latter, which the RPC does not compute.
-    activeTeachers: s.expected,
-    submitted: s.submitted,
-    approved: s.approved,
-    returned: s.returned_t,
-    compliancePct: s.compliance ?? 0,
-    // Null, not zero: a week still in progress has not stopped its clock, and
-    // "0 minit" would read as a school that decided instantly.
-    avgMinutes: here?.avgMinutes ?? null,
+    activeTeachers: expected,
+    submitted: sum((w) => w.submitted),
+    approved: sum((w) => w.approved),
+    returned: sum((w) => w.returned),
+    // Teachers x weeks in the window. A single week is the usual rate; a
+    // wider window asks how often each teacher's week was covered, which is
+    // the same question measured over more of it.
+    compliancePct:
+      expected === 0 || weeks.length === 0
+        ? 0
+        : Math.round((sum((w) => w.approved) / (expected * weeks.length)) * 1000) / 10,
+    // Null, not zero: a window with no decided plan has not stopped its
+    // clock, and "0 minit" would read as a school that decided instantly.
+    avgMinutes: mean,
     prevAvgMinutes: before?.avgMinutes ?? null,
     weeks,
     loading: remote.isLoading,

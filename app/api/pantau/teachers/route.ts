@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { currentWeek } from "@/lib/config";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
 import { adminDb } from "@/lib/server/db";
+import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
 
 /**
@@ -39,11 +39,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!schoolId) return NextResponse.json({ items: [] as TeacherRow[] });
 
   const session = await resolveSession(gate.user.id);
+  const range = parseRange(request);
 
   const { data, error } = await adminDb(gate.user.id).rpc("pantau_teachers", {
     p_school: schoolId,
     p_session: session,
-    p_week: currentWeek(),
+    // The range the page's filter chose, not always the current week — the
+    // roster and the cards above it have to describe the same weeks, or a
+    // supervisor reads a total beside a table that disagrees with it.
+    p_first_week: range.first,
+    p_last_week: range.last,
   });
 
   if (error) {

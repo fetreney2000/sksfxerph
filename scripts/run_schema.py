@@ -525,13 +525,13 @@ def main() -> int:
         # assignment cast, so the call would not resolve at all — it fails with
         # "function does not exist" rather than anything that names the problem.
         act_as("gpk.uji")
-        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint)")]
+        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint, 1::smallint)")]
         stage.append(
             ("a GPK's report lists only their supervised teachers", seen == ["GPK Ujian", "Guru Ujian"], str(seen))
         )
 
         act_as("gb.uji")
-        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint)")]
+        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint, 1::smallint)")]
         stage.append(
             ("a Guru Besar's lists the whole school", seen == ["GB Ujian", "GPK Ujian", "Guru Ujian"], str(seen))
         )
@@ -547,7 +547,7 @@ def main() -> int:
         )
         conn.commit()
         act_as("gpk.uji")
-        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint)")]
+        seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint, 1::smallint)")]
         stage.append(
             ("and loses them when reassigned away", seen == ["GPK Ujian"], str(seen))
         )

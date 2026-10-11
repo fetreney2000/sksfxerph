@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek } from "@/lib/config";
 import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
+import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
 
 /**
@@ -33,6 +34,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const session = await resolveSession(gate.user.id);
   const week = currentWeek();
+  // The range the page's filter chose. Defaults to the last six weeks, which
+  // is what the chart drew before the filter existed.
+  const range = parseRange(request, { first: week - 5, last: week });
 
   const { data, error } = await gate.db.rpc("school_week_stats", {
     p_school: schoolId,
@@ -45,13 +49,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: error.message }, { status: 422 });
   }
 
-  // The trend, over the six weeks ending now. Same permission shape as the
-  // single week above — counts and a percentage, never a name.
+  // The trend, over the requested range. Same permission shape as the single
+  // week above — counts and a percentage, never a name.
   const { data: history, error: histErr } = await gate.db.rpc("school_week_history", {
     p_school: schoolId,
     p_session: session,
-    p_first_week: week - 5,
-    p_last_week: week,
+    p_first_week: range.first,
+    p_last_week: range.last,
   });
 
   if (histErr) {

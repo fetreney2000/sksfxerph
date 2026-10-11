@@ -19,7 +19,8 @@
 --
 -- ── 1 · the function ────────────────────────────────────────────────────────
 create or replace function erph.pantau_teachers(p_school uuid, p_session text,
-                                                p_week smallint)
+                                                p_first_week smallint,
+                                                p_last_week smallint)
 returns table (user_id uuid, full_name text, role erph.member_role,
                week_total bigint, week_done bigint,
                session_total bigint, session_done bigint,
@@ -27,8 +28,9 @@ returns table (user_id uuid, full_name text, role erph.member_role,
                classes text)
 language sql stable security definer set search_path = erph, public as $$
   select m.user_id, u.full_name, m.role,
-         count(d.id) filter (where d.week_no = p_week),
-         count(d.id) filter (where d.week_no = p_week and d.status = 'approved'),
+         count(d.id) filter (where d.week_no between p_first_week and p_last_week),
+         count(d.id) filter (where d.week_no between p_first_week and p_last_week
+                             and d.status = 'approved'),
          count(d.id),
          count(d.id) filter (where d.status = 'approved'),
          max(d.reviewed_at),

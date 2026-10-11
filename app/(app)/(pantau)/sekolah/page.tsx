@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Users } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import type { TeacherRow } from "@/app/api/pantau/teachers/route";
 import { Avatar } from "@/components/ui/avatar";
@@ -25,7 +26,27 @@ import type { MemberRole } from "@/lib/types";
 
 const WEEK = currentWeek();
 
-const RANGES = ["Minggu 6", "Minggu 5", "4 minggu", "Sepanjang sesi"] as const;
+/**
+ * The windows the filter offers.
+ *
+ * "Minggu N" reads from config rather than being written out, so the pills
+ * stay true when the school rolls its calendar over. Clamped at 1: during
+ * week 1 the previous-week pill is the same window as the first, and saying
+ * so beats offering a week that does not exist.
+ */
+const RANGES = [
+  { key: "now", label: `Minggu ${WEEK}`, first: WEEK, last: WEEK },
+  {
+    key: "prev",
+    label: `Minggu ${Math.max(1, WEEK - 1)}`,
+    first: Math.max(1, WEEK - 1),
+    last: Math.max(1, WEEK - 1),
+  },
+  { key: "four", label: "4 minggu", first: Math.max(1, WEEK - 3), last: WEEK },
+  { key: "session", label: "Sepanjang sesi", first: 1, last: WEEK },
+] as const;
+
+type RangeKey = (typeof RANGES)[number]["key"];
 
 /** What the table renders, whichever source produced it. */
 interface Row {
@@ -98,8 +119,18 @@ function fromApi(r: TeacherRow): Row {
 }
 
 export default function SekolahPage() {
+  // The filter. Keyed rather than by label so the pills can be reworded
+  // without the state silently pointing at the wrong window.
+  const [rangeKey, setRangeKey] = useState<RangeKey>("now");
+  const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0];
+  const scope =
+    range.first === range.last ? `Minggu ${range.last}` : `Minggu ${range.first}–${range.last}`;
+
   // school_week_stats RPC when configured, bundled demo figures otherwise.
-  const s = useSchoolStats();
+  // The range goes to the server rather than filtering client-side: the
+  // history is fetched by window, and a client-side slice would show weeks
+  // that were never asked for.
+  const s = useSchoolStats({ first: range.first, last: range.last });
   // Floor of 1: an empty history would otherwise leave maxPct at 0 and every
   // bar at NaN height.
   const maxPct = Math.max(1, ...s.weeks.map((w) => w.compliance ?? 0));
@@ -107,11 +138,14 @@ export default function SekolahPage() {
   // Gated on `pantau`, and narrowed again inside erph.pantau_teachers to the
   // teachers this reviewer actually supervises — so a GPK's table is their
   // own teachers and nobody else's, while the aggregate cards above stay
-  // school-wide for both roles.
+  // school-wide for both roles. Same window as the cards: a roster for one
+  // week under a total for four is a table that contradicts its own header.
   const teachers = useQuery<{ items: TeacherRow[] }>({
-    queryKey: ["pantau-teachers"],
+    queryKey: ["pantau-teachers", range.first, range.last],
     queryFn: async () => {
-      const res = await fetch("/api/pantau/teachers", { credentials: "same-origin" });
+      const res = await fetch(`/api/pantau/teachers?first=${range.first}&last=${range.last}`, {
+        credentials: "same-origin",
+      });
       if (!res.ok) return { items: [] };
       return (await res.json()) as { items: TeacherRow[] };
     },
@@ -205,24 +239,35 @@ export default function SekolahPage() {
       {/* ── Filter bar ───────────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <div className="flex flex-wrap gap-2">
-          {RANGES.map((r, i) => (
+          {RANGES.map((r) => (
             <button
-              key={r}
+              key={r.key}
               type="button"
-              aria-pressed={i === 0}
+              // Reflects which window is actually loaded. This was hardcoded to
+              // the first pill, so the filter always *looked* set to "Minggu N"
+              // whether or not anything had been chosen — and clicking did
+              // nothing at all.
+              aria-pressed={rangeKey === r.key}
+              onClick={() => setRangeKey(r.key)}
               className={
                 "rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors " +
-                (i === 0
+                (rangeKey === r.key
                   ? "border-ink bg-ink text-surface"
                   : "border-border-strong bg-surface text-ink-2 hover:bg-surface-3")
               }
             >
-              {r}
+              {r.label}
             </button>
           ))}
         </div>
         <span className="ml-auto flex gap-2">
-          <Button size="sm" disabled={lateCount === 0} onClick={() => void remind()}>
+          {/* Deliberately not disabled off the roster's count. A reminder is
+              always about the *current* week, and lateCount now describes
+              whichever window is loaded — so a "Sepanjang sesi" view would
+              enable a button about a week nobody is late in, and a single-week
+              view would silence one where someone is. The server decides and
+              reports how many it reached. */}
+          <Button size="sm" onClick={() => void remind()}>
             <Bell className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Hantar peringatan
           </Button>
         </span>
@@ -237,7 +282,10 @@ export default function SekolahPage() {
           icon={<Users className="h-4 w-4" />}
         />
         <Stat
-          label="RPH minggu ini"
+          // Follows the window. "RPH minggu ini" beside a four-week total is
+          // the same lie the fixed badge was — a label describing one thing
+          // over a number describing another.
+          label={`RPH · ${scope}`}
           value={String(s.submitted)}
           sub={` · ${s.approved} diluluskan`}
           bar={s.submitted === 0 ? 0 : (s.approved / s.submitted) * 100}
@@ -249,10 +297,12 @@ export default function SekolahPage() {
           spark={s.weeks.map((w) => w.compliance ?? 0)}
         />
         <Stat
-          label="Purata masa siap"
+          label={range.first === range.last ? "Purata masa siap" : "Purata mingguan"}
           value={s.avgMinutes === null ? "—" : String(s.avgMinutes)}
-          sub=" minit"
-          // Stated only when both weeks have a figure. A trend is two
+          // A weekly mean over a window, not the average plan — the RPC
+          // returns a per-week figure and nothing to weight it by.
+          sub={range.first === range.last ? " minit" : " minit / minggu"}
+          // Stated only when both windows have a figure. A trend is two
           // measurements; anything less is a number someone chose.
           trend={trendLabel}
         />
@@ -263,7 +313,9 @@ export default function SekolahPage() {
         <Card>
           <CardHeader>
             <CardTitle>Penghantaran mengikut minggu</CardTitle>
-            <CardDescription>Sesi {currentSession()}</CardDescription>
+            <CardDescription>
+              Sesi {currentSession()} · {scope}
+            </CardDescription>
             <span className="ml-auto">
               {sessionTrend === null ? null : Math.abs(sessionTrend) < 0.05 ? (
                 <Badge variant="neutral">Tanpa perubahan sejak M{firstWeek?.week}</Badge>
@@ -326,7 +378,7 @@ export default function SekolahPage() {
         {/* ── Progress ───────────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
-            <CardTitle>Kemajuan minggu ini</CardTitle>
+            <CardTitle>Kemajuan · {scope}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {/* Derived from the rows in the table below. The card this
@@ -349,11 +401,11 @@ export default function SekolahPage() {
               <div>
                 {lateCount > 0 ? (
                   <>
-                    {lateCount} guru belum menghantar. Hantar peringatan di atas untuk
-                    mengingatkan mereka.
+                    {lateCount} guru belum lengkap dalam tempoh ini. Peringatan sentiasa merujuk{" "}
+                    <b>minggu semasa</b> — itulah yang perlu dibereskan.
                   </>
                 ) : (
-                  <>Semua guru di bawah seliaan anda telah menghantar untuk minggu ini.</>
+                  <>Semua guru di bawah seliaan anda lengkap untuk {scope.toLowerCase()}.</>
                 )}
               </div>
             </div>
