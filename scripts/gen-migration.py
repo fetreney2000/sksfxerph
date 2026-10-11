@@ -661,6 +661,16 @@ body10 = f"""-- ================================================================
 {function("pantau_teachers")}
 """
 
+# `create or replace` treats a changed parameter list as a *new* function,
+# so without this the old single-week version stays callable beside the
+# new one. Every other signature change in this repo drops first.
+body10 = body10.replace(
+    "create or replace function erph.pantau_teachers",
+    "drop function if exists erph.pantau_teachers(uuid, text, smallint);\n"
+    "\ncreate or replace function erph.pantau_teachers",
+    1,
+)
+
 OUT10.write_text(body10, encoding="utf-8")
 print(f"{OUT10.relative_to(root)} written ({len(body10)} chars)")
 
@@ -693,6 +703,18 @@ body11 = f"""-- ================================================================
 -- ▸ 1 ▸ the function ───────────────────────────────────────────────────────
 {function("pantau_teachers")}
 """
+
+# Both signatures. Postgres refuses to change a return type in place
+# (42P13), so the function being widened has to go first — and the
+# single-week overload is the one migration 010 left behind. Dropping
+# both makes this safe whether or not 010 went on ahead of it.
+body11 = body11.replace(
+    "create or replace function erph.pantau_teachers",
+    "drop function if exists erph.pantau_teachers(uuid, text, smallint, smallint);\n"
+    "drop function if exists erph.pantau_teachers(uuid, text, smallint);\n"
+    "\ncreate or replace function erph.pantau_teachers",
+    1,
+)
 
 OUT11.write_text(body11, encoding="utf-8")
 print(f"{OUT11.relative_to(root)} written ({len(body11)} chars)")

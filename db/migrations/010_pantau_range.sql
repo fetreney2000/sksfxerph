@@ -18,6 +18,8 @@
 --   python scripts/gen-migration.py
 --
 -- ▸ 1 ▸ the function ───────────────────────────────────────────────────────
+drop function if exists erph.pantau_teachers(uuid, text, smallint);
+
 create or replace function erph.pantau_teachers(p_school uuid, p_session text,
                                                 p_first_week smallint,
                                                 p_last_week smallint)

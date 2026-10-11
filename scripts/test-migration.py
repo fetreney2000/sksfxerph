@@ -54,6 +54,18 @@ def main() -> int:
     delta7 = (ROOT / "db" / "migrations" / "007_school_template.sql").read_text(
         encoding="utf-8"
     )
+    delta8 = (ROOT / "db" / "migrations" / "008_reminders.sql").read_text(
+        encoding="utf-8"
+    )
+    delta9 = (ROOT / "db" / "migrations" / "009_week_history.sql").read_text(
+        encoding="utf-8"
+    )
+    delta10 = (ROOT / "db" / "migrations" / "010_pantau_range.sql").read_text(
+        encoding="utf-8"
+    )
+    delta11 = (ROOT / "db" / "migrations" / "011_fix_rate.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -157,8 +169,12 @@ def main() -> int:
             run(delta5, "005")
             run(delta6, "006")
             run(delta7, "007")
+            run(delta8, "008")
+            run(delta9, "009")
+            run(delta10, "010")
+            run(delta11, "011")
         print(
-            "  [OK ] migration applied (001a→007, old signature pre-installed)"
+            "  [OK ] migration applied (001a→011, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -503,6 +519,18 @@ def main() -> int:
             check(
                 "007 Intervensi/EMK no longer score → 75",
                 cur.fetchone()[0] == 75,
+            )
+
+            # A changed parameter list makes Postgres create a *new* function
+            # rather than replace, so a migration that forgets to drop leaves
+            # the previous overload callable beside the new one. That is what
+            # migration 010 did, and nothing else in the sequence would notice.
+            cur.execute("select count(*)::int from pg_proc where proname = 'pantau_teachers'")
+            n_pantau = cur.fetchone()[0]
+            check(
+                "pantau_teachers has exactly one overload",
+                n_pantau == 1,
+                f"found {n_pantau}",
             )
     except Exception as e:  # noqa: BLE001
         check("007 school template", False, str(e).splitlines()[0][:140])
