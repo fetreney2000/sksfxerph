@@ -280,7 +280,7 @@ export default function SemakanPage() {
               />
 
               <div>
-                {/* Auto-check — mirrors the checklist `review_rph()` stores */}
+                {/* Auto-check — mirrors the checklist `sahkan_rph()` stores */}
                 <div className="mb-3 rounded-[11px] border border-border bg-surface-2 p-3.5">
                   <p className="mb-2.5 text-[11px] font-bold tracking-[0.7px] text-ink-4 uppercase">
                     {ms.review.autoCheck}

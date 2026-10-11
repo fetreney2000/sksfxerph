@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell } from "lucide-react";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { useNotifications } from "@/lib/hooks/use-notifications";
@@ -9,17 +10,33 @@ import { ms } from "@/lib/i18n/ms";
 /**
  * Notification bell + panel.
  *
- * Backend §6: `notification` rows are written by `review_rph()` (approved /
- * returned) and by `pg_cron` deadline nudges. The Dexie mirror is what makes
- * them available offline; this is the surface — previously the bell only
- * showed a toast, so the table had no reader.
+ * `notification` rows are written by `sahkan_rph()` and `hantar_balik()` when
+ * a GPK decides on a plan. The Dexie mirror is what makes this device's own
+ * events available offline; this is the surface.
+ *
+ * Clicking a row both marks it read and follows its `link_view`, because a
+ * notification that says "RPH perlu dibaiki" and does not take you to the RPH
+ * makes the reader do the finding.
  */
+
+/** The routes `link_view` names. 'dashboard' predates /minggu's rename. */
+const ROUTES: Record<string, string> = { dashboard: "/minggu", review: "/semakan" };
 export function NotificationBell() {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const { items, markRead, markAllRead } = useNotifications();
   const unread = items.filter((n) => !n.readAt).length;
+
+  const openNotification = (n: (typeof items)[number]) => {
+    void markRead(n.id);
+    setOpen(false);
+    const href = ROUTES[n.linkView ?? ""] ?? "/minggu";
+    // No push when already there: navigating to the current route would
+    // re-render the page a teacher is already reading.
+    if (window.location.pathname !== href) router.push(href);
+  };
 
   // Close on outside click or Escape — a menu that can only be closed by
   // clicking it again is a keyboard trap.
@@ -86,7 +103,7 @@ export function NotificationBell() {
               <li key={n.id} className="border-b border-border last:border-b-0">
                 <button
                   type="button"
-                  onClick={() => void markRead(n.id)}
+                  onClick={() => openNotification(n)}
                   className={cn(
                     "flex w-full flex-col gap-0.5 px-4 py-3 text-left transition-colors hover:bg-surface-2",
                     !n.readAt && "bg-primary-soft/50",

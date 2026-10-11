@@ -9,7 +9,7 @@ import type { RphStatus } from "@/lib/types";
  * (index: `rph_document_queue_idx`). Only synthetic because a single-device
  * demo has no colleagues.
  *
- * The shapes below are exactly the fields `review_rph()` reads, so switching
+ * The shapes below are exactly the fields `sahkan_rph()` reads, so switching
  * to the real query changes the data source, not the component.
  */
 export interface QueueItem {
