@@ -134,6 +134,10 @@ export default function SekolahPage() {
   // and "Tiada" means this week has nothing at all. Both need a nudge; neither
   // is the same as a teacher who is simply mid-task, which is Menunggu.
   const lateCount = rows.filter((r) => r.week === "Lewat" || r.week === "Tiada").length;
+  // Computed from the same rows the table below renders. Anything else here
+  // would be a bundled demo figure presented as the school's own.
+  const done = rows.length - lateCount;
+  const pct = rows.length === 0 ? 0 : Math.round((done / rows.length) * 100);
 
   /**
    * Nudge the teachers who are late.
@@ -279,31 +283,37 @@ export default function SekolahPage() {
           </CardContent>
         </Card>
 
-        {/* ── By panel ───────────────────────────────────────────────────── */}
+        {/* ── Progress ───────────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
-            <CardTitle>Mengikut bidang</CardTitle>
+            <CardTitle>Kemajuan minggu ini</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {s.byPanel.map((p) => (
-              <div key={p.label}>
-                <div className="mb-1.5 flex justify-between border-none p-0 text-[13px]">
-                  <span className="text-ink-3">{p.label}</span>
-                  <span className="num font-bold">{p.pct}%</span>
-                </div>
-                <Progress value={p.pct} tone={p.pct >= 95 ? "success" : "warning"} />
+            {/* Derived from the rows in the table below. The card this
+                replaces was titled "Mengikut bidang" and showed Prasekolah,
+                Sekolah Rendah and Sekolah Menengah at 100 / 95 / 88 percent —
+                bundled demo figures that no query ever overrode, describing
+                groupings this school does not hold, and addressing a Guru
+                Besar as "bidang anda" when they oversee the whole school. */}
+            <div>
+              <div className="mb-1.5 flex justify-between border-none p-0 text-[13px]">
+                <span className="text-ink-3">RPH lengkap</span>
+                <span className="num font-bold">
+                  {done} / {rows.length}
+                </span>
               </div>
-            ))}
+              <Progress value={pct} tone={pct >= 95 ? "success" : "warning"} />
+            </div>
             <div className="flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
               <Bell className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
               <div>
                 {lateCount > 0 ? (
                   <>
-                    {lateCount} guru belum menghantar. Peringatan automatik:{" "}
-                    <b>Khamis 4:00 petang</b>, ingatan akhir Jumaat 8:00 pagi.
+                    {lateCount} guru belum menghantar. Hantar peringatan di atas untuk
+                    mengingatkan mereka.
                   </>
                 ) : (
-                  <>Semua guru dalam bidang anda telah menghantar untuk minggu ini.</>
+                  <>Semua guru di bawah seliaan anda telah menghantar untuk minggu ini.</>
                 )}
               </div>
             </div>
