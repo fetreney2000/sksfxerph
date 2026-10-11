@@ -307,5 +307,12 @@ body {
   .erph-sheet {
     break-inside: avoid;
     page-break-inside: avoid;
+
+    /* Browsers drop background colour when printing unless told otherwise —
+       "background graphics" is off by default in Chrome and Edge. Without
+       this the pale-green label cells vanish, and the printed page loses the
+       only thing telling a label apart from the value beside it. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

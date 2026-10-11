@@ -1045,6 +1045,16 @@ export function RphEditor({ docId }: { docId?: string }) {
             session={session}
             schoolName={school.name}
             teacherName={me.fullName}
+            // Every field the printed form has. These were missing, so the
+            // preview — and therefore the PDF, which is a browser print of
+            // this exact tree — showed a dash for Subjek, Nama Kelas, Hari
+            // and Tarikh on every plan.
+            planClassName={live.className}
+            subjectName={live.subjectName}
+            planDate={live.planDate}
+            slotTime={live.slotTime}
+            slotTimeEnd={live.slotTimeEnd}
+            weekNo={live.weekNo}
             signature={signature.signature}
             signatureState={signature.state}
           />

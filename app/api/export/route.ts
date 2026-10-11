@@ -2,6 +2,7 @@ import {
   Document,
   Packer,
   Paragraph,
+  ShadingType,
   Table,
   TableCell,
   TableRow,
@@ -35,7 +36,10 @@ const bodySchema = z.object({
   document_id: z.string().uuid().optional(),
   payload: rphPayloadSchema,
   session: z.string(),
-  teacherName: z.string().default("Nurul Aisyah binti Rahim"),
+  // No default. The same reasoning as RphPaper's: a plausible stranger printed
+  // on somebody else's plan is worse than a blank cell, and this route used to
+  // answer a missing name with "Nurul Aisyah binti Rahim".
+  teacherName: z.string().optional(),
   schoolName: z.string().optional(),
   planDate: z.string().optional(),
   className: z.string().optional(),
@@ -66,9 +70,24 @@ async function supabaseAdmin() {
   );
 }
 
-function cell(text: string, opts: { bold?: boolean; width?: number } = {}) {
+/**
+ * The pale green of the school's label cells.
+ *
+ * Same hex as `LABEL_BG` in rph-paper, which is what the preview and the PDF
+ * print from. Word stores shading as the bare colour, so the leading `#` is
+ * dropped here rather than in two places.
+ */
+const LABEL_FILL = "D9EAD3";
+
+function cell(text: string, opts: { bold?: boolean; width?: number; label?: boolean } = {}) {
   return new TableCell({
     width: opts.width ? { size: opts.width, type: WidthType.PERCENTAGE } : undefined,
+    // The label cells, not the values. Shading the whole table would leave the
+    // reader with no way to tell a field's name from its content — which is
+    // the one distinction the printed form's green carries.
+    shading: opts.label
+      ? { fill: LABEL_FILL, type: ShadingType.CLEAR, color: "auto" }
+      : undefined,
     children: [
       new Paragraph({
         children: [new TextRun({ text, bold: opts.bold ?? false, size: 20 })],
@@ -175,39 +194,39 @@ export async function POST(request: NextRequest) {
             rows: [
               new TableRow({
                 children: [
-                  cell("NAMA", { bold: true, width: 22 }),
-                  cell(teacherName, { width: 78 }),
+                  cell("NAMA", { bold: true, width: 22, label: true }),
+                  cell(teacherName || "-", { width: 78 }),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("Subjek", { bold: true, width: 22 }),
+                  cell("Subjek", { bold: true, width: 22, label: true }),
                   cell(subjectName || "—", { width: 28 }),
-                  cell("Nama Kelas", { bold: true, width: 22 }),
+                  cell("Nama Kelas", { bold: true, width: 22, label: true }),
                   cell(className || "—", { width: 28 }),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("Hari", { bold: true, width: 22 }),
+                  cell("Hari", { bold: true, width: 22, label: true }),
                   cell(planDate ? `${weekdayIndex(planDate)}. ${hariName(planDate)}` : "—", {
                     width: 28,
                   }),
-                  cell("Tarikh", { bold: true, width: 22 }),
+                  cell("Tarikh", { bold: true, width: 22, label: true }),
                   cell(planDate || "—", { width: 28 }),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("Masa Mula", { bold: true, width: 22 }),
+                  cell("Masa Mula", { bold: true, width: 22, label: true }),
                   cell(slotTime || "—", { width: 28 }),
-                  cell("Masa Tamat", { bold: true, width: 22 }),
+                  cell("Masa Tamat", { bold: true, width: 22, label: true }),
                   cell(slotTimeEnd || "—", { width: 28 }),
                 ],
               }),
               new TableRow({
                 children: [
-                  cell("Tema / Bidang / Tajuk", { bold: true, width: 22 }),
+                  cell("Tema / Bidang / Tajuk", { bold: true, width: 22, label: true }),
                   cell(temaLengkap(payload) || "—", { width: 78 }),
                 ],
               }),
