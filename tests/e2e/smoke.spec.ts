@@ -291,7 +291,9 @@ test.describe("eRPH smoke", () => {
       .first()
       .click();
 
-    const box = page.getByPlaceholder(/Apa yang berlaku/);
+    // Label, not placeholder: the penyunting no longer fills its fields with
+    // example text a teacher could mistake for their own.
+    const box = page.getByLabel(/Refleksi/);
     await expect(box).toBeVisible();
 
     // 2. Cut the network — the whole point of the local-first design. The UI
@@ -311,7 +313,7 @@ test.describe("eRPH smoke", () => {
       .getByRole("button", { name: /Refleksi/ })
       .first()
       .click();
-    await expect(page.getByPlaceholder(/Apa yang berlaku/)).toHaveValue(marker, {
+    await expect(page.getByLabel(/Refleksi/)).toHaveValue(marker, {
       timeout: 15_000,
     });
 

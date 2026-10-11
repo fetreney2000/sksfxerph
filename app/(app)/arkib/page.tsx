@@ -44,6 +44,17 @@ export default function ArkibPage() {
       )
     : archive;
 
+  /**
+   * The flat list is a year of teaching — a full-time teacher is past a
+   * hundred plans by December — and it used to render every one of them at
+   * once. The newest page is what anyone opening this screen wants; the rest
+   * is one press away, and searching starts the window again from the top.
+   */
+  const PAGE = 20;
+  const [shown, setShown] = React.useState(PAGE);
+  React.useEffect(() => setShown(PAGE), [needle]);
+  const visible = docs.slice(0, shown);
+
   const byWeek = new Map<number, typeof docs>();
   for (const d of docs) {
     const list = byWeek.get(d.weekNo) ?? [];
@@ -255,7 +266,7 @@ export default function ArkibPage() {
               </tr>
             </THead>
             <TBody>
-              {docs.map((d) => (
+              {visible.map((d) => (
                 <TR key={d.id}>
                   <TD className="num whitespace-nowrap">{d.planDate}</TD>
                   <TD>
@@ -295,13 +306,36 @@ export default function ArkibPage() {
               {docs.length === 0 && (
                 <tr>
                   <TD colSpan={5} className="py-10 text-center text-ink-4">
-                    Belum ada RPH. Mulakan daripada Minggu Ini.
+                    {needle
+                      ? `Tiada RPH sepadan dengan "${q.trim()}".`
+                      : "Belum ada RPH. Mulakan daripada Minggu Ini."}
                   </TD>
                 </tr>
               )}
             </TBody>
           </Table>
         </TableContainer>
+
+        {/* Stated rather than implied: a teacher who has written eighty plans
+            sees twenty of them and is told there are eighty, so scrolling to
+            the bottom is a choice rather than a surprise. */}
+        {docs.length > 0 && (
+          <CardFooter>
+            <span className="text-[12.5px] text-ink-3">
+              Menunjukkan {visible.length} daripada {docs.length} rekod
+            </span>
+            {docs.length > visible.length && (
+              <Button
+                className="ml-auto"
+                size="sm"
+                variant="secondary"
+                onClick={() => setShown((n) => n + PAGE)}
+              >
+                Tunjuk lagi {Math.min(PAGE, docs.length - visible.length)}
+              </Button>
+            )}
+          </CardFooter>
+        )}
       </Card>
 
       <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>

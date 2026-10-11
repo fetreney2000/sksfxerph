@@ -1453,7 +1453,6 @@ function StepProfil({
           <Input
             id="f-995730"
             value={payload.fasa_tema ?? ""}
-            placeholder="Nombor & Operasi"
             onChange={(e) => onPayload({ fasa_tema: e.target.value })}
           />
         </div>
@@ -1462,7 +1461,6 @@ function StepProfil({
           <Input
             id="f-bidang"
             value={payload.bidang ?? ""}
-            placeholder="Sifat Manusia"
             onChange={(e) => onPayload({ bidang: e.target.value })}
           />
         </div>
@@ -1471,7 +1469,6 @@ function StepProfil({
           <Input
             id="f-tajuk"
             value={payload.tajuk ?? ""}
-            placeholder="Keutamaan dalam keluarga"
             onChange={(e) => onPayload({ tajuk: e.target.value })}
           />
         </div>
@@ -1498,7 +1495,6 @@ function StepDskp({
         <Input
           id="f-188949"
           value={payload.standard_kandungan}
-          placeholder="cth. 3.1 Mengenal, membaca dan menulis semula nombor"
           onChange={(e) => onPatch({ standard_kandungan: e.target.value })}
         />
         {payload.standard_kandungan.trim() === "" && (
@@ -1513,7 +1509,6 @@ function StepDskp({
         <Input
           id="f-907255"
           value={payload.standard_pembelajaran}
-          placeholder="cth. 3.1.1 Menulis semula nombor hingga 100,000"
           onChange={(e) => onPatch({ standard_pembelajaran: e.target.value })}
         />
         {payload.standard_pembelajaran.trim() === "" && (
@@ -1527,7 +1522,6 @@ function StepDskp({
           <Textarea
             id="f-675227"
             value={payload.objektif}
-            placeholder="Murid dapat…"
             onChange={(e) => onPatch({ objektif: e.target.value })}
           />
           {payload.objektif.trim() === "" && (
@@ -1582,7 +1576,6 @@ function StepPdPc({
             <Input
               id={`f-aktiviti-${i}-nama`}
               value={a.nama}
-              placeholder={a.sub ? "Catur" : "Senamrobik"}
               onChange={(e) => setAktiviti(i, { nama: e.target.value })}
               aria-label={`Aktiviti PdPC ${i + 1}`}
               className={a.sub ? "pl-7" : undefined}
@@ -1634,7 +1627,6 @@ function StepPdPc({
         <Textarea
           id="f-kriteria"
           value={payload.kriteria_kejayaan}
-          placeholder="Murid menunjukkan…"
           onChange={(e) => onPatch({ kriteria_kejayaan: e.target.value })}
         />
         {payload.kriteria_kejayaan.trim() === "" && (
@@ -1666,7 +1658,6 @@ function StepRefleksi({
       <Textarea
         id="f-270580"
         value={payload.refleksi}
-        placeholder="Apa yang berlaku? Murid mana perlu perhatian?"
         onChange={(e) => onPatch({ refleksi: e.target.value })}
       />
       {payload.refleksi.trim() === "" && (
