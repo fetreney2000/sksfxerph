@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/field";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { removePlan } from "@/lib/actions/plans";
 import { longDate, schoolDays, weekRangeLabel } from "@/lib/date";
@@ -24,9 +25,23 @@ import type { RphDocument } from "@/lib/types";
 
 export default function ArkibPage() {
   const router = useRouter();
-  const docs = useArchive() ?? [];
+  const archive = useArchive() ?? [];
   const [confirming, setConfirming] = React.useState<RphDocument | null>(null);
   const [busy, setBusy] = React.useState(false);
+
+  // Search across everything a teacher would remember a plan by: the class,
+  // the subject, the topic, and the Standard Kandungan they wrote. A year is
+  // forty-odd plans and the only other handle on this page is the week number,
+  // which nobody remembers for a lesson written months ago.
+  const [q, setQ] = React.useState("");
+  const needle = q.trim().toLowerCase();
+  const docs = needle
+    ? archive.filter((d) =>
+        [d.className, d.subjectName, d.payload.tajuk, d.payload.standard_kandungan].some((f) =>
+          f.toLowerCase().includes(needle),
+        ),
+      )
+    : archive;
 
   const byWeek = new Map<number, typeof docs>();
   for (const d of docs) {
@@ -42,6 +57,21 @@ export default function ArkibPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Arkib mengikut minggu</h2>
         <span className="h-px flex-1 bg-border" />
+        <div className="relative w-full sm:w-72">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink-4"
+            strokeWidth={1.9}
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Cari kelas, subjek atau tajuk…"
+            aria-label="Cari dalam arkib"
+            className="pl-9"
+          />
+        </div>
       </div>
 
       <Card>
@@ -61,7 +91,11 @@ export default function ArkibPage() {
               {weeks.length === 0 && (
                 <tr>
                   <TD colSpan={6} className="py-10 text-center text-ink-4">
-                    Belum ada rekod.
+                    {/* Different message, because it is a different situation.
+                        "Belum ada rekod" tells a teacher they have written
+                        nothing; saying that to someone whose search simply
+                        matched nothing reads as a lost year. */}
+                    {needle ? `Tiada RPH sepadan dengan "${q.trim()}".` : "Belum ada rekod."}
                   </TD>
                 </tr>
               )}
@@ -161,7 +195,12 @@ export default function ArkibPage() {
       <div className="mt-6 mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Semua RPH</h2>
         <span className="h-px flex-1 bg-border" />
-        <span className="num text-xs text-ink-3">{docs.length} rekod</span>
+        <span className="num text-xs text-ink-3">
+          {/* "N daripada M" while filtering. A bare filtered count reads as
+              the size of the archive, and a teacher who searched for one
+              lesson would conclude they have three plans in a year. */}
+          {needle ? `${docs.length} daripada ${archive.length} rekod` : `${docs.length} rekod`}
+        </span>
       </div>
 
       <Card>

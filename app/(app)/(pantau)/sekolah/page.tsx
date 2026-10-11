@@ -61,6 +61,21 @@ interface Row {
   last: string;
 }
 
+/**
+ * How badly a teacher needs a supervisor's attention, lowest first.
+ *
+ * "Tiada" outranks "Lewat": a week with no plan at all is further from done
+ * than one that exists but has not been sealed, and both are further than
+ * "Menunggu", which is simply a plan waiting on somebody else.
+ */
+const SEVERITY: Record<Row["week"], number> = { Tiada: 0, Lewat: 1, Menunggu: 2, Lengkap: 3 };
+
+const bySeverity = (a: Row, b: Row) =>
+  SEVERITY[a.week] - SEVERITY[b.week] ||
+  a.compliance - b.compliance ||
+  // Stable tiebreak, so the list does not reshuffle between renders.
+  a.name.localeCompare(b.name);
+
 function initialsOf(name: string): string {
   return name
     .trim()
@@ -153,7 +168,7 @@ export default function SekolahPage() {
     retry: false,
   });
 
-  const rows: Row[] = supabaseConfigured
+  const roster: Row[] = supabaseConfigured
     ? (teachers.data?.items ?? []).map(fromApi)
     : TEACHER_ROWS.map((t) => ({
         id: t.name,
@@ -166,6 +181,12 @@ export default function SekolahPage() {
         compliance: t.compliance,
         last: t.last,
       }));
+
+  // Worst first. `pantau_teachers` returns them alphabetically, which is the
+  // one order that makes a supervisor read all forty rows to find the three
+  // that need them — and the three that need them are the three at the top of
+  // a supervisor's mind, not the top of the alphabet.
+  const rows = [...roster].sort(bySeverity);
 
   // Not "not submitted" — "Lewat" means their plan exists but is not approved,
   // and "Tiada" means this week has nothing at all. Both need a nudge; neither

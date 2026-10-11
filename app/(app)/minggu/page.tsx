@@ -46,6 +46,7 @@ import { useWeek } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
 import { parseDocx } from "@/lib/import/docx";
 import { stashImport } from "@/lib/import/pending";
+import { completeness } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
 
@@ -501,6 +502,16 @@ function PlanRow({ doc }: { doc: RphDocument }) {
       </TD>
       <TD>
         <StatusBadge status={doc.status} grade={doc.grade} />
+        {/* The penyunting's four-section meter, on the list. Without it a
+            teacher with six plans opens each one to find which are unfinished
+            — the number was already computed, it was just only ever shown
+            inside the editor. Shown for drafts and returns, because a
+            submitted plan has already passed the gate that requires all four. */}
+        {(doc.status === "draft" || doc.status === "returned") && (
+          <span className="num mt-1 block text-[11px] text-ink-4">
+            {completeness(doc.payload) / 25}/4 seksyen
+          </span>
+        )}
       </TD>
       <TD>
         {/* The name when the record carries one, the date when only that is
