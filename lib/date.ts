@@ -13,6 +13,18 @@
 const MYT = 8 * 3_600_000;
 const DAY_MS = 86_400_000;
 
+/**
+ * Where the school is, and how it writes.
+ *
+ * These are not "defaults": every date in this app is rendered for a school in
+ * Kuala Lumpur, and a teacher whose laptop is set to another country must not
+ * read their own documents back with someone else's clock on them. Anything
+ * that formats an instant goes through `formatMyt` or the helpers below,
+ * which all derive from the same fixed +8 offset.
+ */
+export const TIME_ZONE = "Asia/Kuala_Lumpur";
+export const LOCALE = "ms-MY";
+
 // config.ts imports nothing from this module, so there is no cycle. Having one
 // calendar definition is what keeps `currentWeek()` and `schoolDays()` in sync.
 import { weekMondayIso } from "@/lib/config";
@@ -46,6 +58,53 @@ function myt(ms: number) {
   };
 }
 
+/**
+ * The school's wall-clock fields for anything instant-shaped, or `null` if it
+ * is not a real instant.
+ *
+ * Exported for the printed stamps, whose shape (`19-01-2026 | 09:06 AM`) no
+ * `Intl` option list produces — and which used `Date#getHours()`, i.e. the
+ * reader's machine's zone rather than the school's.
+ */
+export function mytFields(value: number | string | Date): ReturnType<typeof myt> | null {
+  const ms =
+    value instanceof Date
+      ? value.getTime()
+      : typeof value === "number"
+        ? value
+        : Date.parse(value);
+  return Number.isFinite(ms) ? myt(ms) : null;
+}
+
+/**
+ * The app's one `Intl.DateTimeFormat`: Malay (Malaysia), Asia/Kuala_Lumpur.
+ *
+ * `timeZone` is the whole point. Without it Intl renders in the *browser's*
+ * zone, so the same plan reads "9:06 pagi" at the school and "1:06 pagi" on a
+ * colleague's machine set to UTC — two different documents out of one row.
+ */
+export function formatMyt(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(LOCALE, { timeZone: TIME_ZONE, ...options });
+}
+
+/** Which greeting the hour calls for, on the school's clock. */
+export type GreetingPart = "pagi" | "tengahHari" | "petang" | "malam";
+
+/**
+ * Morning to night, in MYT: pagi 05–11, tengah hari 12–14, petang 15–18,
+ * malam 19–04.
+ *
+ * A fixed "Selamat pagi" said the same thing to a teacher opening the app at
+ * nine at night, which is the one greeting it could be sure to get wrong.
+ */
+export function greetingPart(now: number = Date.now()): GreetingPart {
+  const h = myt(now).hour;
+  if (h >= 19 || h < 5) return "malam";
+  if (h < 12) return "pagi";
+  if (h < 15) return "tengahHari";
+  return "petang";
+}
+
 /** Parse `yyyy-mm-dd` as midday MYT — safely inside the intended calendar day. */
 function parseIso(iso: string): number {
   return new Date(`${iso}T12:00:00+08:00`).getTime();
@@ -66,6 +125,21 @@ export function shortDate(iso: string): string {
 export function longDate(iso: string): string {
   const p = myt(parseIso(iso));
   return `${HARI[p.dow]}, ${p.date} ${BULAN[p.month]} ${p.year}`;
+}
+
+/**
+ * 'Rabu, 7 Oktober 2026' for an *instant* — the school's calendar day of it.
+ *
+ * For anything that arrives as a timestamp. Taking `.toISOString().slice(0,
+ * 10)` first would use the UTC day instead, so a plan reviewed at 17:30 UTC
+ * — half past one the next morning at the school — would print the wrong
+ * date on a record the school has to file.
+ */
+export function longDateOf(value: number | string | Date): string {
+  const f = mytFields(value);
+  if (!f) return "—";
+  const iso = `${f.year}-${String(f.month + 1).padStart(2, "0")}-${String(f.date).padStart(2, "0")}`;
+  return longDate(iso);
 }
 
 /** '16:00' — 24-hour, matching KPM's own form. */

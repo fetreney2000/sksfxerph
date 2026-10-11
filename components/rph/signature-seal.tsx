@@ -1,6 +1,7 @@
 import { Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { cn } from "@/lib/cn";
+import { formatMyt } from "@/lib/date";
 import type { SignatureState } from "@/lib/hooks/use-signature";
 
 /**
@@ -22,11 +23,11 @@ import type { SignatureState } from "@/lib/hooks/use-signature";
  * knows about.
  */
 
-/** `ms-MY` date + time, in the app's long form. */
+/** `ms-MY` date + time, in the school's own zone. */
 function when(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat("ms-MY", {
+  return formatMyt({
     day: "numeric",
     month: "long",
     year: "numeric",

@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { currentWeek, SESSION, weekDeadline, weekMondayIso } from "@/lib/config";
-import { deadlineLabel, longDate, schoolDays, weekdayIndex, weekRangeLabel } from "@/lib/date";
+import {
+  deadlineLabel,
+  formatMyt,
+  greetingPart,
+  longDate,
+  longDateOf,
+  mytFields,
+  schoolDays,
+  weekdayIndex,
+  weekRangeLabel,
+} from "@/lib/date";
+import { ms } from "@/lib/i18n/ms";
 
 const MYT = 8 * 3_600_000;
 const DAY = 86_400_000;
@@ -102,6 +113,53 @@ describe("labels", () => {
 
   it("session is the expected format", () => {
     expect(SESSION).toMatch(/^\d{4}\/\d{4}$/);
+  });
+});
+
+/**
+ * The school's clock, not the machine's.
+ *
+ * Every instant in this app is rendered for a school in Kuala Lumpur. A laptop
+ * set to another country must not change what its owner's own documents say —
+ * and the greeting, which used to be the fixed string "Selamat pagi", is the
+ * most visible place where it could.
+ */
+describe("Asia/Kuala_Lumpur, everywhere", () => {
+  it("greets by the hour on the school's clock", () => {
+    expect(greetingPart(mytDate(2026, 10, 12, 7).getTime())).toBe("pagi");
+    expect(greetingPart(mytDate(2026, 10, 12, 13).getTime())).toBe("tengahHari");
+    expect(greetingPart(mytDate(2026, 10, 12, 17).getTime())).toBe("petang");
+    expect(greetingPart(mytDate(2026, 10, 12, 22).getTime())).toBe("malam");
+    // Before the school day counts as night, not as a morning greeting.
+    expect(greetingPart(mytDate(2026, 10, 13, 3).getTime())).toBe("malam");
+  });
+
+  it("has a greeting for every part of the day", () => {
+    for (const part of ["pagi", "tengahHari", "petang", "malam"] as const) {
+      expect(ms.dashboard.greeting[part]).toMatch(/^Selamat \S/);
+    }
+  });
+
+  it("renders the school's hour, not the browser's", () => {
+    // 16:20 UTC is 00:20 the next day in MYT — the date rolls over as well as
+    // the hour, which is what a browser-local formatter gets wrong.
+    const d = new Date("2026-10-12T16:20:00Z");
+    expect(mytFields(d)).toMatchObject({ date: 13, hour: 0, minute: 20 });
+    expect(formatMyt({ hour: "2-digit", minute: "2-digit", hour12: false }).format(d)).toBe(
+      "00:20",
+    );
+  });
+
+  it("refuses to render something that is not an instant", () => {
+    expect(mytFields("khamis depan")).toBeNull();
+  });
+
+  it("names the school's calendar day of an instant, not the UTC one", () => {
+    // 17:30 UTC on the 12th is half past one the *next* morning at the school,
+    // and a record the school has to file must say so.
+    expect(longDateOf("2026-10-12T17:30:00Z")).toBe("Selasa, 13 Oktober 2026");
+    expect(longDateOf(Date.UTC(2026, 9, 12, 17, 30))).toBe("Selasa, 13 Oktober 2026");
+    expect(longDateOf("bukan tarikh")).toBe("—");
   });
 });
 

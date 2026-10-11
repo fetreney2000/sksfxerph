@@ -38,7 +38,7 @@ import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui
 import { reuseLastWeek } from "@/lib/actions/plans";
 import { can } from "@/lib/auth/permissions";
 import { currentWeek, weekDeadline } from "@/lib/config";
-import { daySlot, deadlineLabel, longDate } from "@/lib/date";
+import { daySlot, deadlineLabel, greetingPart, longDateOf } from "@/lib/date";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSignature } from "@/lib/hooks/use-signature";
@@ -135,8 +135,15 @@ export default function MingguPage() {
         {/* ── Greeting ─────────────────────────────────────────────────────── */}
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-[21px] font-extrabold tracking-[-0.6px]">
-              {ms.dashboard.greeting}, {givenName(me.fullName)}
+            {/* The greeting follows the school's clock (lib/date). It is the
+                one string on the page that can differ between the server's
+                render and the browser's — at the exact moment a greeting
+                turns over — so a mismatch here is expected, not a bug. */}
+            <h2
+              className="text-[21px] font-extrabold tracking-[-0.6px]"
+              suppressHydrationWarning
+            >
+              {ms.dashboard.greeting[greetingPart()]}, {givenName(me.fullName)}
             </h2>
             <p className="text-[13px] text-ink-3">
               Anda sudah menghantar{" "}
@@ -527,9 +534,7 @@ function PlanRow({ doc }: { doc: RphDocument }) {
               </span>
             )}
             {doc.reviewedAt && (
-              <span className="block text-[11px] text-ink-4">
-                {longDate(new Date(doc.reviewedAt).toISOString().slice(0, 10))}
-              </span>
+              <span className="block text-[11px] text-ink-4">{longDateOf(doc.reviewedAt)}</span>
             )}
           </div>
         ) : (

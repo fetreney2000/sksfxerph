@@ -20,6 +20,13 @@ const GURU_BIASA_PASS = "biasa123";
 const PENTADBIR_USER = "pentadbir";
 const PENTADBIR_PASS = "pentadbir123";
 
+/**
+ * Any of the four, because the greeting is chosen from the school's clock
+ * (`greetingPart` in lib/date.ts). Asserting "pagi" would make the suite fail
+ * every night it happens to run after seven, for no defect at all.
+ */
+const GREETING = /Selamat (pagi|tengah hari|petang|malam)/;
+
 /** Collect anything React/Next would surface to a real user as a broken page. */
 function collectErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -95,7 +102,7 @@ test.describe("authentication", () => {
     }
 
     // 3. Their own surfaces still work.
-    await expect(page.getByRole("heading", { name: /Selamat pagi/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: GREETING })).toBeVisible();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -139,7 +146,7 @@ test.describe("authentication", () => {
     await login(page);
 
     // Identity comes from the cookie, resolved server-side in the layout.
-    await expect(page.getByRole("heading", { name: /Selamat pagi/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: GREETING })).toBeVisible();
     // Scoped to the sidebar on purpose. The teacher's name also prints on the
     // weekly sheets waiting in the hidden print container — one row per plan
     // — so an unscoped query is ambiguous by design, not by accident.
@@ -177,7 +184,7 @@ test.describe("eRPH smoke", () => {
   test("dashboard seeds from IndexedDB and renders the week", async ({ page }) => {
     const errors = collectErrors(page);
 
-    await expect(page.getByRole("heading", { name: /Selamat pagi/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: GREETING })).toBeVisible();
     await expect(page.getByText("5 Amanah").first()).toBeVisible({ timeout: 15_000 });
 
     // The deadline must be a real Friday 16:00, not the off-by-a-month bug.

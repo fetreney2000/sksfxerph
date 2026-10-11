@@ -56,16 +56,18 @@ describe("RphCover — the weekly summary", () => {
     expect(screen.getByText("M1 / 2026")).toBeTruthy();
   });
 
-  it("prints the submission down to the minute", () => {
+  it("prints the submission down to the minute, in the school's own time", () => {
     render(<RphCover {...BASE} submittedAt={new Date("2026-01-19T01:06:00.000Z").getTime()} />);
-    // The form's stamp is local wall-clock, not UTC — asserting the shape and
-    // the date keeps this true whichever timezone the test runs in.
-    expect(screen.getByText(/^\d{2}-01-2026 \| \d{2}:\d{2} (AM|PM)$/)).toBeTruthy();
+    // 01:06 UTC is 09:06 in Kuala Lumpur, and nine in the morning is what the
+    // school's record says. Asserting the exact instant rather than merely the
+    // shape is what notices a stamp that has gone back to the printing
+    // machine's clock — which would read 01:06 and be wrong for everyone there.
+    expect(screen.getByText("19-01-2026 | 09:06 AM")).toBeTruthy();
   });
 
   it("leaves the approval fields blank until something is sealed", () => {
     render(<RphCover {...BASE} />);
-    for (const field of ["Bob Edrem bin Pemin", "PK KO"]) {
+    for (const field of ["Bob Edrem bin Pemin", "Penolong Kanan HEM"]) {
       expect(screen.queryByText(field), field).toBeNull();
     }
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);

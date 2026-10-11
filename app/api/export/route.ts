@@ -12,7 +12,7 @@ import {
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseConfigured } from "@/lib/config";
-import { hariName, weekdayIndex } from "@/lib/date";
+import { formatMyt, hariName, weekdayIndex } from "@/lib/date";
 import { rphPayloadSchema, temaLengkap } from "@/lib/schemas/rph";
 import { requireUser } from "@/lib/server/auth/guard";
 import { resolveSchool } from "@/lib/server/school";
@@ -36,10 +36,12 @@ const bodySchema = z.object({
   document_id: z.string().uuid().optional(),
   payload: rphPayloadSchema,
   session: z.string(),
-  // No default. The same reasoning as RphPaper's: a plausible stranger printed
-  // on somebody else's plan is worse than a blank cell, and this route used to
-  // answer a missing name with "Nurul Aisyah binti Rahim".
-  teacherName: z.string().optional(),
+  // No `teacherName`. The name printed on the paper is the person exporting
+  // it, taken from the session below: that is the one source that cannot be a
+  // stranger, and the route already refuses to export a document that is not
+  // the caller's. It used to be accepted from the body *and* never sent, so
+  // every exported DOCX printed a dash in the NAMA row and "Guru: undefined"
+  // above it — a blank cell is honest, but this one was avoidable.
   schoolName: z.string().optional(),
   planDate: z.string().optional(),
   className: z.string().optional(),
@@ -142,7 +144,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { payload, session, teacherName, planDate, className, subjectName } = parsed.data;
+  const { payload, session, planDate, className, subjectName } = parsed.data;
+  // The caller, not the request: a plan is the exporter's own (checked below),
+  // so the name on it is theirs, whatever the body claims.
+  const teacherName = gate.user.fullName;
+
+  // The moment of the seal, written the way the school keeps time. An ISO
+  // string ending in "Z" is a fact about a server; the person filing this
+  // paper has a diary in MYT. Anything that is not a real instant is passed
+  // through unchanged rather than rendered as "Invalid Date".
+  const sealDate = parsed.data.signedAt ? new Date(parsed.data.signedAt) : null;
+  const signedAt =
+    sealDate && Number.isFinite(sealDate.getTime())
+      ? formatMyt({
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(sealDate)
+      : parsed.data.signedAt;
   const slotTime = parsed.data.slotTime ?? "07:30";
   const slotTimeEnd = parsed.data.slotTimeEnd ?? "12:40";
   // The school's name on a printed RPH comes from the row the administrator
@@ -313,7 +334,7 @@ export async function POST(request: NextRequest) {
                   children: [
                     new TextRun({
                       text: [
-                        parsed.data.signedAt ?? "",
+                        signedAt ?? "",
                         parsed.data.signatureAlg ?? "",
                         parsed.data.signatureKey
                           ? `kunci ${parsed.data.signatureKey.slice(0, 16)}…`

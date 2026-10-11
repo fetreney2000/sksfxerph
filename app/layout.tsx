@@ -42,7 +42,7 @@ const themeInit = `(function(){try{var t=localStorage.getItem("erph-theme");if(t
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ms" className={inter.variable} suppressHydrationWarning>
+    <html lang="ms-MY" className={inter.variable} suppressHydrationWarning>
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: themeInit is a
             build-time constant with no interpolation — this runs before hydration

@@ -34,6 +34,7 @@ import {
   setSupervisor,
   unlockMember,
 } from "@/lib/client/admin";
+import { formatMyt } from "@/lib/date";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import { ms } from "@/lib/i18n/ms";
 import { JAWATAN_BY_ROLE, type Jawatan, MEMBER_ROLES, type MemberRole } from "@/lib/types";
@@ -90,7 +91,7 @@ function when(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("ms-MY", {
+  return formatMyt({
     day: "numeric",
     month: "short",
     year: "numeric",

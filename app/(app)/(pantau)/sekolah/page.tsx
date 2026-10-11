@@ -18,6 +18,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { currentWeek, supabaseConfigured } from "@/lib/config";
+import { formatMyt } from "@/lib/date";
 import { TEACHER_ROWS } from "@/lib/demo/review";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
 import { ms } from "@/lib/i18n/ms";
@@ -92,7 +93,7 @@ function initialsOf(name: string): string {
 function shortDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return new Intl.DateTimeFormat("ms-MY", {
+  return formatMyt({
     day: "numeric",
     month: "short",
     hour: "2-digit",

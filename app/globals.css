@@ -308,6 +308,12 @@ body {
     break-inside: avoid;
     page-break-inside: avoid;
 
+    /* The sheet is a card on screen and a sheet of paper on print, and a
+       `shadow-lg` is one of the differences: printed, a box-shadow does not
+       blur — it comes out as a grey band along the bottom edge of every
+       table, which reads as a printing fault rather than as depth. */
+    box-shadow: none;
+
     /* Browsers drop background colour when printing unless told otherwise —
        "background graphics" is off by default in Chrome and Edge. Without
        this the pale-green label cells vanish, and the printed page loses the

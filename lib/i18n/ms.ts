@@ -47,7 +47,18 @@ export const ms = {
   },
 
   dashboard: {
-    greeting: "Selamat pagi",
+    /**
+     * Which greeting the hour calls for — paired with `greetingPart()` in
+     * lib/date.ts, which reads the school's clock rather than the browser's.
+     * A single fixed greeting said "Selamat pagi" to a teacher opening the app
+     * at nine at night.
+     */
+    greeting: {
+      pagi: "Selamat pagi",
+      tengahHari: "Selamat tengah hari",
+      petang: "Selamat petang",
+      malam: "Selamat malam",
+    },
     deadline: "Tarikh akhir",
     submitted: "Dihantar",
     waiting: "Menunggu semakan",

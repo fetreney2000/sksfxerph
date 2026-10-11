@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/field";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { removePlan } from "@/lib/actions/plans";
-import { longDate, schoolDays, weekRangeLabel } from "@/lib/date";
+import { longDateOf, schoolDays, weekRangeLabel } from "@/lib/date";
 import { useArchive } from "@/lib/hooks/use-week";
 import type { RphDocument } from "@/lib/types";
 
@@ -154,7 +154,7 @@ export default function ArkibPage() {
                           )}
                           {reviewed && (
                             <span className="num block text-[11px] text-ink-4">
-                              {longDate(new Date(reviewed).toISOString().slice(0, 10))}
+                              {longDateOf(reviewed)}
                             </span>
                           )}
                         </div>

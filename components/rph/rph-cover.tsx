@@ -2,6 +2,7 @@ import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { Label, RULE, Value } from "@/components/rph/rph-paper";
 import { SignatureSeal } from "@/components/rph/signature-seal";
 import { cn } from "@/lib/cn";
+import { mytFields } from "@/lib/date";
 import type { SignatureState } from "@/lib/hooks/use-signature";
 import { ms } from "@/lib/i18n/ms";
 import { currentSchool } from "@/lib/school";
@@ -31,22 +32,27 @@ const STATUS_LABEL: Record<RphStatus, string> = {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** "19-01-2026 | 09:06 AM" — the form's own stamp, down to the minute. */
+/** "19-01-2026 | 09:06 AM" — the form's own stamp, down to the minute.
+ *
+ * Built from the school's wall clock (`mytFields`) rather than `Date#getHours`,
+ * which renders the machine printing the sheet. A cover signed at 01:06 UTC is
+ * signed at 09:06 in Kuala Lumpur, and the second is the time the school has
+ * on its record.
+ */
 function submissionStamp(value: number | string | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  const h = d.getHours();
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} | ${pad(h12)}:${pad(d.getMinutes())} ${h < 12 ? "AM" : "PM"}`;
+  const f = mytFields(value);
+  if (!f) return "—";
+  const h12 = f.hour % 12 === 0 ? 12 : f.hour % 12;
+  return `${pad(f.date)}-${pad(f.month + 1)}-${f.year} | ${pad(h12)}:${pad(f.minute)} ${f.hour < 12 ? "AM" : "PM"}`;
 }
 
-/** "21-01-2026" — the date alone, for TARIKH PENGESAHAN. */
+/** "21-01-2026" — the date alone, for TARIKH PENGESAHAN, in MYT. */
 function dayStamp(value: string | null | undefined): string {
   if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+  const f = mytFields(value);
+  if (!f) return "—";
+  return `${pad(f.date)}-${pad(f.month + 1)}-${f.year}`;
 }
 
 const or = (s: string | null | undefined) => (s?.trim() ? s.trim() : "—");

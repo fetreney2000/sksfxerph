@@ -4,6 +4,7 @@ import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { formatMyt } from "@/lib/date";
 import { useNotifications } from "@/lib/hooks/use-notifications";
 import { ms } from "@/lib/i18n/ms";
 
@@ -125,12 +126,12 @@ export function NotificationBell() {
                     </span>
                   )}
                   <span className="pl-3.5 text-[11px] text-ink-4">
-                    {new Date(n.createdAt).toLocaleString("ms-MY", {
+                    {formatMyt({
                       day: "numeric",
                       month: "short",
                       hour: "2-digit",
                       minute: "2-digit",
-                    })}
+                    }).format(new Date(n.createdAt))}
                   </span>
                 </button>
               </li>
