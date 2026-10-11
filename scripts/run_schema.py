@@ -250,7 +250,7 @@ def main() -> int:
     )[0]
     # Bump when adding a function — this count is a guard against one being
     # lost, not a formality.
-    check("34 functions in erph", n_funcs == 34, f"found {n_funcs}")
+    check("35 functions in erph", n_funcs == 35, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -591,6 +591,25 @@ def main() -> int:
         act_as("gpk.uji")
         again = read_as_authenticated(f"select erph.remind_teachers({SK}::uuid, '2026/2027'::text, 1::smallint)")
         stage.append(("the same week is nudged only once", again == 0, f"got {again}"))
+
+        # ── the trend and the headline must agree ──────────────────────────
+        # Two separate implementations compute the same compliance figure: one
+        # for the week on the card, one for the six weeks on the chart. If
+        # they drift, /sekolah shows a number beside a bar that contradicts it,
+        # and neither is obviously wrong on its own.
+        one_week = read_as_authenticated(
+            f"select compliance from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
+        )
+        in_range = read_as_authenticated(
+            f"select compliance from erph.school_week_history({SK}::uuid, '2026/2027'::text, 1::smallint, 6::smallint) where week = 1"
+        )
+        stage.append(
+            (
+                "the weekly chart agrees with the weekly figure",
+                one_week == in_range,
+                f"{one_week} vs {in_range}",
+            )
+        )
 
         # ── a teacher may not decide their own work ─────────────────────────
         act_as("uji")

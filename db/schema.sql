@@ -817,6 +817,57 @@ begin
   return v_count;
 end $$;
 
+-- Per-week figures across a range, for the trend and the sparkline.
+--
+-- `school_week_stats` answers "how is this week doing"; this answers "how has
+-- it been going". Same permission and same reasoning — counts and a
+-- percentage, never a name, so any member may see the school's shape without
+-- seeing who is behind it.
+--
+-- `expected` is the count of active guru_biasa *now*, not per week: historical
+-- membership is not recorded, so a teacher who left in week 3 would still be
+-- counted in week 1's denominator. That is stated rather than faked with a
+-- zero, and it only ever makes an older week look slightly worse than it was.
+--
+-- `avg_minutes` is submission to review decision, and only for plans that
+-- have been decided. Averaging over the undecided would be timing a clock
+-- that has not stopped, so a week still in progress returns NULL and the
+-- caller shows nothing rather than a number climbing by the minute.
+create or replace function erph.school_week_history(p_school uuid, p_session text,
+                                                    p_first_week smallint,
+                                                    p_last_week smallint)
+returns table (week smallint, expected int, submitted int, approved int,
+               returned_t int, drafts int, compliance numeric,
+               avg_minutes numeric)
+language sql stable security definer set search_path = erph, public as $$
+  with active as (
+    select count(*)::int n from erph.school_member
+     where school_id = p_school and role = 'guru_biasa' and is_active
+  ), docs as (
+    select week_no, status, grade, submitted_at, reviewed_at
+      from erph.rph_document
+     where school_id = p_school and session = p_session
+       and deleted_at is null
+       and week_no between p_first_week and p_last_week
+  )
+  select w.week::smallint,
+         a.n,
+         count(d.*) filter (where d.status <> 'draft')::int,
+         count(d.*) filter (where d.grade = 1)::int,
+         count(d.*) filter (where d.status = 'returned' or d.grade = 0)::int,
+         count(d.*) filter (where d.status = 'draft')::int,
+         round(100.0 * count(d.*) filter (where d.grade = 1) / nullif(a.n, 0), 1),
+         round(avg(extract(epoch from (d.reviewed_at - d.submitted_at)) / 60.0)
+               filter (where d.reviewed_at is not null
+                       and d.submitted_at is not null
+                       and d.reviewed_at >= d.submitted_at), 1)
+    from generate_series(p_first_week::int, p_last_week::int) w(week)
+    cross join active a
+    left join docs d on d.week_no = w.week
+   group by w.week, a.n
+   order by w.week;
+$$;
+
 create or replace function erph.my_schools()
 returns uuid[] language sql stable security definer set search_path = erph, public as $$
   select coalesce(array_agg(school_id) filter (where is_active), '{}')

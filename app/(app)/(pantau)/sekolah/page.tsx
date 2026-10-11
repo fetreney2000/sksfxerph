@@ -99,7 +99,9 @@ function fromApi(r: TeacherRow): Row {
 export default function SekolahPage() {
   // school_week_stats RPC when configured, bundled demo figures otherwise.
   const s = useSchoolStats();
-  const maxPct = Math.max(...s.weeks.map((w) => w.pct));
+  // Floor of 1: an empty history would otherwise leave maxPct at 0 and every
+  // bar at NaN height.
+  const maxPct = Math.max(1, ...s.weeks.map((w) => w.compliance ?? 0));
 
   // Gated on `pantau`, and narrowed again inside erph.pantau_teachers to the
   // teachers this reviewer actually supervises — so a GPK's table is their
@@ -138,6 +140,19 @@ export default function SekolahPage() {
   // would be a bundled demo figure presented as the school's own.
   const done = rows.length - lateCount;
   const pct = rows.length === 0 ? 0 : Math.round((done / rows.length) * 100);
+
+  // A trend is two measurements. With only one there is nothing to compare,
+  // so the card says nothing rather than inventing a direction — the
+  // "▼ 2.1 minit sejak guna templat" it replaced was a constant, and it
+  // attributed the change to a feature rather than to a clock.
+  const trendLabel =
+    s.avgMinutes === null || s.prevAvgMinutes === null
+      ? undefined
+      : (() => {
+          const delta = s.prevAvgMinutes - s.avgMinutes;
+          if (Math.abs(delta) < 0.05) return "tanpa perubahan";
+          return `${delta > 0 ? "▼" : "▲"} ${Math.abs(delta).toFixed(1)} minit vs minggu lepas`;
+        })();
 
   /**
    * Nudge the teachers who are late.
@@ -206,26 +221,28 @@ export default function SekolahPage() {
         <Stat
           label="Guru aktif"
           value={String(s.activeTeachers)}
-          sub="semua hantar ≥ 1 RPH"
+          sub="guru biasa berdaftar"
           icon={<Users className="h-4 w-4" />}
         />
         <Stat
           label="RPH minggu ini"
           value={String(s.submitted)}
-          sub={` / ${s.totalExpected}`}
-          bar={(s.submitted / s.totalExpected) * 100}
+          sub={` · ${s.approved} diluluskan`}
+          bar={s.submitted === 0 ? 0 : (s.approved / s.submitted) * 100}
         />
         <Stat
           label="Kadar pematuhan"
           value={String(s.compliancePct)}
           sub="%"
-          spark={s.weeks.map((w) => w.pct)}
+          spark={s.weeks.map((w) => w.compliance ?? 0)}
         />
         <Stat
           label="Purata masa siap"
-          value={String(s.avgMinutes)}
+          value={s.avgMinutes === null ? "—" : String(s.avgMinutes)}
           sub=" minit"
-          trend="▼ 2.1 minit sejak guna templat"
+          // Stated only when both weeks have a figure. A trend is two
+          // measurements; anything less is a number someone chose.
+          trend={trendLabel}
         />
       </div>
 
@@ -259,13 +276,17 @@ export default function SekolahPage() {
                   key={w.week}
                   className="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
                 >
-                  <span className="num text-[10.5px] font-bold text-ink-3">{w.pct}%</span>
+                  <span className="num text-[10.5px] font-bold text-ink-3">
+                    {w.compliance ?? 0}%
+                  </span>
                   <span
                     className="flex w-full max-w-10 flex-col-reverse overflow-hidden rounded-t-md shadow-xs"
-                    style={{ height: `${(w.pct / maxPct) * 78}%` }}
+                    style={{ height: `${((w.compliance ?? 0) / maxPct) * 78}%` }}
                   >
-                    <span style={{ height: `${w.pct}%`, background: "#12b76a" }} />
-                    <span style={{ height: `${100 - w.pct}%`, background: "#f04438" }} />
+                    <span style={{ height: `${w.compliance ?? 0}%`, background: "#12b76a" }} />
+                    <span
+                      style={{ height: `${100 - (w.compliance ?? 0)}%`, background: "#f04438" }}
+                    />
                   </span>
                   <span className="text-[11px] font-bold text-ink-4">M{w.week}</span>
                 </div>

@@ -31,10 +31,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Tiada keahlian sekolah aktif" }, { status: 403 });
   }
 
+  const session = await resolveSession(gate.user.id);
+  const week = currentWeek();
+
   const { data, error } = await gate.db.rpc("school_week_stats", {
     p_school: schoolId,
-    p_session: await resolveSession(gate.user.id),
-    p_week: currentWeek(),
+    p_session: session,
+    p_week: week,
   });
 
   if (error) {
@@ -42,5 +45,46 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: error.message }, { status: 422 });
   }
 
-  return NextResponse.json({ stats: (data ?? [])[0] ?? null });
+  // The trend, over the six weeks ending now. Same permission shape as the
+  // single week above — counts and a percentage, never a name.
+  const { data: history, error: histErr } = await gate.db.rpc("school_week_history", {
+    p_school: schoolId,
+    p_session: session,
+    p_first_week: week - 5,
+    p_last_week: week,
+  });
+
+  if (histErr) {
+    console.error("[stats] history failed:", histErr.message);
+    return NextResponse.json({ error: histErr.message }, { status: 422 });
+  }
+
+  interface HistoryRow {
+    week: number;
+    expected: number;
+    submitted: number;
+    approved: number;
+    returned_t: number;
+    drafts: number;
+    compliance: number | string;
+    avg_minutes: number | string | null;
+  }
+
+  const rows = (history ?? []) as unknown as HistoryRow[];
+
+  return NextResponse.json({
+    stats: (data ?? [])[0] ?? null,
+    history: rows.map((r) => ({
+      week: r.week,
+      expected: r.expected,
+      submitted: r.submitted,
+      approved: r.approved,
+      returned: r.returned_t,
+      drafts: r.drafts,
+      // numeric comes back as a string from Postgres; the UI renders a
+      // number and never concatenates one.
+      compliance: r.compliance === null ? null : Number(r.compliance),
+      avgMinutes: r.avg_minutes === null ? null : Number(r.avg_minutes),
+    })),
+  });
 }

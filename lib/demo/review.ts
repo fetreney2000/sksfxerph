@@ -131,25 +131,29 @@ export const QUEUE: QueueItem[] = [
 ];
 
 /** Aggregates for the school dashboard — local stand-in for `school_week_stats`. */
+/**
+ * Local mode's figures.
+ *
+ * Local mode has no backend, so these stand in — and they are fine there
+ * because local mode *is* a demo. What was wrong before was that synced mode
+ * replaced some fields and left the rest: `byPanel`, `weeks` and `avgMinutes`
+ * stayed these constants and were then presented as the school's own. Every
+ * field here is now either replaced in synced mode or absent from the shape.
+ */
 export const SCHOOL_STATS = {
   activeTeachers: 42,
-  totalExpected: 210,
   submitted: 198,
   approved: 186,
+  returned: 12,
   compliancePct: 94,
   avgMinutes: 6.4,
-  byPanel: [
-    { label: "Prasekolah", pct: 100 },
-    { label: "Sekolah Rendah", pct: 95 },
-    { label: "Sekolah Menengah", pct: 88 },
-  ],
   weeks: [
-    { week: 1, pct: 96, rejected: 4 },
-    { week: 2, pct: 97, rejected: 3 },
-    { week: 3, pct: 95, rejected: 5 },
-    { week: 4, pct: 98, rejected: 2 },
-    { week: 5, pct: 99, rejected: 1 },
-    { week: 6, pct: 94, rejected: 6 },
+    { week: 1, submitted: 190, approved: 188, returned: 4, compliance: 96, avgMinutes: 7.2 },
+    { week: 2, submitted: 195, approved: 193, returned: 3, compliance: 97, avgMinutes: 7.0 },
+    { week: 3, submitted: 188, approved: 186, returned: 5, compliance: 95, avgMinutes: 6.8 },
+    { week: 4, submitted: 197, approved: 195, returned: 2, compliance: 98, avgMinutes: 6.6 },
+    { week: 5, submitted: 199, approved: 198, returned: 1, compliance: 99, avgMinutes: 6.5 },
+    { week: 6, submitted: 198, approved: 186, returned: 6, compliance: 94, avgMinutes: 6.4 },
   ],
 };
 

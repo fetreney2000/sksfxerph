@@ -22,15 +22,30 @@ import { useSession } from "@/lib/hooks/use-session";
 
 const WEEK = currentWeek();
 
-export interface SchoolStatsView {
-  activeTeachers: number;
-  totalExpected: number;
+/** One point on the weekly trend. Every figure is counted, never modelled. */
+export interface SchoolWeekPoint {
+  week: number;
   submitted: number;
   approved: number;
+  returned: number;
+  /** Null for a week whose denominator was zero — not zero, which would read as a collapse. */
+  compliance: number | null;
+  /** Submission → review decision. Null while the week still has undecided plans. */
+  avgMinutes: number | null;
+}
+
+export interface SchoolStatsView {
+  /** Active guru_biasa — the teaching headcount, not a tally of who has submitted. */
+  activeTeachers: number;
+  submitted: number;
+  approved: number;
+  returned: number;
   compliancePct: number;
-  avgMinutes: number;
-  byPanel: { label: string; pct: number }[];
-  weeks: { week: number; pct: number; rejected: number }[];
+  avgMinutes: number | null;
+  /** The same figure for the week before, so a trend is measured rather than asserted. */
+  prevAvgMinutes: number | null;
+  /** Six weeks ending now. */
+  weeks: SchoolWeekPoint[];
   loading: boolean;
 }
 
@@ -90,16 +105,24 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
 }
 
 /** School compliance; falls back to the bundled demo figures in local mode. */
+/**
+ * School compliance for the current week, plus the six-week trend behind it.
+ *
+ * Local mode has no backend, so the bundled demo figures stand in — and that
+ * is what local mode is. What must not happen is synced mode leaving some of
+ * them standing, which is the bug this replaced: byPanel, weeks and
+ * avgMinutes survived every refresh and were then read as the school's own.
+ */
 export function useSchoolStats(): SchoolStatsView {
   const session = useSession();
-  const remote = useQuery<WeekStatsRow | null>({
+  const remote = useQuery<{ stats: WeekStatsRow | null; history: SchoolWeekPoint[] }>({
     queryKey: ["school-stats", schoolCode, session, WEEK],
     queryFn: async () => {
       const res = await fetch("/api/stats", { credentials: "same-origin" });
-      if (handleExpiredSession(res.status)) return null;
-      if (!res.ok) return null; // local mode (503), signed out (401), no school
-      const body = (await res.json()) as { stats: WeekStatsRow | null };
-      return body.stats;
+      const empty = { stats: null, history: [] as SchoolWeekPoint[] };
+      if (handleExpiredSession(res.status)) return empty;
+      if (!res.ok) return empty; // local mode (503), signed out (401), no school
+      return (await res.json()) as { stats: WeekStatsRow | null; history: SchoolWeekPoint[] };
     },
     // Same as the queue: local mode has no backend, so don't ask.
     enabled: supabaseConfigured,
@@ -107,15 +130,38 @@ export function useSchoolStats(): SchoolStatsView {
     staleTime: 60_000,
   });
 
-  const base: SchoolStatsView = { ...SCHOOL_STATS, loading: remote.isLoading };
-  if (!supabaseConfigured || !remote.data) return base;
+  const base: SchoolStatsView = {
+    activeTeachers: SCHOOL_STATS.activeTeachers,
+    submitted: SCHOOL_STATS.submitted,
+    approved: SCHOOL_STATS.approved,
+    returned: SCHOOL_STATS.returned,
+    compliancePct: SCHOOL_STATS.compliancePct,
+    avgMinutes: SCHOOL_STATS.avgMinutes,
+    prevAvgMinutes: null,
+    weeks: SCHOOL_STATS.weeks,
+    loading: remote.isLoading,
+  };
 
-  const s = remote.data;
+  if (!supabaseConfigured || !remote.data?.stats) return base;
+
+  const s = remote.data.stats;
+  const weeks = remote.data.history;
+  const here = weeks.find((w) => w.week === WEEK);
+  const before = weeks.find((w) => w.week === WEEK - 1);
+
   return {
-    ...base,
+    // The teaching headcount, not a tally of who has submitted — the previous
+    // sub-label claimed the latter, which the RPC does not compute.
+    activeTeachers: s.expected,
     submitted: s.submitted,
     approved: s.approved,
-    compliancePct: s.compliance ?? base.compliancePct,
-    totalExpected: s.expected || base.totalExpected,
+    returned: s.returned_t,
+    compliancePct: s.compliance ?? 0,
+    // Null, not zero: a week still in progress has not stopped its clock, and
+    // "0 minit" would read as a school that decided instantly.
+    avgMinutes: here?.avgMinutes ?? null,
+    prevAvgMinutes: before?.avgMinutes ?? null,
+    weeks,
+    loading: remote.isLoading,
   };
 }
