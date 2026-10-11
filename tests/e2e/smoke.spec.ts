@@ -365,6 +365,39 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
+  test("a missed week can be filled in from the archive", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto("/arkib");
+
+    // Every week that has happened is listed, not only the weeks with plans
+    // in them — a week with nothing filed under it used not to appear here at
+    // all, which hid exactly the week a teacher needed to see.
+    const add = page.getByRole("button", { name: /Tambah RPH/ });
+    await expect(add.first()).toBeVisible({ timeout: 15_000 });
+
+    // Week 1 is as far back as it goes, and its Monday is 16 March 2026.
+    await add.last().click();
+    await expect(page).toHaveURL(/\/editor\?week=1$/, { timeout: 15_000 });
+    await expect(page.getByLabel("Minggu", { exact: true })).toHaveValue("1");
+    // The date comes with the week, so what the page prints and the week its
+    // figures land in cannot disagree.
+    await expect(page.getByLabel("Tarikh", { exact: true })).toHaveValue("2026-03-16");
+
+    // Saving files it there. Still a draft, so the archive counts it as
+    // unsent rather than claiming a week that was handed in.
+    await page.getByRole("button", { name: /Simpan rancangan/ }).click();
+    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{8}-/, { timeout: 15_000 });
+
+    await page.goto("/arkib");
+    const week1 = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: "Minggu 1", exact: true }) });
+    await expect(week1.getByText("0 / 1")).toBeVisible({ timeout: 15_000 });
+    await expect(week1.getByRole("button", { name: /Buka/ })).toBeVisible();
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
   test("service worker registers in production build", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/minggu");

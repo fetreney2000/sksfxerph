@@ -101,6 +101,12 @@ export const ms = {
     step4sub: "Perkara susulan",
     subject: "Mata pelajaran",
     class: "Kelas",
+    /**
+     * The week the plan files under. A choice, not a stamp: a week missed to
+     * illness still had lessons, and the RPH for them is still owed.
+     */
+    week: "Minggu",
+    weekHint: "Minggu yang telah berlalu boleh diisi semula.",
     date: "Tarikh",
     time: "Masa Mula",
     timeEnd: "Masa Tamat",

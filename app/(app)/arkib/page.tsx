@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/field";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { removePlan } from "@/lib/actions/plans";
+import { currentWeek } from "@/lib/config";
 import { longDateOf, schoolDays, weekRangeLabel } from "@/lib/date";
 import { useArchive } from "@/lib/hooks/use-week";
 import type { RphDocument } from "@/lib/types";
@@ -50,7 +51,22 @@ export default function ArkibPage() {
     byWeek.set(d.weekNo, list);
   }
 
-  const weeks = [...byWeek.keys()].sort((a, b) => b - a);
+  /**
+   * Every week that has happened, not only the weeks with plans in them.
+   *
+   * A week with nothing filed under it used not to appear here at all, which
+   * made the one week a teacher most needs to see — the one they missed — the
+   * one the archive hid. It is now a row like any other, empty and with a way
+   * to fill it in.
+   *
+   * While searching, only the weeks that match: a list of empty rows beside a
+   * result is noise.
+   */
+  const now = currentWeek();
+  const past = Array.from({ length: Math.max(0, now - 1) }, (_, i) => now - 1 - i);
+  const weeks = needle
+    ? [...byWeek.keys()].sort((a, b) => b - a)
+    : [...new Set([...byWeek.keys(), ...past])].sort((a, b) => b - a);
 
   return (
     <>
@@ -123,10 +139,18 @@ export default function ArkibPage() {
                       {range[0] ? weekRangeLabel(w) : "—"}
                     </TD>
                     <TD className="num">
-                      {submitted} / {rows.length}
+                      {rows.length === 0 ? (
+                        <span className="text-ink-4">0 / 0</span>
+                      ) : (
+                        `${submitted} / ${rows.length}`
+                      )}
                     </TD>
                     <TD>
-                      {approved === rows.length && rows.length > 0 ? (
+                      {rows.length === 0 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-[3px] text-[11.5px] font-semibold text-ink-3">
+                          Belum ada RPH
+                        </span>
+                      ) : approved === rows.length && rows.length > 0 ? (
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-success-line bg-success-soft px-2.5 py-[3px] text-[11.5px] font-semibold text-success-ink">
                           Lengkap semua (1)
                         </span>
@@ -145,7 +169,9 @@ export default function ArkibPage() {
                           most recent review. The reviewer is whoever wrote the
                           newest `rph_review` row, which for a plan returned
                           and then approved is the approver. */}
-                      {reviewer || reviewed ? (
+                      {rows.length === 0 ? (
+                        <span className="text-[12.5px] text-ink-4">—</span>
+                      ) : reviewer || reviewed ? (
                         <div className="min-w-0">
                           {reviewer && (
                             <span className="block truncate text-[12.5px] font-semibold text-ink">
@@ -164,15 +190,28 @@ export default function ArkibPage() {
                     </TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">
+                        {rows.length > 0 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              const first = rows[0];
+                              if (first) router.push(`/editor/${first.id}`);
+                            }}
+                          >
+                            Buka
+                          </Button>
+                        )}
+                        {/* The way a missed week gets filled in: the penyunting
+                            opens already filed under this one, so the RPH is
+                            written for the lessons that were actually missed
+                            rather than for whatever week happens to be current. */}
                         <Button
                           size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            const first = rows[0];
-                            if (first) router.push(`/editor/${first.id}`);
-                          }}
+                          variant="secondary"
+                          onClick={() => router.push(`/editor?week=${w}`)}
                         >
-                          Buka
+                          Tambah RPH
                         </Button>
                       </div>
                     </TD>

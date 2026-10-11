@@ -27,7 +27,7 @@ export const LOCALE = "ms-MY";
 
 // config.ts imports nothing from this module, so there is no cycle. Having one
 // calendar definition is what keeps `currentWeek()` and `schoolDays()` in sync.
-import { weekMondayIso } from "@/lib/config";
+import { currentWeek, weekMondayIso } from "@/lib/config";
 
 const HARI = ["Ahad", "Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu"] as const;
 const BULAN = [
@@ -181,6 +181,38 @@ export function weekRangeLabel(weekNo: number, mondayIso?: string): string {
   const suffix = `${BULAN[b.month]?.slice(0, 3)} ${b.year}`;
 
   return `${a.date}–${b.date} ${suffix}`;
+}
+
+/**
+ * The weeks a plan may be filed under: every week of the session that has
+ * started, newest first.
+ *
+ * The week is a choice because back-filling is a real thing a teacher owes. A
+ * week missed to illness still had lessons, and until now a plan could only be
+ * born into whatever week the penyunting happened to be opened in — there was
+ * no way to write Monday's RPH on Thursday of the following week, and the gap
+ * simply stayed a gap.
+ *
+ * The future is not offered. An RPH is a plan for a lesson that has a date and
+ * a class, and a week the school has not reached has neither; offering it
+ * would let a plan be counted towards a week that has not happened.
+ */
+export function weekOptions(): {
+  week: number;
+  monday: string;
+  friday: string;
+  label: string;
+}[] {
+  const now = currentWeek();
+  return Array.from({ length: now }, (_, i) => now - i).map((week) => {
+    const days = schoolDays(week);
+    return {
+      week,
+      monday: days[0] ?? weekMondayIso(week),
+      friday: days[4] ?? days[0] ?? weekMondayIso(week),
+      label: `M${week} · ${weekRangeLabel(week)}`,
+    };
+  });
 }
 
 /**

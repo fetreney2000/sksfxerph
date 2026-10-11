@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentWeek, SESSION, weekDeadline, weekMondayIso } from "@/lib/config";
+import { currentWeek, SESSION, weekDeadline, weekMondayIso, weekOfIso } from "@/lib/config";
 import {
   deadlineLabel,
   formatMyt,
@@ -9,6 +9,7 @@ import {
   mytFields,
   schoolDays,
   weekdayIndex,
+  weekOptions,
   weekRangeLabel,
 } from "@/lib/date";
 import { ms } from "@/lib/i18n/ms";
@@ -113,6 +114,46 @@ describe("labels", () => {
 
   it("session is the expected format", () => {
     expect(SESSION).toMatch(/^\d{4}\/\d{4}$/);
+  });
+});
+
+/**
+ * The week a plan files under.
+ *
+ * A week is a choice only while a plan is a draft, so the two halves of the
+ * pairing have to agree exactly: the day a teacher picks and the week they
+ * pick must be the same question, or a plan prints one date and files under
+ * another.
+ */
+describe("the weeks a plan may be filed under", () => {
+  it("maps a school day to the week that contains it", () => {
+    for (const w of [1, 10, currentWeek()]) {
+      expect(weekOfIso(weekMondayIso(w))).toBe(w);
+      expect(weekOfIso(schoolDays(w)[0] ?? "")).toBe(w);
+      expect(weekOfIso(schoolDays(w)[4] ?? "")).toBe(w);
+    }
+  });
+
+  it("counts a Sunday the way currentWeek does — as the week ahead", () => {
+    // A teacher planning on Sunday evening is planning the week starting the
+    // next day, so the Sunday and that Monday are the same week. Whoever
+    // picks the date and whoever stamps the week must not disagree.
+    expect(weekOfIso("2026-10-18")).toBe(weekOfIso("2026-10-19"));
+  });
+
+  it("offers every week that has started, newest first, and none ahead", () => {
+    const now = currentWeek();
+    expect(weekOptions().map((o) => o.week)).toEqual(
+      Array.from({ length: now }, (_, i) => now - i),
+    );
+  });
+
+  it("gives each option the Monday and Friday the date is offered between", () => {
+    for (const o of weekOptions()) {
+      expect(o.monday).toBe(weekMondayIso(o.week));
+      expect(o.friday).toBe(schoolDays(o.week)[4]);
+      expect(o.label).toMatch(new RegExp(`^M${o.week} · `));
+    }
   });
 });
 

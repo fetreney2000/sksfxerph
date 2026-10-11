@@ -143,6 +143,19 @@ export const mytIso = (ms: number = Date.now()): string => tokenToIso(tokenFromI
 export const weekMondayIso = (weekNo: number): string => tokenToIso(mondayToken(weekNo));
 
 /**
+ * The school week containing a `yyyy-mm-dd` day — the other half of the pair.
+ *
+ * Needed the moment the week became a choice: a teacher who back-dates a plan
+ * to last Tuesday must have it filed under last Tuesday's week, or the printed
+ * page and the week its numbers land in disagree. Same rule as `currentWeek`,
+ * so a Sunday belongs to the week that starts the following Monday.
+ */
+export function weekOfIso(iso: string): number {
+  const token = Date.parse(`${iso}T00:00:00Z`);
+  return Number.isFinite(token) ? currentWeek(new Date(token)) : currentWeek();
+}
+
+/**
  * Current school week (1-based).
  *
  * Saturday and Sunday belong to the school week that starts the *following*

@@ -35,8 +35,15 @@ import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/fiel
 import { HelpHint } from "@/components/ui/help-hint";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/cn";
-import { currentWeek, mytIso, schoolCode, supabaseConfigured } from "@/lib/config";
-import { longDate } from "@/lib/date";
+import {
+  currentWeek,
+  mytIso,
+  schoolCode,
+  supabaseConfigured,
+  weekMondayIso,
+  weekOfIso,
+} from "@/lib/config";
+import { longDate, schoolDays, weekOptions } from "@/lib/date";
 import { db } from "@/lib/db";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSchool } from "@/lib/hooks/use-school";
@@ -312,6 +319,15 @@ export function RphEditor({ docId }: { docId?: string }) {
         : await loadSeed(params.get("template") ?? undefined, params.get("reuse") === "1");
       if (cancelled) return;
 
+      // Which week this plan files under. `/arkib` links here with `?week=`
+      // so a missed week can be filled in; anything else — absent, nonsense,
+      // or a week the school has not reached — lands on the week at hand.
+      // The date follows the week, so the two can never disagree: this week
+      // opens on today, an earlier one on its Monday.
+      const asked = Number(params.get("week"));
+      const week =
+        Number.isInteger(asked) && asked >= 1 && asked <= currentWeek() ? asked : currentWeek();
+
       const now = Date.now();
       setPending({
         id:
@@ -325,8 +341,9 @@ export function RphEditor({ docId }: { docId?: string }) {
         subjectCode: loaded?.subjectCode ?? subject?.code ?? "MAT",
         subjectName: loaded?.subjectName ?? subject?.nama ?? "Matematik",
         session: currentSession(),
-        weekNo: currentWeek(),
-        planDate: mytIso(),
+        weekNo: week,
+        planDate:
+          week === currentWeek() ? mytIso() : (schoolDays(week)[0] ?? weekMondayIso(week)),
         slotTime: imported?.slotTime ?? "07:30",
         slotTimeEnd: imported?.slotTimeEnd ?? "12:40",
         status: "draft",
@@ -1298,9 +1315,26 @@ function StepProfil({
     ];
   }, [subjects, doc.subjectCode, doc.subjectName]);
 
+  /**
+   * Which week this plan files under, and whether that can still be changed.
+   *
+   * The week is a choice while the plan is a draft — a week missed to illness
+   * still had lessons, and the RPH for them is still owed. Once it has been
+   * sent it stops being one: the archive, the compliance figures and the
+   * printed sheets all key on `week_no`, so moving it afterwards would
+   * silently rewrite what a past week's totals say.
+   *
+   * A plan from another school year is locked too, and for a different
+   * reason — its week numbers belong to that year's calendar, and the picker
+   * lists this one's.
+   */
+  const weekLocked = doc.status !== "draft" || doc.session !== currentSession();
+  const days = schoolDays(doc.weekNo);
+  const weeks = weekOptions();
+
   return (
     <div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Label htmlFor="f-14796">{ms.editor.subject}</Label>
           <Select
@@ -1337,13 +1371,56 @@ function StepProfil({
           </Select>
         </div>
         <div>
+          <Label htmlFor="f-week">{ms.editor.week}</Label>
+          <Select
+            id="f-week"
+            value={String(doc.weekNo)}
+            disabled={weekLocked}
+            title={weekLocked ? "Minggu ditetapkan apabila RPH dihantar" : undefined}
+            onChange={(e) => {
+              const week = Number(e.target.value);
+              const chosen = weeks.find((o) => o.week === week);
+              if (!chosen) return;
+              // A plan belongs to one week. Moving it carries the date with
+              // it, unless the date already falls inside the week chosen.
+              const inside = doc.planDate >= chosen.monday && doc.planDate <= chosen.friday;
+              onPatch(inside ? { weekNo: week } : { weekNo: week, planDate: chosen.monday });
+            }}
+          >
+            {weeks.map((o) => (
+              <option key={o.week} value={o.week}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+          {/* Stated where it is offered: a week that has gone still had
+              lessons, and their RPH is still owed. */}
+          <p className="mt-1.5 text-[11.5px] text-ink-4">{ms.editor.weekHint}</p>
+        </div>
+        <div>
           <Label htmlFor="f-807586">{ms.editor.date}</Label>
           <Input
             id="f-807586"
             type="date"
             className="num"
             value={doc.planDate}
-            onChange={(e) => onPatch({ planDate: e.target.value })}
+            // Offered inside the week the plan files under — Monday to
+            // Friday, the days the school teaches.
+            min={days[0]}
+            max={days[4]}
+            disabled={weekLocked}
+            title={weekLocked ? "Tarikh ditetapkan apabila RPH dihantar" : undefined}
+            onChange={(e) => {
+              const iso = e.target.value;
+              if (!iso) return;
+              // The week follows the date, so the two can never disagree: a
+              // teacher who sets last Tuesday files under last Tuesday's
+              // week, and the printed page says what the totals count.
+              const week = weekOfIso(iso);
+              onPatch(
+                week === doc.weekNo ? { planDate: iso } : { planDate: iso, weekNo: week },
+              );
+            }}
           />
         </div>
       </div>
