@@ -23,7 +23,9 @@ const SEAL: SignaturePayload = {
   alg: "ES256",
   signedAt: "2026-10-10T08:14:02.000Z",
   signerName: "Ramlan bin Yusof",
-  signerTitle: "PK KO",
+  // The office the cover sheet prints from erph.user.jawatan — "PK KO" was a
+  // value nothing in the system could ever have supplied.
+  signerTitle: "Penolong Kanan HEM",
 };
 
 describe("signature seal", () => {
@@ -40,6 +42,18 @@ describe("signature seal", () => {
     expect(screen.getByText("Disahkan secara digital")).toBeTruthy();
     expect(screen.getByText("Ramlan bin Yusof")).toBeTruthy();
     expect(screen.getByText(/ES256/)).toBeTruthy();
+  });
+
+  it("puts the reviewer's office under their name, or nothing if unset", () => {
+    const { unmount } = render(<SignatureSeal signature={SEAL} state="valid" />);
+    expect(screen.getByText("Penolong Kanan HEM")).toBeTruthy();
+    unmount();
+
+    // No office was ever set, so the line is absent rather than a dash — the
+    // name alone is still true, and a dash would look like a rendering fault.
+    render(<SignatureSeal signature={{ ...SEAL, signerTitle: null }} state="valid" />);
+    expect(screen.queryByText("Penolong Kanan HEM")).toBeNull();
+    expect(screen.getByText("Ramlan bin Yusof")).toBeTruthy();
   });
 
   it("says it is still checking rather than claiming validity", () => {
@@ -63,8 +77,10 @@ describe("signature seal", () => {
     render(<SignatureSeal signature={SEAL} state="invalid" />);
 
     // Printing a name beside a signature that does not verify would attach a
-    // person to a claim that could not be confirmed.
+    // person to a claim that could not be confirmed — and the office under it
+    // would attach the same person's standing.
     expect(screen.queryByText("Ramlan bin Yusof")).toBeNull();
+    expect(screen.queryByText("Penolong Kanan HEM")).toBeNull();
     expect(screen.queryByText(/ES256/)).toBeNull();
   });
 

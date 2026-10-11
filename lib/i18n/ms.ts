@@ -20,6 +20,19 @@ export const ms = {
     system: "Sistem",
   },
 
+  /**
+   * How each `erph.jawatan` is written on paper — the JAWATAN row of the
+   * weekly cover sheet and the accounts picker. Keyed by the enum so the
+   * printed office and the selected one can never drift apart.
+   */
+  jawatan: {
+    guru_biasa: "Guru Biasa",
+    pk_pentadbiran: "Penolong Kanan Pentadbiran",
+    pk_hem: "Penolong Kanan HEM",
+    pk_kokum: "Penolong Kanan Kokum",
+    guru_besar: "Guru Besar",
+  },
+
   nav: {
     minggu: "Minggu Ini",
     editor: "Penyunting RPH",

@@ -122,6 +122,19 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
         >
           {signature.signerName ?? "Penyemak"}
         </p>
+        {/* The office under the name, as the printed cover sheet has it — and
+            only when one has been set: a "—" here would read as a missing
+            label rather than a fact nobody has supplied. */}
+        {signature.signerTitle && (
+          <p
+            className={cn(
+              "text-[12px] leading-tight text-ink-3",
+              variant === "print" && "text-[9px]",
+            )}
+          >
+            {signature.signerTitle}
+          </p>
+        )}
         <p
           className={cn(
             "mt-1 text-[12px] text-ink-3",

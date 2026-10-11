@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { verifyPassword } from "@/lib/server/auth/password";
+import { JAWATAN_BY_ROLE, type MemberRole } from "@/lib/types";
 
 /**
  * Seed credentials (db/seed.sql).
@@ -15,13 +16,18 @@ import { verifyPassword } from "@/lib/server/auth/password";
 
 const SQL = readFileSync(path.join(process.cwd(), "db", "seed.sql"), "utf8");
 
-/** `('username', 'scrypt$…', 'Full Name', 'email', 'role', active)` */
-function seededUsers(): { username: string; hash: string; role: string }[] {
-  const out: { username: string; hash: string; role: string }[] = [];
+/** `('username', 'scrypt$…', 'Full Name', 'email', 'role', jawatan, active)` */
+function seededUsers(): {
+  username: string;
+  hash: string;
+  role: string;
+  jawatan: string | null;
+}[] {
+  const out: { username: string; hash: string; role: string; jawatan: string | null }[] = [];
   const row =
-    /\('([a-z][\w.]+)',\s*'([^']+)',\s*'[^']*',\s*(?:'[^']*'|null),\s*'(\w+)',\s*(true|false)\)/g;
+    /\('([a-z][\w.]+)',\s*'([^']+)',\s*'[^']*',\s*(?:'[^']*'|null),\s*'(\w+)',\s*(?:'(\w+)'|null),\s*(true|false)\)/g;
   for (const m of SQL.matchAll(row)) {
-    out.push({ username: m[1]!, hash: m[2]!, role: m[3]! });
+    out.push({ username: m[1]!, hash: m[2]!, role: m[3]!, jawatan: m[4] ?? null });
   }
   return out;
 }
@@ -47,6 +53,33 @@ describe("seeded accounts", () => {
   it("covers every member_role exactly once", () => {
     const roles = users.map((u) => u.role).sort();
     expect(roles).toEqual(["gpk", "guru_besar", "guru_biasa", "pentadbir", "system"]);
+  });
+
+  // An office the account's role cannot hold would be printed on a cover sheet
+  // by someone who never held it — the exact failure `erph.jawatan_for`
+  // refuses in SQL, checked here against the list the picker offers.
+  it("only gives a seeded account an office its role may hold", () => {
+    for (const u of users) {
+      if (u.jawatan === null) continue;
+      const offices = JAWATAN_BY_ROLE[u.role as MemberRole] ?? [];
+      expect(
+        offices,
+        `${u.username} holds ${u.jawatan}, not one of ${offices.join(", ")}`,
+      ).toContain(u.jawatan);
+    }
+  });
+
+  it("states an office for the accounts that hold one", () => {
+    const byRole = Object.fromEntries(users.map((u) => [u.role, u.jawatan]));
+    expect(byRole.guru_biasa).toBe("guru_biasa");
+    expect(byRole.guru_besar).toBe("guru_besar");
+    // One GPK, so the seed may name the office — a school with several would
+    // have to be told which, and that is the point of the column.
+    expect(byRole.gpk).toBe("pk_pentadbiran");
+    // Neither the administrator's account nor the service account holds an
+    // office, and the cover sheet prints "—" rather than inventing one.
+    expect(byRole.pentadbir).toBeNull();
+    expect(byRole.system).toBeNull();
   });
 
   it("every documented password verifies against its stored hash", async () => {

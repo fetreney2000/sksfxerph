@@ -66,6 +66,9 @@ def main() -> int:
     delta11 = (ROOT / "db" / "migrations" / "011_fix_rate.sql").read_text(
         encoding="utf-8"
     )
+    delta12 = (ROOT / "db" / "migrations" / "012_jawatan.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -173,8 +176,9 @@ def main() -> int:
             run(delta9, "009")
             run(delta10, "010")
             run(delta11, "011")
+            run(delta12, "012")
         print(
-            "  [OK ] migration applied (001a→011, old signature pre-installed)"
+            "  [OK ] migration applied (001a→012, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -534,6 +538,138 @@ def main() -> int:
             )
     except Exception as e:  # noqa: BLE001
         check("007 school template", False, str(e).splitlines()[0][:140])
+
+    # ── 012: the office printed on the cover sheet ──────────────────────────
+    try:
+        with conn.cursor() as cur:
+            # The type and the column are created by 001b for a database built
+            # from scratch (002 and 004 name them in signatures that cannot be
+            # created without them); 012 is what a database that ran the
+            # original 001b gets. By this point both must exist either way.
+            cur.execute("select enum_range(null::erph.jawatan)::text")
+            jawatans = cur.fetchone()[0]
+            check(
+                "012 jawatan carries the five offices",
+                all(
+                    j in jawatans
+                    for j in ("guru_biasa", "pk_pentadbiran", "pk_hem", "pk_kokum", "guru_besar")
+                ),
+                jawatans,
+            )
+            cur.execute(
+                "select count(*) from information_schema.columns "
+                "where table_schema='erph' and table_name='user' and column_name='jawatan'"
+            )
+            check("erph.user gained jawatan", cur.fetchone()[0] == 1)
+
+            # The backfill is deliberately partial: it fills what the role
+            # already states outright and invents nothing, because a cover
+            # sheet that names an office nobody set is the bug being fixed.
+            cur.execute(
+                "select count(*) from erph.user "
+                "where role in ('guru_biasa', 'guru_besar') and jawatan is null"
+            )
+            check("backfill covers the roles that state an office", cur.fetchone()[0] == 0)
+            cur.execute("select count(*) from erph.user where role = 'gpk' and jawatan is not null")
+            check("…and invents none for a GPK", cur.fetchone()[0] == 0)
+
+            cur.execute(
+                "select pg_get_function_result(p.oid) from pg_proc p "
+                "join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='erph' and p.proname='admin_list_members'"
+            )
+            check("admin_list_members returns the jawatan", "jawatan" in cur.fetchone()[0])
+
+            # The two shapes that changed needed a drop first. Counting them
+            # is what notices a missing one: `create or replace` would happily
+            # leave the previous arity callable beside the new one.
+            cur.execute(
+                "select p.proname, count(*)::int from pg_proc p "
+                "join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='erph' and p.proname in "
+                "('admin_list_members','admin_create_member','admin_set_member',"
+                "'admin_set_jawatan','jawatan_for') "
+                "group by 1 order by 1"
+            )
+            counts = dict(cur.fetchall())
+            check(
+                "012 leaves exactly one signature of each function",
+                len(counts) == 5 and all(v == 1 for v in counts.values()),
+                str(counts),
+            )
+    except Exception as e:  # noqa: BLE001
+        check("012 jawatan column and functions", False, str(e).splitlines()[0][:140])
+
+    # The behaviour, not just the shape: the accounts screen reports a role
+    # change as done, and this is the write that has to make it true.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute(
+                "select id from erph.user where role = 'guru_biasa' and is_active limit 1"
+            )
+            teacher = cur.fetchone()[0]
+            cur.execute(
+                "select erph.admin_set_member((select id from erph.school limit 1), "
+                "%s, 'gpk', true)",
+                (teacher,),
+            )
+            conn.commit()
+            cur.execute("select role, jawatan from erph.user where id = %s", (teacher,))
+            new_role, new_jawatan = cur.fetchone()
+            check(
+                "012 the role change reaches erph.user, not only school_member",
+                new_role == "gpk",
+                str(new_role),
+            )
+            # 'guru_biasa' is not an office a GPK holds, so it goes rather
+            # than being printed under a name that never had it.
+            check(
+                "012 an office the new role cannot hold is cleared",
+                new_jawatan is None,
+                str(new_jawatan),
+            )
+
+            # And the mismatch is refused rather than stored.
+            cur.execute("select id from erph.user where role = 'gpk' limit 1")
+            gpk_user = cur.fetchone()[0]
+            try:
+                cur.execute(
+                    "select erph.admin_set_jawatan((select id from erph.school limit 1), "
+                    "%s, 'guru_besar')",
+                    (gpk_user,),
+                )
+                conn.rollback()
+                check("012 admin_set_jawatan refuses a mismatched office", False, "no exception")
+            except Exception as e:  # noqa: BLE001
+                conn.rollback()
+                check(
+                    "012 admin_set_jawatan refuses a mismatched office",
+                    "tidak sepadan" in str(e),
+                    str(e).splitlines()[0][:120],
+                )
+
+            # Leave the seed as it was found: the checks above read counts by
+            # role, and a teacher left holding a GPK's office would change them.
+            cur.execute(
+                "select erph.admin_set_member((select id from erph.school limit 1), "
+                "%s, 'guru_biasa', true)",
+                (teacher,),
+            )
+            conn.commit()
+            cur.execute(
+                "update erph.user set jawatan = 'guru_biasa' where id = %s",
+                (teacher,),
+            )
+            conn.commit()
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("012 role change and jawatan guard", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

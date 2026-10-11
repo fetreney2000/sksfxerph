@@ -56,6 +56,13 @@ const bodySchema = z.object({
    * did — an unapproved plan must not look sealed.
    */
   signerName: z.string().optional(),
+  /**
+   * The signer's office, printed under their name exactly as the weekly cover
+   * sheet prints it. Optional for the same reason as the name: an export with
+   * no seal prints the blank reviewer line, and an office without a name
+   * would be a claim about nobody.
+   */
+  signerTitle: z.string().max(80).optional(),
   signedAt: z.string().optional(),
   signatureAlg: z.string().optional(),
   signatureKey: z.string().optional(),
@@ -291,6 +298,17 @@ export async function POST(request: NextRequest) {
                   ],
                   spacing: { before: 400 },
                 }),
+                // The office beneath the name, as the cover sheet has it: a
+                // signature with no office under it is a name anyone could
+                // have typed, and the reader of the document has never met
+                // them. Omitted when nobody has set one rather than guessed.
+                ...(parsed.data.signerTitle
+                  ? [
+                      new Paragraph({
+                        children: [new TextRun({ text: parsed.data.signerTitle, size: 18 })],
+                      }),
+                    ]
+                  : []),
                 new Paragraph({
                   children: [
                     new TextRun({

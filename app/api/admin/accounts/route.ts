@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
 import { hashPassword } from "@/lib/server/auth/password";
-import { MEMBER_ROLES } from "@/lib/types";
+import { JAWATAN, MEMBER_ROLES } from "@/lib/types";
 
 /**
  * GET / POST / PATCH /api/admin/accounts — who may use the app, and as what.
@@ -22,6 +22,11 @@ import { MEMBER_ROLES } from "@/lib/types";
 /** Roles an administrator may hand out — `system` is a service account. */
 const ASSIGNABLE = MEMBER_ROLES.filter((r) => r !== "system");
 
+/**
+ * `jawatan` is optional because it is nullable in SQL: an office nobody has
+ * set prints as "—" on the cover sheet, which is honest, so an account must
+ * never have to invent one before it can be saved.
+ */
 const postSchema = z.object({
   username: z
     .string()
@@ -29,18 +34,21 @@ const postSchema = z.object({
     .max(32, "Nama pengguna: maksimum 32 aksara"),
   fullName: z.string().min(1, "Nama penuh diperlukan").max(120),
   role: z.enum(ASSIGNABLE, { message: "Peranan tidak sah" }),
+  jawatan: z.enum(JAWATAN).nullable().optional(),
   email: z.string().email("Emel tidak sah").max(200).nullable().optional(),
   password: z.string().min(8, "Kata laluan: sekurang-kurangnya 8 aksara").max(128),
 });
 
 /**
- * Four distinct actions in one PATCH. `password` and `unlock` are separate
+ * Five distinct actions in one PATCH. `password` and `unlock` are separate
  * from `role`/`isActive` because they hit different RPCs — and resetting a
  * password already clears the lockout, so the two are never sent together.
  * `supervisorId` is separate again: it is the scope assignment that decides
  * which plans a GPK can reach, and it has its own validation in SQL (a
  * supervisor must be an active GPK or Guru Besar, and nobody supervises
- * themselves).
+ * themselves). `jawatan` is separate for the same reason: it is an office
+ * rather than a permission, so `erph.admin_set_jawatan` — not the role write —
+ * is what accepts it, and it refuses one that does not fit the account.
  */
 const patchSchema = z
   .object({
@@ -51,12 +59,15 @@ const patchSchema = z
     unlock: z.literal(true).optional(),
     /** null clears it — the teacher falls back to Guru-Besar-only visibility. */
     supervisorId: z.string().uuid().nullable().optional(),
+    /** null clears it — the cover sheet's JAWATAN row prints "—". */
+    jawatan: z.enum(JAWATAN).nullable().optional(),
   })
   .refine(
     (d) =>
       d.password !== undefined ||
       d.unlock !== undefined ||
       d.supervisorId !== undefined ||
+      d.jawatan !== undefined ||
       (d.role !== undefined && d.isActive !== undefined),
     { message: "Tiada perubahan diminta" },
   );
@@ -110,6 +121,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     p_role: parsed.data.role,
     p_password_hash: hash,
     p_email: parsed.data.email ?? null,
+    // Explicit rather than omitted so a deliberately-cleared office and one
+    // that was never sent are the same row, not two code paths.
+    p_jawatan: parsed.data.jawatan ?? null,
   });
 
   // 23505 is the unique index doing its job when two admins race on a name —
@@ -183,6 +197,13 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       p_school: schoolId,
       p_member: body.userId,
       p_supervisor: body.supervisorId,
+    };
+  } else if (body.jawatan !== undefined) {
+    rpc = "admin_set_jawatan";
+    args = {
+      p_school: schoolId,
+      p_user: body.userId,
+      p_jawatan: body.jawatan,
     };
   } else {
     rpc = "admin_set_member";

@@ -20,6 +20,30 @@ for m in re.finditer(r"create table erph\.(\w+) \((.*?)\n\);", sql, re.S):
 
 problems = 0
 
+
+def select_parts(spec: str) -> list[str]:
+    """Split a PostgREST select on its *top-level* commas.
+
+    An embedded relation carries its own list — `signer:signer_id(full_name,
+    jawatan)` — and splitting that on every comma turns it into two bogus
+    column names, each of which then "does not exist".
+    """
+    parts: list[str] = []
+    depth, current = 0, []
+    for ch in spec:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    if current:
+        parts.append("".join(current))
+    return [p.strip() for p in parts if p.strip()]
+
 for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
     src = f.read_text(encoding="utf-8")
 
@@ -33,7 +57,7 @@ for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
         table = froms[-1] if froms else None
         if table not in TABLES:
             continue
-        for part in [p.strip() for p in spec.split(",") if p.strip()]:
+        for part in select_parts(spec):
             embed = re.match(r"\w+:(\w+)\(([\w, ]+)\)", part)
             if embed:
                 fk, cols = embed.group(1), embed.group(2)

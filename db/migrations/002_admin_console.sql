@@ -25,7 +25,8 @@ create or replace function erph.admin_create_member(p_school uuid, p_username te
                                                     p_full_name text,
                                                     p_role erph.member_role,
                                                     p_password_hash text,
-                                                    p_email text default null)
+                                                    p_email text default null,
+                                                    p_jawatan erph.jawatan default null)
 returns uuid language plpgsql security definer set search_path = erph, public as $$
 declare
   v_id uuid;
@@ -47,6 +48,11 @@ begin
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
   end if;
+  -- The office may be left for later — but if it is given here it has to fit
+  -- the role, or a GPK account could be born already printed as "Guru Besar".
+  if p_jawatan is not null and erph.jawatan_for(p_role, p_jawatan) is distinct from p_jawatan then
+    raise exception 'Jawatan tidak sepadan dengan peranan akaun';
+  end if;
   if p_password_hash is null or length(p_password_hash) < 20 then
     raise exception 'Kata laluan tidak sah';
   end if;
@@ -56,9 +62,9 @@ begin
     raise exception 'Nama pengguna ini telah digunakan';
   end if;
 
-  insert into erph.user (username, password_hash, full_name, email, role)
+  insert into erph.user (username, password_hash, full_name, email, role, jawatan)
   values (v_username, p_password_hash, trim(p_full_name),
-          nullif(trim(p_email), ''), p_role)
+          nullif(trim(p_email), ''), p_role, p_jawatan)
   returning id into v_id;
 
   insert into erph.school_member (school_id, user_id, role)
@@ -124,7 +130,15 @@ begin
   end if;
   update erph.school_member set role = p_role
    where school_id = p_school and user_id = p_user;
-  update erph.user set is_active = p_active where id = p_user;
+  -- The jawatan travels with the role: an office the new role cannot hold is
+  -- cleared rather than left for the cover sheet to print under a name that
+  -- never held it. Refusing instead would turn a routine demotion into an
+  -- error the administrator has no way to resolve from that screen.
+  update erph.user
+     set is_active = p_active,
+         role = p_role,
+         jawatan = erph.jawatan_for(p_role, erph.user.jawatan)
+   where id = p_user;
 end $$;
 
 

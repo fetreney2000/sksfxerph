@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { ms } from "@/lib/i18n/ms";
 import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
 import { adminDb } from "@/lib/server/db";
+import type { Jawatan } from "@/lib/types";
 
 /**
  * GET /api/rph/[id]/signature — the signature sealing a plan, if any.
@@ -18,6 +20,16 @@ import { adminDb } from "@/lib/server/db";
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * The office as it is written on paper — "Penolong Kanan HEM", never the
+ * `erph.jawatan` slug. Anything the enum does not recognise becomes `null`
+ * rather than a string nobody can read on a sheet a district officer holds.
+ */
+function jawatanLabel(value: string | null | undefined): string | null {
+  if (!value || !(value in ms.jawatan)) return null;
+  return ms.jawatan[value as Jawatan];
+}
+
 export interface SignaturePayload {
   envelope: unknown;
   signature: string;
@@ -26,10 +38,13 @@ export interface SignaturePayload {
   signedAt: string;
   signerName: string | null;
   /**
-   * The signer's jawatan — "PK KO", "Guru Besar". Printed beneath their name on
-   * the cover sheet: a signature with a name but no office under it is a name
-   * anyone could have typed, and the district reading the sheet has no way to
-   * tell which.
+   * The signer's office as printed — "Penolong Kanan HEM", "Guru Besar" —
+   * read from `erph.user.jawatan`, or `null` when nobody has set one.
+   *
+   * Printed beneath their name on the cover sheet: a signature with a name but
+   * no office under it is a name anyone could have typed, and the district
+   * reading the sheet has no way to tell which. `null` stays `null` rather
+   * than becoming a guess, so a missing office shows as "—".
    */
   signerTitle: string | null;
 }
@@ -86,7 +101,8 @@ export async function GET(
   const { data, error } = await gate.db
     .from("rph_signature")
     .select(
-      "envelope, signature, public_key, alg, signed_at, signer_id, signer:signer_id(full_name)",
+      "envelope, signature, public_key, alg, signed_at, signer_id, " +
+        "signer:signer_id(full_name, jawatan)",
     )
     .eq("document_id", id)
     .order("signed_at", { ascending: false })
@@ -105,22 +121,16 @@ export async function GET(
     alg: string;
     signed_at: string;
     signer_id: string;
-    signer: { full_name: string } | null;
+    signer: { full_name: string; jawatan: string | null } | null;
   } | null;
 
   if (!sig) return NextResponse.json({ signature: null });
 
-  // The jawatan lives on school_member — the school's row for this user — not
-  // on the user, so it cannot ride along on the join above and costs one more
-  // query. It is worth the round trip for the reason in SignaturePayload: the
-  // cover sheet is read by people who have never met the signer.
-  const { data: member } = await gate.db
-    .from("school_member")
-    .select("title")
-    .eq("school_id", schoolId)
-    .eq("user_id", sig.signer_id)
-    .maybeSingle();
-
+  // The office rides along on the same embedded read as the name. It used to
+  // come from `school_member.title`, a free-text column nothing ever wrote —
+  // which is why every cover sheet printed "—" beneath a signature the school
+  // had actually made. `erph.user.jawatan` is the one the administrator sets,
+  // and the join to `erph.user` is the same row the name is already read from.
   const payload: SignaturePayload = {
     envelope: sig.envelope,
     signature: sig.signature,
@@ -128,7 +138,7 @@ export async function GET(
     alg: sig.alg,
     signedAt: sig.signed_at,
     signerName: sig.signer?.full_name ?? null,
-    signerTitle: (member as { title: string | null } | null)?.title ?? null,
+    signerTitle: jawatanLabel(sig.signer?.jawatan),
   };
 
   return NextResponse.json({ signature: payload });

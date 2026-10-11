@@ -20,7 +20,7 @@ const SEAL: SignaturePayload = {
   alg: "ES256",
   signedAt: "2026-01-21T02:00:00.000Z",
   signerName: "Bob Edrem bin Pemin",
-  signerTitle: "PK KO",
+  signerTitle: "Penolong Kanan HEM",
 };
 
 const BASE = {
@@ -76,7 +76,9 @@ describe("RphCover — the weekly summary", () => {
     // Twice: once inside the seal, once in NAMA PENTADBIR. The form has both —
     // the seal is what makes it trustworthy, the row is what a reader scans.
     expect(screen.getAllByText("Bob Edrem bin Pemin").length).toBe(2);
-    expect(screen.getByText("PK KO")).toBeTruthy();
+    // Twice for the same reason: the seal puts the office under the name, and
+    // the JAWATAN row puts it where a reader of the form expects to scan it.
+    expect(screen.getAllByText("Penolong Kanan HEM").length).toBe(2);
     // signedAt is 21 January 2026 in UTC; the printed date is local wall-clock,
     // so assert the day rather than the whole stamp.
     expect(screen.getByText(/-01-2026$/)).toBeTruthy();

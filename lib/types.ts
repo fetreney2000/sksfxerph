@@ -5,6 +5,43 @@ import type { RphPayload } from "@/lib/schemas/rph";
 export const MEMBER_ROLES = ["guru_biasa", "gpk", "guru_besar", "pentadbir", "system"] as const;
 export type MemberRole = (typeof MEMBER_ROLES)[number];
 
+/**
+ * `erph.jawatan` — the office a person holds at the school, printed on the
+ * JAWATAN row of the weekly cover sheet.
+ *
+ * Deliberately not derived from `MemberRole`: the app's roles say what an
+ * *account* may do, and three completely different offices ('pk_pentadbiran',
+ * 'pk_hem', 'pk_kokum') all live under the single role 'gpk'. Only the school
+ * knows which one a given GPK holds, so it is stored and chosen, never
+ * inferred — a cover sheet is read by people who have never met the signer.
+ * `null` means "not set" and prints as "—".
+ */
+export const JAWATAN = [
+  "guru_biasa",
+  "pk_pentadbiran",
+  "pk_hem",
+  "pk_kokum",
+  "guru_besar",
+] as const;
+export type Jawatan = (typeof JAWATAN)[number];
+
+/**
+ * The offices each role may hold — the accounts picker's option list.
+ *
+ * `erph.jawatan_for` in db/schema.sql is the same table, and it has to stay
+ * in step with this one: an option offered here that SQL would refuse shows up
+ * as a Malay error out of PostgREST instead of a saved row. `[]` is a real
+ * answer, not a placeholder: the pentadbir and system accounts hold no office,
+ * so their JAWATAN is "—" and stays that way.
+ */
+export const JAWATAN_BY_ROLE: Record<MemberRole, readonly Jawatan[]> = {
+  guru_biasa: ["guru_biasa"],
+  gpk: ["pk_pentadbiran", "pk_hem", "pk_kokum"],
+  guru_besar: ["guru_besar"],
+  pentadbir: [],
+  system: [],
+};
+
 export const RPH_STATUSES = [
   "draft",
   "submitted",

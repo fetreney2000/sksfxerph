@@ -29,13 +29,14 @@ import {
   listMembers,
   type Member,
   resetPassword,
+  setJawatan,
   setMember,
   setSupervisor,
   unlockMember,
 } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import { ms } from "@/lib/i18n/ms";
-import { MEMBER_ROLES, type MemberRole } from "@/lib/types";
+import { JAWATAN_BY_ROLE, type Jawatan, MEMBER_ROLES, type MemberRole } from "@/lib/types";
 
 /**
  * Tab 1 — accounts and roles.
@@ -53,6 +54,21 @@ import { MEMBER_ROLES, type MemberRole } from "@/lib/types";
 
 /** Roles an administrator may hand out — `system` is a service account. */
 const ASSIGNABLE = MEMBER_ROLES.filter((r) => r !== "system");
+
+/**
+ * What the jawatan should be when a role is chosen or changed.
+ *
+ * Kept if the new role can still hold it, otherwise the single office that
+ * role implies, otherwise unset. `gpk` deliberately lands on unset: its three
+ * Penolong Kanan offices are a choice only the school can make, and picking one
+ * here would put a name on paper nobody confirmed.
+ */
+function jawatanFor(role: MemberRole, current: Jawatan | null): Jawatan | null {
+  const offices = JAWATAN_BY_ROLE[role] ?? [];
+  if (current !== null && offices.includes(current)) return current;
+  if (offices.length !== 1) return null;
+  return offices[0] ?? null;
+}
 
 type LockState = "active" | "locked" | "inactive";
 
@@ -106,7 +122,8 @@ export function AccountsTab() {
           <div>
             <CardTitle>Akaun &amp; peranan</CardTitle>
             <CardDescription>
-              Peranan menentukan apa yang boleh dilihat dan dilakukan. Kesemua lima peranan
+              Peranan menentukan apa yang boleh dilihat dan dilakukan; jawatan ialah gelaran
+              yang tertera pada baris JAWATAN dalam cetakan mingguan. Kesemua lima peranan
               mempunyai akses kepada RPH sendiri.
             </CardDescription>
           </div>
@@ -133,16 +150,22 @@ export function AccountsTab() {
               <table className="w-full border-collapse text-[13px]">
                 <thead>
                   <tr className="bg-surface-2">
-                    {["Nama", "Peranan", "Penyelia", "Status", "Log masuk terakhir", ""].map(
-                      (h) => (
-                        <th
-                          key={h}
-                          className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                        >
-                          {h}
-                        </th>
-                      ),
-                    )}
+                    {[
+                      "Nama",
+                      "Peranan",
+                      "Jawatan",
+                      "Penyelia",
+                      "Status",
+                      "Log masuk terakhir",
+                      "",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -154,7 +177,25 @@ export function AccountsTab() {
                     const changeRole = (role: MemberRole) =>
                       save(
                         () => setMember(m.user_id, role, m.is_active),
-                        `Peranan ${m.full_name} dikemas kini`,
+                        // A role change can take an office away with it — SQL
+                        // clears a jawatan the new role cannot hold, so say so
+                        // rather than let the row quietly empty itself.
+                        m.jawatan !== null && !(JAWATAN_BY_ROLE[role] ?? []).includes(m.jawatan)
+                          ? `Peranan ${m.full_name} dikemas kini — jawatan lama ditanggalkan`
+                          : `Peranan ${m.full_name} dikemas kini`,
+                        () => void accounts.refetch(),
+                      );
+
+                    // The offices this role may hold; empty for the pentadbir
+                    // and the service account, which hold none at all.
+                    const offices = JAWATAN_BY_ROLE[m.role] ?? [];
+
+                    const changeJawatan = (jawatan: Jawatan | null) =>
+                      save(
+                        () => setJawatan(m.user_id, jawatan),
+                        jawatan
+                          ? `Jawatan ${m.full_name} dikemas kini`
+                          : `Jawatan ${m.full_name} dikosongkan`,
                         () => void accounts.refetch(),
                       );
 
@@ -208,6 +249,33 @@ export function AccountsTab() {
                               </option>
                             ))}
                           </Select>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {/* The office, not the permission — it is what the
+                              cover sheet prints under the signer's name, which
+                              is why it is chosen per person instead of being
+                              derived from the role beside it: one GPK role
+                              covers three different Penolong Kanan offices. */}
+                          {offices.length === 0 ? (
+                            <span className="text-[12.5px] text-ink-4">—</span>
+                          ) : (
+                            <Select
+                              aria-label={`Jawatan ${m.full_name}`}
+                              value={m.jawatan ?? ""}
+                              className="w-[190px] py-1.5 text-[12.5px]"
+                              disabled={busy}
+                              onChange={(e) =>
+                                changeJawatan((e.target.value || null) as Jawatan | null)
+                              }
+                            >
+                              <option value="">— belum ditetapkan —</option>
+                              {offices.map((j) => (
+                                <option key={j} value={j}>
+                                  {ms.jawatan[j]}
+                                </option>
+                              ))}
+                            </Select>
+                          )}
                         </td>
                         <td className="px-4 py-2.5">
                           {/* Scope, not decoration: this decides whose plans the
@@ -336,9 +404,14 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
   const [username, setUsername] = React.useState("");
   const [fullName, setFullName] = React.useState("");
   const [role, setRole] = React.useState<MemberRole>("guru_biasa");
+  const [jawatan, setJawatan] = React.useState<Jawatan | null>(() =>
+    jawatanFor("guru_biasa", null),
+  );
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+
+  const offices = JAWATAN_BY_ROLE[role] ?? [];
 
   const submit = () => {
     if (!username.trim() || !fullName.trim() || password.length < 8) {
@@ -352,6 +425,7 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
           username: username.trim(),
           fullName: fullName.trim(),
           role,
+          jawatan,
           email: email.trim() || null,
           password,
         }),
@@ -363,6 +437,7 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
     setEmail("");
     setPassword("");
     setRole("guru_biasa");
+    setJawatan(jawatanFor("guru_biasa", null));
   };
 
   return (
@@ -405,7 +480,11 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
               <Select
                 id="acc-role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as MemberRole)}
+                onChange={(e) => {
+                  const next = e.target.value as MemberRole;
+                  setRole(next);
+                  setJawatan(jawatanFor(next, jawatan));
+                }}
               >
                 {ASSIGNABLE.map((r) => (
                   <option key={r} value={r}>
@@ -425,6 +504,30 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
               />
             </div>
           </div>
+          {/* Only where a role has an office to hold: the pentadbir's account
+              exists to set the app up, and printing a JAWATAN for it would be
+              inventing one. */}
+          {offices.length > 0 && (
+            <div>
+              <Label htmlFor="acc-jawatan">Jawatan</Label>
+              <Select
+                id="acc-jawatan"
+                value={jawatan ?? ""}
+                onChange={(e) => setJawatan((e.target.value || null) as Jawatan | null)}
+              >
+                <option value="">— belum ditetapkan —</option>
+                {offices.map((j) => (
+                  <option key={j} value={j}>
+                    {ms.jawatan[j]}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1.5 text-[11.5px] text-ink-4">
+                Gelaran ini yang tertera pada baris JAWATAN ketika cetakan mingguan
+                ditandatangani.
+              </p>
+            </div>
+          )}
           <div>
             <Label htmlFor="acc-password" required>
               Kata laluan sementara

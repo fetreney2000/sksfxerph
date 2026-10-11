@@ -90,14 +90,14 @@ end $$;
 
 create or replace function erph.admin_list_members(p_school uuid)
 returns table (user_id uuid, username text, full_name text, email text,
-               role erph.member_role, is_active boolean,
+               role erph.member_role, jawatan erph.jawatan, is_active boolean,
                last_login_at timestamptz, locked_until timestamptz,
                failed_logins int, password_changed_at timestamptz,
                supervisor_id uuid, supervisor_name text)
 language sql stable security definer set search_path = erph, public as $$
-  select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active,
-         u.last_login_at, u.locked_until, u.failed_logins, u.password_changed_at,
-         m.supervisor_id, sup.full_name
+  select m.user_id, u.username, u.full_name, u.email, m.role, u.jawatan,
+         u.is_active, u.last_login_at, u.locked_until, u.failed_logins,
+         u.password_changed_at, m.supervisor_id, sup.full_name
     from erph.school_member m
     join erph.user u on u.id = m.user_id
     left join erph.user sup on sup.id = m.supervisor_id

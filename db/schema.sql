@@ -58,6 +58,27 @@ create type erph.member_role as enum (
   'system'        -- seeded/service accounts
 );
 
+-- The office a person actually holds, printed on the JAWATAN row of the weekly
+-- cover sheet. Deliberately *not* the same question as `member_role`:
+--
+--   · `member_role` is what the account may do inside the app. Three people
+--     with completely different jobs can hold 'gpk', and 'guru_biasa' says
+--     nothing about whether the person is, say, a subject coordinator.
+--   · `erph.jawatan` is who they are to the district reading the printed
+--     sheet, which is why one role maps to several jawatan (the three
+--     Penolong Kanan offices) and why it has to be chosen rather than derived.
+--
+-- NULL means "not set yet" and prints as "—". It is never guessed: a cover
+-- sheet that names an office nobody set would be a claim the school never
+-- made, which is the failure this column exists to replace.
+create type erph.jawatan as enum (
+  'guru_biasa',      -- Guru Biasa
+  'pk_pentadbiran',  -- Penolong Kanan Pentadbiran
+  'pk_hem',          -- Penolong Kanan HEM
+  'pk_kokum',        -- Penolong Kanan Kokum
+  'guru_besar'       -- Guru Besar
+);
+
 -- Two-stage approval: Guru Biasa submits -> GPK semak (forwarded) -> Guru Besar
 -- lulus. `forwarded` is the plan sitting with the Guru Besar.
 create type erph.rph_status as enum
@@ -236,6 +257,9 @@ create table erph.user (
   username      text not null,                        -- case-insensitive (index below)
   password_hash text not null,                        -- PHC-style scrypt string
   role          erph.member_role not null default 'guru_biasa',
+  -- The office held at the school, for the JAWATAN row of the cover sheet.
+  -- NULL until an administrator sets it — see erph.jawatan above.
+  jawatan       erph.jawatan,
   is_active     boolean not null default true,
   failed_logins int not null default 0,               -- brute-force lockout
   locked_until  timestamptz,                          -- null = not locked
@@ -278,7 +302,11 @@ create table erph.school_member (
   school_id  uuid not null references erph.school(id) on delete cascade,
   user_id    uuid not null references erph.user(id) on delete cascade,
   role       erph.member_role not null default 'guru_biasa',
-  title      text,                                      -- 'GPK Pentadbiran', 'Guru Matematik'
+  -- Free text, never written by any code path, and NOT what the cover sheet
+  -- prints: the JAWATAN row reads erph.user.jawatan. This column being all
+  -- NULL while still being the one the signature route consulted is exactly
+  -- why every cover printed "—" beneath the signer's name.
+  title      text,
   -- Who supervises this member's plans. NULL means *nobody*, and that is the
   -- deliberate default: a teacher with no supervisor is visible only to a Guru
   -- Besar, because "GPK can only view, review and sahkan rph of teachers under
@@ -1317,20 +1345,42 @@ end $$;
 -- route hashes it with scrypt first (lib/server/auth/password.ts), so reading
 -- these functions still yields no way back to what a teacher typed.
 
+-- Does this office belong to that role? Returns the jawatan when it does and
+-- NULL when it does not — one answer both callers need: `admin_set_member`
+-- uses it to clear an office a new role cannot hold, and `admin_set_jawatan`
+-- uses the same expression to refuse one that was never valid.
+--
+-- The mapping is the constraint the UI enforces too (JAWATAN_BY_ROLE in
+-- lib/types.ts). Stated here as well because a check constraint on the table
+-- would fire *after* a role change had already gone through, turning a
+-- routine demotion into a 23514 the administrator cannot act on.
+create or replace function erph.jawatan_for(p_role erph.member_role,
+                                            p_jawatan erph.jawatan)
+returns erph.jawatan language sql immutable set search_path = erph, public as $$
+  select case
+    when p_jawatan is null then null
+    when p_jawatan = 'guru_biasa'   then case when p_role = 'guru_biasa' then p_jawatan end
+    when p_jawatan = 'guru_besar'   then case when p_role = 'guru_besar' then p_jawatan end
+    -- the three Penolong Kanan offices, all of them held under 'gpk'
+    when p_role = 'gpk' then p_jawatan
+    else null
+  end;
+$$;
+
 -- Who supervises whom is part of the roster, not a separate screen: the
 -- administrator assigning a teacher needs the GPK's name beside them, and the
 -- "nobody supervises this teacher yet" state has to be visible rather than
 -- discoverable later when a GPK's queue is mysteriously empty.
 create or replace function erph.admin_list_members(p_school uuid)
 returns table (user_id uuid, username text, full_name text, email text,
-               role erph.member_role, is_active boolean,
+               role erph.member_role, jawatan erph.jawatan, is_active boolean,
                last_login_at timestamptz, locked_until timestamptz,
                failed_logins int, password_changed_at timestamptz,
                supervisor_id uuid, supervisor_name text)
 language sql stable security definer set search_path = erph, public as $$
-  select m.user_id, u.username, u.full_name, u.email, m.role, u.is_active,
-         u.last_login_at, u.locked_until, u.failed_logins, u.password_changed_at,
-         m.supervisor_id, sup.full_name
+  select m.user_id, u.username, u.full_name, u.email, m.role, u.jawatan,
+         u.is_active, u.last_login_at, u.locked_until, u.failed_logins,
+         u.password_changed_at, m.supervisor_id, sup.full_name
     from erph.school_member m
     join erph.user u on u.id = m.user_id
     left join erph.user sup on sup.id = m.supervisor_id
@@ -1345,7 +1395,8 @@ create or replace function erph.admin_create_member(p_school uuid, p_username te
                                                     p_full_name text,
                                                     p_role erph.member_role,
                                                     p_password_hash text,
-                                                    p_email text default null)
+                                                    p_email text default null,
+                                                    p_jawatan erph.jawatan default null)
 returns uuid language plpgsql security definer set search_path = erph, public as $$
 declare
   v_id uuid;
@@ -1367,6 +1418,11 @@ begin
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
   end if;
+  -- The office may be left for later — but if it is given here it has to fit
+  -- the role, or a GPK account could be born already printed as "Guru Besar".
+  if p_jawatan is not null and erph.jawatan_for(p_role, p_jawatan) is distinct from p_jawatan then
+    raise exception 'Jawatan tidak sepadan dengan peranan akaun';
+  end if;
   if p_password_hash is null or length(p_password_hash) < 20 then
     raise exception 'Kata laluan tidak sah';
   end if;
@@ -1376,9 +1432,9 @@ begin
     raise exception 'Nama pengguna ini telah digunakan';
   end if;
 
-  insert into erph.user (username, password_hash, full_name, email, role)
+  insert into erph.user (username, password_hash, full_name, email, role, jawatan)
   values (v_username, p_password_hash, trim(p_full_name),
-          nullif(trim(p_email), ''), p_role)
+          nullif(trim(p_email), ''), p_role, p_jawatan)
   returning id into v_id;
 
   insert into erph.school_member (school_id, user_id, role)
@@ -1431,10 +1487,12 @@ begin
   update erph.user set failed_logins = 0, locked_until = null where id = p_user;
 end $$;
 
--- Sets the role and the active flag together. The role is duplicated on
--- `erph.user` (what the route guard reads) and `erph.school_member` (what SQL
--- reads) with nothing keeping them in step, so updating one alone would let a
--- demoted account keep its privileges through whichever layer it reached.
+-- Sets the role and the active flag together, on both of the rows that hold
+-- the role: `erph.user` (what the route guard and the session read) and
+-- `erph.school_member` (what every SQL policy reads). Nothing else keeps them
+-- in step, so writing one alone would let a demoted account keep its
+-- privileges through whichever layer it reached next — and would make the
+-- "peranan dikemas kini" toast a description of half a change.
 create or replace function erph.admin_set_member(p_school uuid, p_user uuid,
                                                  p_role erph.member_role,
                                                  p_active boolean)
@@ -1452,7 +1510,45 @@ begin
   end if;
   update erph.school_member set role = p_role
    where school_id = p_school and user_id = p_user;
-  update erph.user set is_active = p_active where id = p_user;
+  -- The jawatan travels with the role: an office the new role cannot hold is
+  -- cleared rather than left for the cover sheet to print under a name that
+  -- never held it. Refusing instead would turn a routine demotion into an
+  -- error the administrator has no way to resolve from that screen.
+  update erph.user
+     set is_active = p_active,
+         role = p_role,
+         jawatan = erph.jawatan_for(p_role, erph.user.jawatan)
+   where id = p_user;
+end $$;
+
+-- Sets the office printed on the cover sheet, or clears it. Separate from
+-- `admin_set_member` because it is a different question — "what may this
+-- account do" versus "what is this person called on paper" — and folding it
+-- into the role write would mean every role change silently had to re-decide
+-- an office nobody was asking about.
+--
+-- The mismatch check is here rather than as a CHECK on the table so that the
+-- refusal arrives as a sentence in Malay in front of the person who can fix
+-- it, instead of as 23514.
+create or replace function erph.admin_set_jawatan(p_school uuid, p_user uuid,
+                                                  p_jawatan erph.jawatan)
+returns void language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_role erph.member_role;
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if not exists (select 1 from erph.school_member
+                 where school_id = p_school and user_id = p_user) then
+    raise exception 'Akaun bukan ahli sekolah ini';
+  end if;
+  select role into v_role from erph.user where id = p_user;
+  if p_jawatan is not null and erph.jawatan_for(v_role, p_jawatan) is distinct from p_jawatan then
+    raise exception 'Jawatan tidak sepadan dengan peranan akaun';
+  end if;
+
+  update erph.user set jawatan = p_jawatan where id = p_user;
 end $$;
 
 -- The session is a real setting, not a build constant: turning the school year

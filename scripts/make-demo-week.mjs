@@ -201,6 +201,18 @@ const bob = members?.find((m) => m.user_id === bobUser.id);
 if (!kartini || !bob) throw new Error("Kartini or Bob has no membership here.");
 console.log(`Kartini ${kartini.user_id}, Bob ${bob.user_id}`);
 
+// Bob's office. The weekly cover sheet prints the signer's jawatan, read from
+// erph.user — and 'gpk' does not say which of the three Penolong Kanan offices
+// he holds, so the demo states one rather than leave "—" beneath a signature
+// this script has just made. One GPK, one school: any of the three is as true
+// as the other until the school says otherwise.
+const BOB_JAWATAN = "pk_pentadbiran";
+await api(`/rest/v1/user?id=eq.${bobUser.id}`, {
+  method: "PATCH",
+  body: JSON.stringify({ jawatan: BOB_JAWATAN }),
+});
+console.log(`Bob's jawatan: ${BOB_JAWATAN}`);
+
 const classes = await api(
   `/rest/v1/class?school_id=eq.${schoolId}&session=eq.${SESSION}&select=id,nama&order=nama&limit=1`,
 );

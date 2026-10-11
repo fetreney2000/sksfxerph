@@ -1,5 +1,5 @@
 import { handleExpiredSession } from "@/lib/client/auth-session";
-import type { Curriculum, MemberRole } from "@/lib/types";
+import type { Curriculum, Jawatan, MemberRole } from "@/lib/types";
 
 /**
  * Typed calls into `/api/admin/*` and the two reference-data endpoints.
@@ -48,6 +48,13 @@ export interface Member {
   full_name: string;
   email: string | null;
   role: MemberRole;
+  /**
+   * The office this person holds, printed on the cover sheet's JAWATAN row.
+   *
+   * `null` is a real state — "nobody has set this yet" — and the picker shows
+   * it as "belum ditetapkan" rather than pretending a value exists.
+   */
+  jawatan: Jawatan | null;
   is_active: boolean;
   last_login_at: string | null;
   locked_until: string | null;
@@ -68,6 +75,8 @@ export interface NewAccount {
   username: string;
   fullName: string;
   role: MemberRole;
+  /** May be `null`: the office can be set later from the accounts table. */
+  jawatan: Jawatan | null;
   email: string | null;
   password: string;
 }
@@ -80,6 +89,15 @@ export const createAccount = (body: NewAccount) =>
 /** Role + active flag together — `admin_set_member` writes both or neither. */
 export const setMember = (userId: string, role: MemberRole, isActive: boolean) =>
   request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, role, isActive }));
+
+/**
+ * The office printed under the signer's name on the cover sheet, or `null` to
+ * clear it. Its own PATCH branch because it is not a permission change: SQL
+ * accepts it only when it fits the account's role, and the refusal comes back
+ * as the message shown in the toast.
+ */
+export const setJawatan = (userId: string, jawatan: Jawatan | null) =>
+  request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, jawatan }));
 
 export const resetPassword = (userId: string, password: string) =>
   request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, password }));

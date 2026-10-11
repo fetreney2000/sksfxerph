@@ -55,19 +55,23 @@ where s.kod_sekolah = 'SK0000'
 on conflict (school_id, session, nama) do nothing;
 
 -- ── 4 · one account per role ────────────────────────────────────────────────
-insert into erph.user (username, password_hash, full_name, email, role, is_active)
+-- `jawatan` is the office printed on the cover sheet's JAWATAN row. Seeded
+-- only where the role already says it outright, plus one GPK office so a
+-- locally printed weekly cover has something real to show; the other two
+-- (`pentadbir.sk`, `sistem.erph`) hold no office and stay NULL on purpose.
+insert into erph.user (username, password_hash, full_name, email, role, jawatan, is_active)
 values
   -- username: nurul.aisyah       password: guru2026
-  ('nurul.aisyah', 'scrypt$16384$8$1$dbsjVcXMhuT5Z7igUNHUcA$0g_lKAWtwbfOfJCvbLftN1hEzXTx8hcsr40d48K2803oKMTANbl8WYqYEWPYH7A50vCB0ClrWaDEPgzEXOy_FQ', 'Nurul Aisyah binti Rahim', 'nurul.aisyah@sk0000.local', 'guru_biasa', true),
+  ('nurul.aisyah', 'scrypt$16384$8$1$dbsjVcXMhuT5Z7igUNHUcA$0g_lKAWtwbfOfJCvbLftN1hEzXTx8hcsr40d48K2803oKMTANbl8WYqYEWPYH7A50vCB0ClrWaDEPgzEXOy_FQ', 'Nurul Aisyah binti Rahim', 'nurul.aisyah@sk0000.local', 'guru_biasa', 'guru_biasa', true),
   -- username: ramlan.yusof       password: penyelaras2026
-  ('ramlan.yusof', 'scrypt$16384$8$1$acdfe8ckwcAxPHiMwnG9Vg$toHYln8by5fkx2Lw7sa5xunepYbq0zpzW4HVDfEquWy10SfDN_QJ9-0cBDATMPfVs5rLSejGrSjl-KkZdKbLfQ', 'Ramlan bin Yusof', 'ramlan.yusof@sk0000.local', 'gpk', true),
+  ('ramlan.yusof', 'scrypt$16384$8$1$acdfe8ckwcAxPHiMwnG9Vg$toHYln8by5fkx2Lw7sa5xunepYbq0zpzW4HVDfEquWy10SfDN_QJ9-0cBDATMPfVs5rLSejGrSjl-KkZdKbLfQ', 'Ramlan bin Yusof', 'ramlan.yusof@sk0000.local', 'gpk', 'pk_pentadbiran', true),
   -- username: zulkifli.rahman    password: admin2026
-  ('zulkifli.rahman', 'scrypt$16384$8$1$nsx95Xm9eeThntZEU7ikrQ$RGd4agBkKXyGetTZc48kGbQPWASaw7KlhH3pIVUa0dBw69Ygz_CizEi18_6hw0nFdz60Lbxrd3iIUX35eqDsrQ', 'Zulkifli bin Rahman', 'zulkifli.rahman@sk0000.local', 'guru_besar', true),
+  ('zulkifli.rahman', 'scrypt$16384$8$1$nsx95Xm9eeThntZEU7ikrQ$RGd4agBkKXyGetTZc48kGbQPWASaw7KlhH3pIVUa0dBw69Ygz_CizEi18_6hw0nFdz60Lbxrd3iIUX35eqDsrQ', 'Zulkifli bin Rahman', 'zulkifli.rahman@sk0000.local', 'guru_besar', 'guru_besar', true),
   -- username: pentadbir.sk       password: pentadbir2026
-  ('pentadbir.sk', 'scrypt$16384$8$1$sBZJbXJZGtDoXYVtM_r_MA$_Q_vvOJhHbPEbvKonOnd-ktpbXbn0axcvfihN6Gvw3QbzfzfEWoXvyhHi8rFcWaxKqNtYn9iUxIlQYOTgGmVGg', 'Pentadbir eRPH', 'pentadbir@sk0000.local', 'pentadbir', true),
+  ('pentadbir.sk', 'scrypt$16384$8$1$sBZJbXJZGtDoXYVtM_r_MA$_Q_vvOJhHbPEbvKonOnd-ktpbXbn0axcvfihN6Gvw3QbzfzfEWoXvyhHi8rFcWaxKqNtYn9iUxIlQYOTgGmVGg', 'Pentadbir eRPH', 'pentadbir@sk0000.local', 'pentadbir', null, true),
   -- Service account: not a person. Kept inactive so it can never be used to
   -- log in; exists so automated rows have a stable actor to reference.
-  ('sistem.erph', '!not-a-password', 'Sistem eRPH', null, 'system', false)
+  ('sistem.erph', '!not-a-password', 'Sistem eRPH', null, 'system', null, false)
 on conflict do nothing;
 
 -- ── 5 · membership (an account with no school cannot sync, review or report) ─

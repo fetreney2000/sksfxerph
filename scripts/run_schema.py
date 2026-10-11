@@ -249,8 +249,8 @@ def main() -> int:
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
     # Bump when adding a function — this count is a guard against one being
-    # lost, not a formality.
-    check("35 functions in erph", n_funcs == 35, f"found {n_funcs}")
+    # lost, not a formality. 012 added `jawatan_for` and `admin_set_jawatan`.
+    check("37 functions in erph", n_funcs == 37, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -266,7 +266,7 @@ def main() -> int:
     for name, label in rows:
         enums.setdefault(name, []).append(label)
 
-    check("5 enum types", len(enums) == 5, f"found {sorted(enums)}")
+    check("6 enum types", len(enums) == 6, f"found {sorted(enums)}")
     tv = enums.get("template_visibility", [])
     check(
         "template_visibility values = private/school/system",
@@ -278,6 +278,13 @@ def main() -> int:
         "member_role values intact",
         roles == ["guru_biasa", "gpk", "guru_besar", "pentadbir", "system"],
         f"got {roles}",
+    )
+    offices = enums.get("jawatan", [])
+    check(
+        "jawatan values = the five offices on the cover sheet",
+        offices
+        == ["guru_biasa", "pk_pentadbiran", "pk_hem", "pk_kokum", "guru_besar"],
+        f"got {offices}",
     )
 
     # the exact class of bug this runner was written for:

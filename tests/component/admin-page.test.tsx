@@ -32,6 +32,7 @@ const ME: Member = {
   full_name: "Nurul Aisyah binti Rahim",
   email: "nurul@sk0000.local",
   role: "guru_biasa",
+  jawatan: "guru_biasa",
   is_active: true,
   last_login_at: "2026-10-05T08:12:00Z",
   locked_until: null,
@@ -49,6 +50,8 @@ const MEMBERS: Member[] = [
     full_name: "Ramlan bin Yusof",
     email: null,
     role: "gpk",
+    // One of the three Penolong Kanan offices — a GPK's role cannot say which.
+    jawatan: "pk_hem",
     is_active: true,
     last_login_at: null,
     // In the future → rendered as a locked account, not merely "inactive".
@@ -64,6 +67,8 @@ const MEMBERS: Member[] = [
     full_name: "Siti Rahmah binti Ali",
     email: null,
     role: "guru_biasa",
+    // Nobody has set an office yet — a real state, not a missing field.
+    jawatan: null,
     is_active: true,
     last_login_at: null,
     locked_until: null,
@@ -257,6 +262,37 @@ describe("pentadbiran", () => {
     });
     expect(offered.length).toBe(2);
     expect(screen.queryByRole("option", { name: /Siti Rahmah .*Guru Biasa/ })).toBeNull();
+  });
+
+  it("offers the office the cover sheet prints, and only what the role may hold", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mount();
+
+    await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
+
+    // One picker per row — and none for a role with no office to hold, which
+    // this roster happens not to contain.
+    expect(screen.getAllByLabelText(/^Jawatan /)).toHaveLength(3);
+
+    // A GPK's menu is the three Penolong Kanan offices, not the single one a
+    // Guru Biasa gets: the role cannot say which office this person holds.
+    const gpkSelect = screen.getByLabelText("Jawatan Ramlan bin Yusof") as HTMLSelectElement;
+    expect(gpkSelect.value).toBe("pk_hem");
+    expect(Array.from(gpkSelect.options).map((o) => o.textContent)).toEqual([
+      "— belum ditetapkan —",
+      "Penolong Kanan Pentadbiran",
+      "Penolong Kanan HEM",
+      "Penolong Kanan Kokum",
+    ]);
+
+    // Nobody has set Siti's office, and that reads as unset rather than being
+    // filled in from the role beside it.
+    expect(
+      (screen.getByLabelText("Jawatan Siti Rahmah binti Ali") as HTMLSelectElement).value,
+    ).toBe("");
+    expect(
+      (screen.getByLabelText("Jawatan Nurul Aisyah binti Rahim") as HTMLSelectElement).value,
+    ).toBe("guru_biasa");
   });
 
   it("lists classes with plan counts, archived ones included", async () => {

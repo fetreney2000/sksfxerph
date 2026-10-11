@@ -113,6 +113,7 @@ async function exportDocx(doc: RphDocument): Promise<void> {
         className: doc.className,
         subjectName: doc.subjectName,
         signerName: seal?.signerName ?? undefined,
+        signerTitle: seal?.signerTitle ?? undefined,
         signedAt: seal?.signedAt ?? undefined,
         signatureAlg: seal?.alg ?? undefined,
         signatureKey: seal?.publicKey ?? undefined,
