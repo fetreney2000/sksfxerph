@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { HelpHint } from "@/components/ui/help-hint";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { currentWeek, supabaseConfigured } from "@/lib/config";
@@ -323,8 +324,12 @@ export default function SekolahPage() {
         />
         <Stat
           label="Kadar pematuhan"
-          value={String(s.compliancePct)}
-          sub="%"
+          // The same wording as the teacher's own card: the percentage is
+          // only checkable beside what it divides.
+          value={s.compliancePct === null ? "—" : String(s.compliancePct)}
+          sub={
+            s.expected === 0 ? "tiada RPH dijangka" : `${s.approved} daripada ${s.expected} RPH`
+          }
           spark={s.weeks.map((w) => w.compliance ?? 0)}
         />
         <Stat
@@ -473,7 +478,17 @@ export default function SekolahPage() {
               cards do, so a header naming one week over a total for four would
               be the mismatch the range filter was fixed to remove. */}
                 <TH>{scope}</TH>
-                <TH>Pematuhan sesi</TH>
+                <TH>
+                  Pematuhan sesi
+                  {/* A different measure from the school's rate, and sharing
+                      its word was asking for the two to be read as one. */}
+                  <HelpHint label="Pematuhan sesi">
+                    Peratus rancangan guru ini yang telah diluluskan, daripada semua rancangan
+                    yang ditulis sepanjang sesi — termasuk yang masih draf. Bukan kadar
+                    pematuhan sekolah, yang membaca RPH diluluskan berbanding RPH wajib (guru ×
+                    RPH seminggu).
+                  </HelpHint>
+                </TH>
                 <TH>Dikembalikan → dibetulkan</TH>
                 <TH>Terakhir disemak</TH>
                 <TH className="text-right">Tindakan</TH>
@@ -608,7 +623,9 @@ function Stat({
                 "w-[7px] rounded-[2.5px] " +
                 (i === spark.length - 1 ? "bg-primary" : "bg-primary-soft-2")
               }
-              style={{ height: `${Math.max(20, ((v - 90) / 10) * 100)}%` }}
+              style={{
+                height: `${Math.min(100, Math.max(20, ((v - 90) / 10) * 100))}%`,
+              }}
             />
           ))}
         </div>

@@ -724,6 +724,30 @@ def main() -> int:
             )
         )
 
+        # A school with no active Guru Biasa owes nothing, so there is no rate
+        # to give. Postgres's `least()` ignores NULLs — `least(100, NULL)` is
+        # 100 — so without the explicit guard this reports full compliance for
+        # a school that has not been scored at all. Only the teacher is
+        # deactivated: the caller has to stay a member or the function refuses
+        # to answer at all, which is a different check passing.
+        r.q(
+            f"update erph.school_member set is_active = false "
+            f"where school_id = {SK} and role = 'guru_biasa'"
+        )
+        conn.commit()
+        unscored = read_as_authenticated(
+            f"select compliance from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
+        )
+        r.q(f"update erph.school_member set is_active = true where school_id = {SK}")
+        conn.commit()
+        stage.append(
+            (
+                "a school with no teacher owes nothing and is not scored",
+                unscored is None,
+                f"got {unscored}",
+            )
+        )
+
         # ── a decided plan cannot be re-decided by replaying the call ───────
         msg = refused(f"select erph.sahkan_rph({DOC})")
         stage.append(("a decided plan cannot be re-sahkan", "peringkat semakan" in msg))

@@ -72,6 +72,9 @@ def main() -> int:
     delta13 = (ROOT / "db" / "migrations" / "013_week_expectation.sql").read_text(
         encoding="utf-8"
     )
+    delta14 = (ROOT / "db" / "migrations" / "014_compliance_truth.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -181,8 +184,9 @@ def main() -> int:
             run(delta11, "011")
             run(delta12, "012")
             run(delta13, "013")
+            run(delta14, "014")
         print(
-            "  [OK ] migration applied (001a→013, old signature pre-installed)"
+            "  [OK ] migration applied (001a→014, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -283,14 +287,55 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         check("role arrays still evaluate", False, str(e).splitlines()[0][:120])
 
-    # the views key on status now
+    # The views key on status now. `v_school_compliance` asks
+    # `school_week_stats` for the headcount, which answers only for a member of
+    # the school — so a member reads it and a stranger is refused outright.
+    # Both halves are the behaviour to pin.
     try:
         with conn.cursor() as cur:
-            cur.execute("select count(*) from erph.v_school_compliance")
             cur.execute("select count(*) from erph.v_teacher_week")
+            cur.fetchone()
         check("views rebuilt", True)
     except Exception as e:  # noqa: BLE001
         check("views rebuilt", False, str(e).splitlines()[0][:120])
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select count(*) from erph.v_school_compliance")
+        conn.rollback()
+        check(
+            "v_school_compliance fails closed for a stranger",
+            False,
+            "an anonymous caller could read the school's compliance",
+        )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check(
+            "v_school_compliance fails closed for a stranger",
+            "Tidak dibenarkan" in str(e),
+            str(e).splitlines()[0][:120],
+        )
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute("select count(*) from erph.v_school_compliance")
+            cur.fetchone()
+        check("v_school_compliance answers for a member", True)
+    except Exception as e:  # noqa: BLE001
+        check("v_school_compliance answers for a member", False, str(e).splitlines()[0][:120])
+    finally:
+        with conn.cursor() as cur:
+            # Back to nobody: the checks below prove what an *anonymous*
+            # caller cannot do, and a leftover subject would make each of
+            # them pass for the wrong reason.
+            cur.execute("select set_config('request.jwt.claims', null, false)")
+            conn.commit()
 
     # the admin path, called with no actor: must fail closed, not list everyone
     try:
@@ -730,6 +775,122 @@ def main() -> int:
             )
     except Exception as e:  # noqa: BLE001
         check("013 week expectation", False, str(e).splitlines()[0][:140])
+
+    # ── 014: the percentage must never lie ──────────────────────────────────
+    def apply_014(cur) -> None:
+        """Re-run 014. Every statement in it is idempotent, so this is safe."""
+        for _offset, stmt in rs.split_statements(delta14):
+            clean = "\n".join(
+                ln for ln in stmt.splitlines() if not ln.strip().startswith("--")
+            ).strip()
+            if clean:
+                cur.execute(clean)
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select column_name from information_schema.columns "
+                "where table_schema='erph' and table_name='v_school_compliance' "
+                "and column_name in ('teachers','expected','compliance_pct')"
+            )
+            cols = {r[0] for r in cur.fetchall()}
+            check(
+                "014 the view carries the headcount and the expectation",
+                cols == {"teachers", "expected", "compliance_pct"},
+                str(sorted(cols)),
+            )
+    except Exception as e:  # noqa: BLE001
+        check("014 view rebuilt", False, str(e).splitlines()[0][:140])
+
+    # `least(100, NULL)` is 100 in Postgres, so a school with no active Guru
+    # Biasa has no denominator at all and must come back unscored — otherwise
+    # an empty school reports full compliance.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute(
+                "update erph.school_member set is_active = false "
+                " where school_id = (select id from erph.school limit 1) "
+                " and role = 'guru_biasa'"
+            )
+            conn.commit()
+            cur.execute(
+                "select compliance from erph.school_week_stats("
+                "(select id from erph.school limit 1), '2026/2027'::text, 1::smallint)"
+            )
+            row = cur.fetchone()
+            cur.execute(
+                "update erph.school_member set is_active = true "
+                " where school_id = (select id from erph.school limit 1)"
+            )
+            conn.commit()
+            check(
+                "014 a school with no teacher is not scored 100%",
+                row is not None and row[0] is None,
+                str(row[0]) if row else "no row",
+            )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("014 zero-denominator week", False, str(e).splitlines()[0][:140])
+
+    # `admin_set_member` wrote only `school_member.role` until 012, so an
+    # account changed through the console before then carries two roles — and
+    # the route guard reads the stale one.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select id from erph.school order by kod_sekolah limit 1")
+            school = cur.fetchone()[0]
+            cur.execute(
+                "insert into erph.user (username, password_hash, full_name, role) "
+                "values ('karut.uji', 'scrypt$16384$8$1$x$y', 'Karut Uji', 'guru_biasa') "
+                "returning id"
+            )
+            stale = cur.fetchone()[0]
+            cur.execute(
+                "insert into erph.school_member (school_id, user_id, role) "
+                "values (%s, %s, 'gpk')",
+                (school, stale),
+            )
+            conn.commit()
+            apply_014(cur)
+            conn.commit()
+            cur.execute("select role::text from erph.user where id = %s", (stale,))
+            role = cur.fetchone()[0]
+            check(
+                "014 the guard's role is brought into line with the membership",
+                role == "gpk",
+                role,
+            )
+
+            # A user in two schools is left as they are: reconciling would
+            # mean picking one of them for them.
+            cur.execute(
+                "insert into erph.school (kod_sekolah, nama, level) "
+                "values ('SKUJI', 'Sekolah Kedua Uji', 'rendah')"
+            )
+            cur.execute(
+                "insert into erph.school_member (school_id, user_id, role) "
+                "select id, %s, 'guru_biasa' from erph.school where kod_sekolah = 'SKUJI'",
+                (stale,),
+            )
+            conn.commit()
+            apply_014(cur)
+            conn.commit()
+            cur.execute("select role::text from erph.user where id = %s", (stale,))
+            still = cur.fetchone()[0]
+            check(
+                "014 …and a user in two schools is left to be decided",
+                still == "gpk",
+                still,
+            )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("014 role reconciliation", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

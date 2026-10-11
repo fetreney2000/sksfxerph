@@ -154,9 +154,11 @@ export default function SemakanPage() {
         />
         <Kpi
           label="Pematuhan sekolah"
-          value={`${stats.compliancePct}%`}
+          // "—" rather than 0% when the school has no denominator or the
+          // figure has not been measured.
+          value={stats.compliancePct === null ? "—" : `${stats.compliancePct}%`}
           tone="ok"
-          bar={stats.compliancePct}
+          bar={stats.compliancePct ?? 0}
         />
       </div>
 

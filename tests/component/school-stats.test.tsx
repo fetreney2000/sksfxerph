@@ -68,7 +68,9 @@ function Probe({ first, last }: { first: number; last: number }) {
       <dt>dijangka</dt>
       <dd data-testid="expected">{s.expected}</dd>
       <dt>pematuhan</dt>
-      <dd data-testid="pct">{s.compliancePct}</dd>
+      {/* "—" for the null rate: a school with no denominator, or figures
+          that have not been measured, is not scored zero. */}
+      <dd data-testid="pct">{s.compliancePct === null ? "—" : s.compliancePct}</dd>
     </dl>
   );
 }
@@ -124,11 +126,14 @@ describe("school compliance", () => {
     expect(screen.getByTestId("expected").textContent).toBe("20");
   });
 
-  it("shows nothing rather than a collapse when a school has no teachers", async () => {
+  it("is not scored at all when a school has no teachers", async () => {
+    // No active Guru Biasa means no denominator — and `least(100, NULL)` is
+    // 100 in Postgres, so the SQL guards this explicitly. The view gets a
+    // dash, not a zero and not a perfect score.
     serve([
       point(WEEK, { teachers: 0, expected: 0, submitted: 0, approved: 0, compliance: null }),
     ]);
-    await mount("0");
+    await mount("—");
 
     expect(screen.getByTestId("teachers").textContent).toBe("0");
   });

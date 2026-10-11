@@ -20,7 +20,8 @@
 -- Both functions change their *return type* (a column each), which Postgres
 -- refuses to change in place (42P13) — so both are dropped first, along with
 -- `admin_set_setting`, which gained a parameter and would otherwise leave the
--- old arity callable beside the new one.
+-- old arity callable beside the new one. `v_school_compliance` reads the
+-- first of them, so it is dropped with them and rebuilt at the end.
 --
 -- `school_setting.rph_per_week` is created here for a database that ran the
 -- original 001b; a fresh chain already has it from 001b, and both statements
@@ -39,6 +40,12 @@ alter table erph.school_setting add constraint school_setting_rph_per_week_check
   check (rph_per_week between 1 and 7);
 
 -- ▸ 2 ▸ shapes that changed ─────────────────────────────────────────────────
+-- The view is dropped first and rebuilt at the end: it reads
+-- `school_week_stats`, and Postgres refuses to drop a function anything
+-- depends on. Recreated here rather than left to the next migration so that
+-- this file still leaves the schema complete on its own.
+drop view if exists erph.v_school_compliance;
+
 drop function if exists erph.school_week_stats(uuid, text, smallint);
 drop function if exists erph.school_week_history(uuid, text, smallint, smallint);
 drop function if exists erph.admin_set_setting(uuid, smallint, time, boolean, text);
@@ -82,8 +89,13 @@ begin
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
-          / nullif(v_teachers * v_per_week, 0), 1));
+    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 — a school
+    -- with no active Guru Biasa would report full compliance instead of no
+    -- figure at all. The zero denominator is therefore handled here and
+    -- returns NULL: not scored, rather than scored zero or scored perfectly.
+    case when v_teachers * v_per_week = 0 then null
+         else least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
+               / (v_teachers * v_per_week), 1)) end;
 end $$;
 
 create or replace function erph.school_week_history(p_school uuid, p_session text,
@@ -116,8 +128,12 @@ language sql stable security definer set search_path = erph, public as $$
          count(d.*) filter (where d.grade = 1)::int,
          count(d.*) filter (where d.status = 'returned' or d.grade = 0)::int,
          count(d.*) filter (where d.status = 'draft')::int,
-         least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
-               / nullif(a.n * c.per_week, 0), 1)),
+         -- Same `least`/NULL trap as the week's own figure: a school with no
+         -- active Guru Biasa has no denominator, so the week is unscored
+         -- rather than perfect.
+         case when a.n * c.per_week = 0 then null
+              else least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
+                    / (a.n * c.per_week), 1)) end,
          round(avg(extract(epoch from (d.reviewed_at - d.submitted_at)) / 60.0)
                filter (where d.reviewed_at is not null
                        and d.submitted_at is not null
@@ -155,3 +171,22 @@ begin
          rph_per_week = coalesce(p_rph_per_week, rph_per_week)
    where school_id = p_school;
 end $$;
+
+-- ▸ 4 ▸ the view, back ──────────────────────────────────────────────────────
+create view erph.v_school_compliance
+with (security_invoker = true) as
+with docs as (
+  select school_id, session, week_no,
+         count(*)                                            as total_docs,
+         count(*) filter (where status = 'approved')         as approved,
+         count(*) filter (where status = 'returned')         as rejected,
+         count(*) filter (where status in ('submitted','forwarded')) as pending
+    from erph.rph_document
+   where deleted_at is null
+   group by 1,2,3
+)
+select docs.school_id, docs.session, docs.week_no,
+       docs.total_docs, docs.approved, docs.rejected, docs.pending,
+       s.teachers, s.expected, s.compliance as compliance_pct
+  from docs
+  cross join lateral erph.school_week_stats(docs.school_id, docs.session, docs.week_no) s;

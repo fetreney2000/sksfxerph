@@ -180,8 +180,13 @@ begin
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
-          / nullif(v_teachers * v_per_week, 0), 1));
+    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 — a school
+    -- with no active Guru Biasa would report full compliance instead of no
+    -- figure at all. The zero denominator is therefore handled here and
+    -- returns NULL: not scored, rather than scored zero or scored perfectly.
+    case when v_teachers * v_per_week = 0 then null
+         else least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
+               / (v_teachers * v_per_week), 1)) end;
 end $$;
 
 
@@ -302,16 +307,21 @@ group by 1,2,3,4;
 
 create view erph.v_school_compliance
 with (security_invoker = true) as
-select d.school_id, d.session, d.week_no,
-       count(*)                                as total_docs,
-       count(*) filter (where d.status = 'approved')                as approved,
-       count(*) filter (where d.status = 'returned')                as rejected,
-       count(*) filter (where d.status in ('submitted','forwarded')) as pending,
-       round(100.0 * count(*) filter (where d.status = 'approved')
-             / nullif(count(distinct d.owner_id), 0), 1) as compliance_pct
-from erph.rph_document d
-where d.deleted_at is null
-group by 1,2,3;
+with docs as (
+  select school_id, session, week_no,
+         count(*)                                            as total_docs,
+         count(*) filter (where status = 'approved')         as approved,
+         count(*) filter (where status = 'returned')         as rejected,
+         count(*) filter (where status in ('submitted','forwarded')) as pending
+    from erph.rph_document
+   where deleted_at is null
+   group by 1,2,3
+)
+select docs.school_id, docs.session, docs.week_no,
+       docs.total_docs, docs.approved, docs.rejected, docs.pending,
+       s.teachers, s.expected, s.compliance as compliance_pct
+  from docs
+  cross join lateral erph.school_week_stats(docs.school_id, docs.session, docs.week_no) s;
 
 -- ── 7 · accounts ───────────────────────────────────────────────────────────
 -- The district/state roles are gone from the app. Postgres cannot drop an enum

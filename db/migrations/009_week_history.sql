@@ -56,8 +56,12 @@ language sql stable security definer set search_path = erph, public as $$
          count(d.*) filter (where d.grade = 1)::int,
          count(d.*) filter (where d.status = 'returned' or d.grade = 0)::int,
          count(d.*) filter (where d.status = 'draft')::int,
-         least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
-               / nullif(a.n * c.per_week, 0), 1)),
+         -- Same `least`/NULL trap as the week's own figure: a school with no
+         -- active Guru Biasa has no denominator, so the week is unscored
+         -- rather than perfect.
+         case when a.n * c.per_week = 0 then null
+              else least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
+                    / (a.n * c.per_week), 1)) end,
          round(avg(extract(epoch from (d.reviewed_at - d.submitted_at)) / 60.0)
                filter (where d.reviewed_at is not null
                        and d.submitted_at is not null

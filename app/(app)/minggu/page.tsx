@@ -57,6 +57,10 @@ export default function MingguPage() {
   const me = useUser();
   const week = useWeek();
   const stats = useSchoolStats();
+  // Nothing to count yet — the figures have not loaded, or the school owes
+  // nothing this week. Both read as "—" rather than as a school that has
+  // handed in zero plans: a number nobody has measured is not zero.
+  const noFigures = stats.expected === 0 && stats.submitted === 0 && stats.approved === 0;
   const { items: classes } = useSchoolClasses();
   const { items: subjects } = useSchoolSubjects();
 
@@ -264,24 +268,37 @@ export default function MingguPage() {
                 Sekolah · Minggu {WEEK}
               </p>
               <p className="mt-0.5 text-[13.5px] text-ink-2">
-                {/* The denominator is the school's own rule — teachers × the
-                    RPH each owes a week, five for a Monday-to-Friday school —
-                    stated beside the percentage so it can be checked by hand.
-                    It is deliberately not teachers × classes: that would need
-                    teaching_assignment, which has no writer, and a made-up
-                    denominator is worse than none. */}
-                <b className="num text-ink">{stats.approved}</b>
-                <span className="text-ink-4">
-                  {" "}
-                  daripada {stats.expected} RPH · {stats.submitted} dihantar
-                </span>
+                {noFigures ? (
+                  <span className="text-ink-4">Tiada angka untuk minggu ini lagi.</span>
+                ) : (
+                  <>
+                    {/* The denominator is the school's own rule — teachers ×
+                        the RPH each owes a week, five for a Monday-to-Friday
+                        school — stated beside the percentage so it can be
+                        checked by hand. It is deliberately not teachers ×
+                        classes: that would need teaching_assignment, which has
+                        no writer, and a made-up denominator is worse than
+                        none. */}
+                    <b className="num text-ink">{stats.approved}</b>
+                    <span className="text-ink-4">
+                      {" "}
+                      daripada {stats.expected} RPH · {stats.submitted} dihantar
+                    </span>
+                  </>
+                )}
               </p>
             </div>
             <div className="min-w-[180px] flex-1">
               <p className="mb-1.5 text-[12.5px] text-ink-3">
-                <b className="num text-ink">{stats.compliancePct}%</b> pematuhan sekolah
+                {/* "—" when there is no rate to show — no denominator, or the
+                    figures have not been measured. A percentage nobody has
+                    computed is not zero. */}
+                <b className="num text-ink">
+                  {stats.compliancePct === null ? "—" : stats.compliancePct}%
+                </b>{" "}
+                pematuhan sekolah
               </p>
-              <Progress value={stats.compliancePct} tone="success" />
+              <Progress value={stats.compliancePct ?? 0} tone="success" />
             </div>
             {can(me.role, "pantau") && (
               <Button variant="secondary" size="sm" onClick={() => router.push("/sekolah")}>

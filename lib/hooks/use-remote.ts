@@ -46,7 +46,14 @@ export interface SchoolStatsView {
   submitted: number;
   approved: number;
   returned: number;
-  compliancePct: number;
+  /**
+   * Approved against what the school owes, capped at 100.
+   *
+   * `null` is a real state, not zero: either the school has no denominator at
+   * all (no active Guru Biasa) or these figures have not been measured —
+   * still loading, or unreachable. A page that must show something shows "—".
+   */
+  compliancePct: number | null;
   avgMinutes: number | null;
   /** The same figure for the week before, so a trend is measured rather than asserted. */
   prevAvgMinutes: number | null;
@@ -172,7 +179,29 @@ export function useSchoolStats(range?: { first: number; last: number }): SchoolS
     loading: remote.isLoading,
   };
 
-  if (!supabaseConfigured || !remote.data?.stats) return base;
+  // Local mode has no backend, so the bundled figures *are* the data — and
+  // local mode is a demo by construction.
+  if (!supabaseConfigured) return base;
+
+  // Synced mode with nothing to answer: still loading, an expired session, or
+  // a failed request. The bundled figures describe a different school and must
+  // not be shown as this one's, which is the leak this hook's own docblock
+  // promises cannot happen. Zeroes and a null rate read as "nothing measured
+  // yet"; 42 teachers at 88.6% read as a term that already went well.
+  if (!remote.data?.stats) {
+    return {
+      activeTeachers: 0,
+      expected: 0,
+      submitted: 0,
+      approved: 0,
+      returned: 0,
+      compliancePct: null,
+      avgMinutes: null,
+      prevAvgMinutes: null,
+      weeks: [],
+      loading: remote.isLoading,
+    };
+  }
 
   const all = remote.data.history;
   const weeks = all.filter((w) => w.week >= first && w.week <= last);
@@ -210,9 +239,11 @@ export function useSchoolStats(range?: { first: number; last: number }): SchoolS
     // Capped at 100 for the same reason the SQL caps it — handing in more than
     // the week requires has met the requirement, not exceeded it — and the
     // counts on the same card still say exactly how many were approved.
+    // Null rather than zero when there is no denominator: a school with no
+    // active Guru Biasa has not scored 0%, it has not been scored.
     compliancePct:
       required === 0 || weeks.length === 0
-        ? 0
+        ? null
         : Math.min(100, Math.round((sum((w) => w.approved) / required) * 1000) / 10),
     // Null, not zero: a window with no decided plan has not stopped its
     // clock, and "0 minit" would read as a school that decided instantly.

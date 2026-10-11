@@ -929,8 +929,12 @@ language sql stable security definer set search_path = erph, public as $$
          count(d.*) filter (where d.grade = 1)::int,
          count(d.*) filter (where d.status = 'returned' or d.grade = 0)::int,
          count(d.*) filter (where d.status = 'draft')::int,
-         least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
-               / nullif(a.n * c.per_week, 0), 1)),
+         -- Same `least`/NULL trap as the week's own figure: a school with no
+         -- active Guru Biasa has no denominator, so the week is unscored
+         -- rather than perfect.
+         case when a.n * c.per_week = 0 then null
+              else least(100, round(100.0 * count(d.*) filter (where d.grade = 1)
+                    / (a.n * c.per_week), 1)) end,
          round(avg(extract(epoch from (d.reviewed_at - d.submitted_at)) / 60.0)
                filter (where d.reviewed_at is not null
                        and d.submitted_at is not null
@@ -1378,8 +1382,13 @@ begin
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
-          / nullif(v_teachers * v_per_week, 0), 1));
+    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 — a school
+    -- with no active Guru Biasa would report full compliance instead of no
+    -- figure at all. The zero denominator is therefore handled here and
+    -- returns NULL: not scored, rather than scored zero or scored perfectly.
+    case when v_teachers * v_per_week = 0 then null
+         else least(100, round(100.0 * coalesce((select count(*) from d where grade = 1), 0)
+               / (v_teachers * v_per_week), 1)) end;
 end $$;
 
 -- ── 10 · ADMIN (app set-up) ───────────────────────────────────────────────────
@@ -2072,20 +2081,34 @@ from erph.rph_document d
 where d.deleted_at is null
 group by 1,2,3,4;
 
+-- The same figures as `school_week_stats`, grouped over a whole session.
+--
+-- It used to compute `approved / count(distinct owner_id)` — the definition
+-- the percentage was fixed *from*: plans divided by the teacher headcount, so
+-- a finished week read as 500% and nothing capped it. It now asks the same
+-- function the dashboard asks, so the two cannot drift apart; the counts stay
+-- here because they are what a report is actually filed from.
 create view erph.v_school_compliance
 with (security_invoker = true) as
-select d.school_id, d.session, d.week_no,
-       count(*)                                as total_docs,
-       -- keyed on status, not `grade`: a GPK's grade-1 "accepted" sits at
-       -- `forwarded` and is not an approval until the Guru Besar signs it.
-       count(*) filter (where d.status = 'approved')                as approved,
-       count(*) filter (where d.status = 'returned')                as rejected,
-       count(*) filter (where d.status in ('submitted','forwarded')) as pending,
-       round(100.0 * count(*) filter (where d.status = 'approved')
-             / nullif(count(distinct d.owner_id), 0), 1) as compliance_pct
-from erph.rph_document d
-where d.deleted_at is null
-group by 1,2,3;
+with docs as (
+  select school_id, session, week_no,
+         count(*)                                            as total_docs,
+         -- keyed on status, not `grade`: a GPK's grade-1 "accepted" sits at
+         -- `forwarded` and is not an approval until the Guru Besar signs it.
+         count(*) filter (where status = 'approved')         as approved,
+         count(*) filter (where status = 'returned')         as rejected,
+         count(*) filter (where status in ('submitted','forwarded')) as pending
+    from erph.rph_document
+   where deleted_at is null
+   group by 1,2,3
+)
+select docs.school_id, docs.session, docs.week_no,
+       docs.total_docs, docs.approved, docs.rejected, docs.pending,
+       s.teachers, s.expected, s.compliance as compliance_pct
+  from docs
+  -- SECURITY DEFINER, so the headcount is the school's own and not whatever
+  -- the caller's row-level security would let them count.
+  cross join lateral erph.school_week_stats(docs.school_id, docs.session, docs.week_no) s;
 
 -- ── 15 · pg_cron JOBS (enable after seeding the calendar) ────────────────────
 -- -- Thursday 20:00: nudge teachers with incomplete drafts

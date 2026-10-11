@@ -123,13 +123,16 @@ export default function UtamaPage() {
     {
       label: "RPH dihantar · minggu ini",
       value: o?.week ? `${o.week.submitted}/${o.week.expected}` : "—",
-      hint: `${o?.week?.compliance ?? 0}% pematuhan sekolah`,
+      // "—%" while there is nothing to measure against: a rate nobody has
+      // computed is not zero.
+      hint: `${o?.week?.compliance == null ? "—" : o.week.compliance}% pematuhan sekolah`,
       icon: <CalendarCheck className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
     {
       label: "Diluluskan",
       value: o?.week?.approved ?? "—",
-      hint: `${o?.week?.returned_t ?? 0} dikembalikan · ${o?.week?.drafts ?? 0} draf`,
+      // Counts of a week that has not been read yet are not zeroes either.
+      hint: o?.week ? `${o.week.returned_t} dikembalikan · ${o.week.drafts} draf` : "—",
       icon: <ShieldCheck className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
   ];

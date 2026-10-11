@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { reviewStageFor } from "@/lib/auth/permissions";
+import { mytFields } from "@/lib/date";
 import type { QueueItem } from "@/lib/demo/review";
 import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
 import { resolveSession } from "@/lib/server/session";
@@ -30,9 +31,22 @@ import { resolveSession } from "@/lib/server/session";
  */
 function waitingLabel(submittedAt: string | null): string {
   if (!submittedAt) return "Hantar tidak direkodkan";
-  const elapsed = Date.now() - Date.parse(submittedAt);
-  if (!Number.isFinite(elapsed) || elapsed < 0) return "Baru sahaja";
-  const days = Math.floor(elapsed / 86_400_000);
+  const since = Date.parse(submittedAt);
+  if (!Number.isFinite(since)) return "Hantar tidak direkodkan";
+  if (Date.now() < since) return "Baru sahaja";
+
+  // Whole school days, not elapsed hours. "Hari ini" is a claim about the
+  // calendar — a plan submitted at eight last night was not submitted today,
+  // however less than twenty-four hours ago that was. Both days are read in
+  // MYT, so a reviewer abroad counts the same day as one at the school.
+  const from = mytFields(since);
+  const to = mytFields(Date.now());
+  if (!from || !to) return "Hantar tidak direkodkan";
+  const days = Math.round(
+    (Date.UTC(to.year, to.month, to.date) - Date.UTC(from.year, from.month, from.date)) /
+      86_400_000,
+  );
+
   if (days <= 0) return "Hari ini";
   if (days === 1) return "1 hari menunggu";
   return `${days} hari menunggu`;
