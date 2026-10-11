@@ -20,6 +20,7 @@ import { currentWeek, supabaseConfigured } from "@/lib/config";
 import { TEACHER_ROWS } from "@/lib/demo/review";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
 import { ms } from "@/lib/i18n/ms";
+import { currentSession } from "@/lib/session";
 import type { MemberRole } from "@/lib/types";
 
 const WEEK = currentWeek();
@@ -154,6 +155,17 @@ export default function SekolahPage() {
           return `${delta > 0 ? "▼" : "▲"} ${Math.abs(delta).toFixed(1)} minit vs minggu lepas`;
         })();
 
+  // The trend the chart beside it actually shows. A fixed "▲ 6% sejak M1"
+  // badge sat here while the bars changed underneath it, so on any school
+  // whose session was flat or falling it still claimed an improvement — and
+  // it did so next to a chart that plainly said otherwise.
+  const firstWeek = s.weeks[0];
+  const lastWeek = s.weeks[s.weeks.length - 1];
+  const sessionTrend =
+    firstWeek && lastWeek && firstWeek.compliance !== null && lastWeek.compliance !== null
+      ? lastWeek.compliance - firstWeek.compliance
+      : null;
+
   /**
    * Nudge the teachers who are late.
    *
@@ -251,9 +263,16 @@ export default function SekolahPage() {
         <Card>
           <CardHeader>
             <CardTitle>Penghantaran mengikut minggu</CardTitle>
-            <CardDescription>Sesi 2026/2027</CardDescription>
+            <CardDescription>Sesi {currentSession()}</CardDescription>
             <span className="ml-auto">
-              <Badge variant="success">▲ 6% sejak M1</Badge>
+              {sessionTrend === null ? null : Math.abs(sessionTrend) < 0.05 ? (
+                <Badge variant="neutral">Tanpa perubahan sejak M{firstWeek?.week}</Badge>
+              ) : (
+                <Badge variant={sessionTrend > 0 ? "success" : "danger"}>
+                  {sessionTrend > 0 ? "▲" : "▼"} {Math.abs(sessionTrend).toFixed(0)}% sejak M
+                  {firstWeek?.week}
+                </Badge>
+              )}
             </span>
           </CardHeader>
           <CardContent>
