@@ -1,4 +1,6 @@
 import {
+  AlignmentType,
+  BorderStyle,
   Document,
   Packer,
   Paragraph,
@@ -16,6 +18,7 @@ import { formatMyt, hariName, weekdayIndex } from "@/lib/date";
 import { rphPayloadSchema, temaLengkap } from "@/lib/schemas/rph";
 import { requireUser } from "@/lib/server/auth/guard";
 import { resolveSchool } from "@/lib/server/school";
+import { fingerprint } from "@/lib/signature";
 import { DB_SCHEMA } from "@/lib/supabase/schema";
 
 /**
@@ -309,15 +312,36 @@ export async function POST(request: NextRequest) {
           // already happened is a document that understates what was done.
           ...(parsed.data.signerName
             ? [
+                // A signature block, laid out the way the paper form has one:
+                // the seal, a rule to rest a pen on, the name under it, the
+                // office under that, the moment — and the technical proof on
+                // a quiet line of its own rather than shouting in the middle
+                // of the document.
                 new Paragraph({
+                  alignment: AlignmentType.RIGHT,
                   children: [
                     new TextRun({
-                      text: `Disahkan secara digital oleh ${parsed.data.signerName}`,
+                      text: "Disahkan secara digital",
                       bold: true,
-                      size: 20,
+                      size: 16,
+                      color: "067647",
                     }),
                   ],
                   spacing: { before: 400 },
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  border: {
+                    bottom: { style: BorderStyle.SINGLE, size: 6, color: "1D2939" },
+                  },
+                  children: [new TextRun({ text: " ", size: 16 })],
+                  spacing: { after: 80 },
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [
+                    new TextRun({ text: parsed.data.signerName, bold: true, size: 22 }),
+                  ],
                 }),
                 // The office beneath the name, as the cover sheet has it: a
                 // signature with no office under it is a name anyone could
@@ -326,24 +350,29 @@ export async function POST(request: NextRequest) {
                 ...(parsed.data.signerTitle
                   ? [
                       new Paragraph({
+                        alignment: AlignmentType.RIGHT,
                         children: [new TextRun({ text: parsed.data.signerTitle, size: 18 })],
                       }),
                     ]
                   : []),
                 new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  children: [new TextRun({ text: signedAt ?? "", size: 16, color: "667085" })],
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.RIGHT,
                   children: [
                     new TextRun({
                       text: [
-                        signedAt ?? "",
                         parsed.data.signatureAlg ?? "",
                         parsed.data.signatureKey
-                          ? `kunci ${parsed.data.signatureKey.slice(0, 16)}…`
+                          ? `kunci ${fingerprint(parsed.data.signatureKey)}`
                           : "",
                       ]
                         .filter(Boolean)
                         .join("  ·  "),
-                      size: 16,
-                      color: "667085",
+                      size: 14,
+                      color: "98A2B3",
                     }),
                   ],
                 }),

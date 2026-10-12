@@ -35,6 +35,18 @@ export { canonicalize, sha256Hex } from "./canonical";
 /** ECDSA P-256 with SHA-256. Universally supported by WebCrypto *and* Node. */
 export const ALGORITHM = "ES256" as const;
 
+/**
+ * The key, short enough to print and long enough to tell two apart.
+ *
+ * A full SPKI public key is a paragraph of base64 that nobody reading a school
+ * form can check by eye. A fragment from each end is what a fingerprint looks
+ * like, and it is what someone comparing a printed sheet against the stored
+ * material actually compares.
+ */
+export function fingerprint(key: string): string {
+  return key.length <= 12 ? key : `${key.slice(0, 8)}…${key.slice(-4)}`;
+}
+
 export interface SignatureEnvelope {
   /** Envelope version, so a future format change stays verifiable. */
   v: 1;

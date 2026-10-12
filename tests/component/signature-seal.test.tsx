@@ -36,6 +36,17 @@ describe("signature seal", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("draws the line to sign on on paper, and nothing at all on screen", () => {
+    const paper = render(<SignatureSeal signature={null} state="none" variant="print" />);
+    // The form has a signature area whether or not anyone has approved it, so
+    // the printed block keeps its rule and two blank lines.
+    expect(paper.container.querySelector("[class*='border-t']")).toBeTruthy();
+
+    const onScreen = render(<SignatureSeal signature={null} state="none" />);
+    // On screen a blank block would read as an approval that has not happened.
+    expect(onScreen.container.firstChild).toBeNull();
+  });
+
   it("names the reviewer and when they sealed it", () => {
     render(<SignatureSeal signature={SEAL} state="valid" />);
 
@@ -84,17 +95,24 @@ describe("signature seal", () => {
     expect(screen.queryByText(/ES256/)).toBeNull();
   });
 
-  it("fits the A4 document when asked for the print variant", () => {
+  it("is a signature block on paper, not a status card", () => {
     const { container } = render(
       <SignatureSeal signature={SEAL} state="valid" variant="print" />,
     );
 
-    // The paper is styled at KPM proportions, so the print seal drops the
-    // screen card's scale and border colour rather than shrinking it with
-    // CSS later.
+    // The paper form has a signature block — right-aligned under its label,
+    // with a rule for a signature to rest on. What it does not have is the
+    // app's green panel: a card printed on every approved sheet is a
+    // screenshot, and screenshots are not filed.
     const el = container.firstElementChild as HTMLElement;
-    expect(el.className).toContain("items-center");
-    expect(el.className).toContain("border-[#067647]");
+    expect(el.className).toContain("text-right");
+    expect(el.className).toContain("items-end");
+    expect(el.className).not.toContain("bg-success-soft");
+    expect(container.querySelector("[class*='border-t']")).toBeTruthy();
+
+    // The name is the largest thing in the block, and the proof is a
+    // fingerprint — a fragment from each end — not a wall of base64.
     expect(screen.getByText("Ramlan bin Yusof")).toBeTruthy();
+    expect(screen.getByText(/ES256 · kunci/)).toBeTruthy();
   });
 });
