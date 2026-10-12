@@ -20,6 +20,8 @@ import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
  */
 export interface DocumentRow {
   id: string;
+  /** Written into the local copy, so IndexedDB can tell two accounts apart. */
+  owner_id: string;
   class_id: string;
   subject_code: string;
   session: string;
@@ -60,7 +62,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { data, error } = await gate.db
     .from("rph_document")
     .select(
-      "id, class_id, subject_code, session, week_no, plan_date, slot_time, " +
+      "id, owner_id, class_id, subject_code, session, week_no, plan_date, slot_time, " +
         "slot_time_end, status, payload, version, content_hash, created_at, " +
         "updated_at, submitted_at, deleted_at, grade, reviewed_at, " +
         "class:class_id(nama), subject:subject_code(nama), " +

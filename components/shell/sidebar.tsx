@@ -12,10 +12,10 @@ import { cn } from "@/lib/cn";
 import { currentWeek, supabaseConfigured } from "@/lib/config";
 import { db } from "@/lib/db";
 import { QUEUE } from "@/lib/demo/review";
-import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
+import { ownerId } from "@/lib/owner";
 import type { MemberRole } from "@/lib/types";
 
 const WEEK = currentWeek();
@@ -48,16 +48,19 @@ export function Sidebar({
   };
 
   const session = useSession();
+  // Whose drafts this badge counts: IndexedDB is shared by every account that
+  // signs into this browser.
+  const owner = ownerId();
   const school = useSchool();
   const counts = useLiveQuery(
     async () => ({
       drafts: await db.documents
         .where("[ownerId+session]")
-        .equals([LOCAL_OWNER_ID, session])
+        .equals([owner, session])
         .filter((d) => d.weekNo === WEEK && d.status === "draft")
         .count(),
     }),
-    [session],
+    [owner, session],
     { drafts: 0 },
   );
 

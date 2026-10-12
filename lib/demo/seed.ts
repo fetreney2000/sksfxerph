@@ -1,4 +1,4 @@
-import { SESSION, schoolCode } from "@/lib/config";
+import { DEMO_OWNER_ID, SESSION, schoolCode } from "@/lib/config";
 import { schoolDays } from "@/lib/date";
 import { db } from "@/lib/db";
 import { emptyPayload, type RphPayload } from "@/lib/schemas/rph";
@@ -85,9 +85,6 @@ export interface SeedPlan {
   makePayload: () => RphPayload;
 }
 
-const OWNER = "local-teacher";
-const OWNER_ID = OWNER;
-
 const PLAN_SEED: SeedPlan[] = [
   {
     classId: "c-5a",
@@ -170,7 +167,10 @@ export async function seedLocalData(weekNo: number): Promise<void> {
       return {
         id: mintId(),
         schoolCode,
-        ownerId: OWNER_ID,
+        // Filed under the demo Guru Besar's own id, not a shared placeholder:
+        // every read path asks for the signed-in account's plans, and a
+        // constant here is what put one teacher's week on another's screen.
+        ownerId: DEMO_OWNER_ID,
         classId: seed.classId,
         className: seed.className,
         subjectCode: seed.subjectCode,
@@ -194,5 +194,3 @@ export async function seedLocalData(weekNo: number): Promise<void> {
     await db.documents.bulkPut(docs);
   });
 }
-
-export const LOCAL_OWNER_ID = OWNER_ID;

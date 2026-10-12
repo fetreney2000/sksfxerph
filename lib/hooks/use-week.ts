@@ -4,8 +4,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { currentWeek, schoolCode, weekDeadline } from "@/lib/config";
 import { schoolDays } from "@/lib/date";
 import { db, documentsForWeek } from "@/lib/db";
-import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSession } from "@/lib/hooks/use-session";
+import { ownerId } from "@/lib/owner";
 import { normalisePayload } from "@/lib/schemas/rph";
 import type { RphDocument } from "@/lib/types";
 
@@ -37,9 +37,12 @@ export function useWeek(): WeekSummary {
   // would otherwise keep showing last year's plans until something else
   // invalidated the query.
   const session = useSession();
+  // Whose plans, too. IndexedDB is shared by every account on this browser,
+  // so asking for "the" plans would be asking for the last one who signed in.
+  const owner = ownerId();
 
   const summary = useLiveQuery(async () => {
-    const documents = await documentsForWeek(LOCAL_OWNER_ID, session, WEEK);
+    const documents = await documentsForWeek(owner, session, WEEK);
     const total = documents.length || 0;
     const count = (s: RphDocument["status"]) => documents.filter((d) => d.status === s).length;
     // "Left the teacher" and "still awaiting a decision" are the same set at
@@ -69,7 +72,7 @@ export function useWeek(): WeekSummary {
           : Math.round((documents.filter((d) => d.status === "approved").length / total) * 100),
       onTimePct: handed.length === 0 ? null : Math.round((onTime / handed.length) * 100),
     };
-  }, [session]);
+  }, [owner, session]);
 
   return {
     weekNo: WEEK,
@@ -89,11 +92,12 @@ export function useWeek(): WeekSummary {
 /** All documents this teacher has ever written, newest first. */
 export function useArchive() {
   const session = useSession();
+  const owner = ownerId();
   return useLiveQuery(
     async () => {
       const all = await db.documents
         .where("[ownerId+session]")
-        .equals([LOCAL_OWNER_ID, session])
+        .equals([owner, session])
         .toArray();
       // Normalised on the way out, not on the way in: Dexie holds whatever
       // was written, including plans saved before the template reshape, and
@@ -103,7 +107,7 @@ export function useArchive() {
         .map((d) => ({ ...d, payload: normalisePayload(d.payload) }))
         .sort((a, b) => (a.planDate < b.planDate ? 1 : a.planDate > b.planDate ? -1 : 0));
     },
-    [session],
+    [owner, session],
     [] as RphDocument[],
   );
 }

@@ -75,6 +75,16 @@ export const SCHOOL = {
 export const SESSION = "2026/2027";
 
 /**
+ * The account local mode's demo plans are filed under — `cikgu`, the demo
+ * Guru Besar in `lib/server/auth/local.ts`.
+ *
+ * One constant, here rather than beside the seed, because it is also the
+ * fallback for "whose plans this browser is holding" (lib/owner.ts) and the
+ * id on the demo account itself. A second copy of a uuid is a third opinion.
+ */
+export const DEMO_OWNER_ID = "00000000-0000-4000-8000-000000000001";
+
+/**
  * ── School calendar ────────────────────────────────────────────────────────
  *
  * Term 1 of the 2026/2027 session starts **Monday 16 March 2026**; weeks run

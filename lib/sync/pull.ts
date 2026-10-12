@@ -1,7 +1,6 @@
 import type { DocumentRow } from "@/app/api/rph/route";
 import { schoolCode, supabaseConfigured } from "@/lib/config";
 import { db } from "@/lib/db";
-import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { normalisePayload } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
@@ -83,11 +82,13 @@ function toLocal(row: DocumentRow): RphDocument {
   return {
     id: row.id,
     schoolCode,
-    // The local convention. Dexie's owner is this placeholder in every plan,
-    // and the dashboard, archive and editor all filter on `[ownerId+session]`
-    // — so a pulled plan with the server's real owner id would be written and
-    // then invisible to the very screens that asked for it.
-    ownerId: LOCAL_OWNER_ID,
+    // The server's own owner id — the same one every screen filters on
+    // (`[ownerId+session]`). It used to be a shared placeholder, and that is
+    // how one teacher's plans reached another's dashboard: the pull writes
+    // rows but never deletes one the server did not return, so a plan pulled
+    // by the previous account on this browser stayed under the shared key and
+    // the next account read every one of them as its own.
+    ownerId: row.owner_id,
     classId: row.class_id,
     className: row.class?.nama ?? "",
     subjectCode: row.subject_code,

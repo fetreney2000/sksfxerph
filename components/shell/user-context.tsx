@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { setOwnerId } from "@/lib/owner";
 import type { MemberRole } from "@/lib/types";
 
 export interface ShellUser {
@@ -26,6 +27,15 @@ export function UserProvider({
   user: ShellUser;
   children: React.ReactNode;
 }) {
+  // Whose plans this browser is holding, for every Dexie query in the app.
+  // Set here because this is the first place the client knows which account
+  // signed in — and it runs before the shell's own effect, the sync pull in
+  // `Providers`, so nothing is ever pulled under the wrong name.
+  React.useEffect(() => {
+    setOwnerId(user.id);
+    return () => setOwnerId(null);
+  }, [user.id]);
+
   return <UserContext.Provider value={user}>{children}</UserContext.Provider>;
 }
 

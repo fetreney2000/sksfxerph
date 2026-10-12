@@ -174,6 +174,36 @@ test.describe("authentication", () => {
     const value = await page.evaluate(() => document.cookie);
     expect(value).not.toContain("erph_session");
   });
+
+  test("one account on a shared browser never sees another's plans", async ({ page }) => {
+    const errors = collectErrors(page);
+
+    // 1. A teacher signs in on the staff-room laptop and has a week of plans.
+    //    They live in IndexedDB, which the next account on this machine shares.
+    await login(page);
+    await expect(page.getByText(/5 Amanah/).first()).toBeVisible({ timeout: 15_000 });
+
+    // 2. Sign out. Nothing is deleted: the point of an offline cache is that
+    //    the plans are still here when this teacher comes back.
+    await page.getByRole("button", { name: "Log keluar" }).click();
+    await page.waitForURL(/\/login/, { timeout: 15_000 });
+
+    // 3. A colleague signs in on the same browser. Their dashboard must be
+    //    their own — previously every plan in the store was filed under one
+    //    shared owner, so the previous teacher's week rendered as theirs.
+    await login(page, GURU_BIASA_USER, GURU_BIASA_PASS);
+    await expect(page.getByText(/5 Amanah/)).toHaveCount(0);
+    await expect(page.getByText(/Tiada RPH lagi/)).toBeVisible({ timeout: 15_000 });
+
+    // 4. And the first teacher gets theirs back — the cache was scoped, not
+    //    emptied.
+    await page.getByRole("button", { name: "Log keluar" }).click();
+    await page.waitForURL(/\/login/, { timeout: 15_000 });
+    await login(page);
+    await expect(page.getByText(/5 Amanah/).first()).toBeVisible({ timeout: 15_000 });
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
 });
 
 test.describe("eRPH smoke", () => {

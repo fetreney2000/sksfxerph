@@ -1,6 +1,6 @@
 import { schoolDays } from "@/lib/date";
 import { db, findByNaturalKey } from "@/lib/db";
-import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
+import { ownerId } from "@/lib/owner";
 import { currentSession } from "@/lib/session";
 import { commit, hasBackend } from "@/lib/sync/queue";
 import type { RphDocument, SchoolClass } from "@/lib/types";
@@ -49,9 +49,13 @@ export async function reuseLastWeek(
   classes: SchoolClass[],
 ): Promise<number> {
   const session = currentSession();
+  // Whose last week this is. Dexie is shared by every account on the browser,
+  // so "reuse last week" must read the signed-in teacher's plans — never the
+  // last account that happened to sign in here.
+  const owner = ownerId();
   const source = await db.documents
     .where("[ownerId+session]")
-    .equals([LOCAL_OWNER_ID, session])
+    .equals([owner, session])
     .filter((d) => d.weekNo === fromWeek)
     .toArray();
 
@@ -65,7 +69,7 @@ export async function reuseLastWeek(
     if (!targetDate) continue;
 
     const exists = await findByNaturalKey(
-      LOCAL_OWNER_ID,
+      owner,
       doc.classId,
       doc.subjectCode,
       session,

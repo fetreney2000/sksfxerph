@@ -45,13 +45,13 @@ import {
 } from "@/lib/config";
 import { longDate, schoolDays, weekOptions } from "@/lib/date";
 import { db } from "@/lib/db";
-import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSession } from "@/lib/hooks/use-session";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { ms } from "@/lib/i18n/ms";
 import { takeImport } from "@/lib/import/pending";
+import { ownerId } from "@/lib/owner";
 import { RpcError, submitRph } from "@/lib/rpc";
 import {
   type Aktiviti,
@@ -233,7 +233,7 @@ async function loadSeed(templateId?: string, reuse?: boolean): Promise<SeedSourc
     try {
       const docs = await db.documents
         .where("[ownerId+session]")
-        .equals([LOCAL_OWNER_ID, currentSession()])
+        .equals([ownerId(), currentSession()])
         .toArray();
       // The newest *written* plan from last week — an untouched blank from a
       // previous "RPH baharu" would seed this one with nothing at all.
@@ -340,7 +340,7 @@ export function RphEditor({ docId }: { docId?: string }) {
             ? crypto.randomUUID()
             : `local-${now}`,
         schoolCode,
-        ownerId: LOCAL_OWNER_ID,
+        ownerId: ownerId(),
         classId: cls.id,
         className: cls.nama,
         subjectCode: loaded?.subjectCode ?? subject.code,
