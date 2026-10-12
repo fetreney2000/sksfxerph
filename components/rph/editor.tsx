@@ -302,7 +302,12 @@ export function RphEditor({ docId }: { docId?: string }) {
   React.useEffect(() => {
     const cls = classes[0];
     const subject = subjects[0];
-    if (id || seeded || !cls) return;
+    // Both lists, not only the class. A plan stamped with a subject code the
+    // school does not have is refused by `sync_rph` on every flush, so
+    // waiting for the list is the difference between a saved plan and one
+    // that queues forever with a bundled "MAT" under its name. Local mode
+    // has both from its fixtures; synced mode re-runs this when they arrive.
+    if (id || seeded || !cls || !subject) return;
 
     let cancelled = false;
     void (async () => {
@@ -338,8 +343,8 @@ export function RphEditor({ docId }: { docId?: string }) {
         ownerId: LOCAL_OWNER_ID,
         classId: cls.id,
         className: cls.nama,
-        subjectCode: loaded?.subjectCode ?? subject?.code ?? "MAT",
-        subjectName: loaded?.subjectName ?? subject?.nama ?? "Matematik",
+        subjectCode: loaded?.subjectCode ?? subject.code,
+        subjectName: loaded?.subjectName ?? subject.nama,
         session: currentSession(),
         weekNo: week,
         planDate:

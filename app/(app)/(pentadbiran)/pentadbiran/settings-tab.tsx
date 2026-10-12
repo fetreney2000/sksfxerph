@@ -125,6 +125,19 @@ export function SettingsTab() {
     );
   }
 
+  // No stored setting means the read failed or this account has no school —
+  // never "the school's rule is Friday at 16:00". A form of defaults is a
+  // form an administrator can save over the real answer.
+  if (!stored) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-[12.5px] text-ink-4">
+          Tetapan sekolah tidak dapat dimuatkan.
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="grid gap-4">
       <Card>

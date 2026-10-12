@@ -82,6 +82,22 @@ export default function SemakanPage() {
       // and sahkan_rph refuses unless a verified signature is already on file —
       // so an approval here means the browser has signed it first. Local mode
       // updates the demo queue only.
+      /**
+       * What a *recorded* decision does to the screen.
+       *
+       * Called only once the write has landed — or in local mode, where the
+       * write is the screen. Doing it earlier marked a plan as graded while
+       * the toast beside it said the review had failed, and the plan left the
+       * queue the reviewer was working through.
+       */
+      const applyDecision = () => {
+        setGraded((g) => ({ ...g, [item.id]: decision === "sahkan" ? 1 : 0 }));
+        setComment("");
+        // Advance to the next ungraded item — the queue is the whole workflow.
+        const next = QUEUE.find((q) => !(q.id in graded) && q.id !== item.id);
+        if (next) setSelected(next.id);
+      };
+
       if (supabaseConfigured) {
         void decideRph({
           userId: meId,
@@ -91,7 +107,10 @@ export default function SemakanPage() {
           decision,
           comment: comment || undefined,
         })
-          .then(() => toast.success(decisionMessage(decision)))
+          .then(() => {
+            toast.success(decisionMessage(decision));
+            applyDecision();
+          })
           .catch((err: unknown) =>
             toast.error(
               `Gagal menyemak: ${err instanceof Error ? err.message : "ralat rangkaian"}`,
@@ -100,14 +119,9 @@ export default function SemakanPage() {
           .finally(() => setDeciding(false));
       } else {
         toast.success(decisionMessage(decision));
+        applyDecision();
         setDeciding(false);
       }
-
-      setGraded((g) => ({ ...g, [item.id]: decision === "sahkan" ? 1 : 0 }));
-      setComment("");
-      // Advance to the next ungraded item — the queue is the whole workflow.
-      const next = QUEUE.find((q) => !(q.id in graded) && q.id !== item.id);
-      if (next) setSelected(next.id);
     },
     [item, deciding, graded, comment, QUEUE, meId],
   );

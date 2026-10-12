@@ -1,14 +1,17 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navFor } from "@/components/shell/nav";
-import { homeFor } from "@/lib/auth/permissions";
+import { homeFor, reviewStageFor } from "@/lib/auth/permissions";
+import { handleExpiredSession } from "@/lib/client/auth-session";
 import { cn } from "@/lib/cn";
-import { currentWeek } from "@/lib/config";
+import { currentWeek, supabaseConfigured } from "@/lib/config";
 import { db } from "@/lib/db";
+import { QUEUE } from "@/lib/demo/review";
 import { LOCAL_OWNER_ID } from "@/lib/demo/seed";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
@@ -53,11 +56,41 @@ export function Sidebar({
         .equals([LOCAL_OWNER_ID, session])
         .filter((d) => d.weekNo === WEEK && d.status === "draft")
         .count(),
-      pending: 4, // stand-in for `select count(*) ... status='submitted'` in local mode
     }),
     [session],
-    { drafts: 0, pending: 4 },
+    { drafts: 0 },
   );
+
+  /**
+   * How many plans are waiting to be reviewed.
+   *
+   * It was the constant 4, printed on every reviewer's sidebar whatever the
+   * school had actually sent in — a badge reporting work that may not exist,
+   * which is the same lie as a dashboard of another school's figures. In local
+   * mode the demo queue *is* the queue, so it is counted there; in synced mode
+   * it is fetched, and a request that has not answered yet shows nothing at
+   * all rather than a number.
+   */
+  const stage = reviewStageFor(user.role);
+  const queueCount = useQuery<number | null>({
+    queryKey: ["review-queue-count", session],
+    queryFn: async () => {
+      const res = await fetch("/api/queue", { credentials: "same-origin" });
+      if (handleExpiredSession(res.status)) return null;
+      if (!res.ok) return null;
+      const body = (await res.json()) as { items: unknown[] };
+      return body.items.length;
+    },
+    // Only a reviewer may ask, and only where there is someone to ask.
+    enabled: supabaseConfigured && stage !== null,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const pending = supabaseConfigured
+    ? (queueCount.data ?? null)
+    : stage
+      ? QUEUE.filter((q) => q.status === stage.status).length
+      : null;
 
   return (
     <aside
@@ -96,7 +129,7 @@ export function Sidebar({
                 item.badge === "drafts"
                   ? counts?.drafts
                   : item.badge === "pending"
-                    ? counts?.pending
+                    ? pending
                     : undefined;
               const Icon = item.icon;
               return (

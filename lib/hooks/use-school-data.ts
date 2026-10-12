@@ -22,9 +22,10 @@ import type { SchoolClass, Subject } from "@/lib/types";
  *
  * While a synced fetch is still in flight the list is empty rather than
  * fixture-backed. Every caller already treats an empty list as "nothing to do"
- * (`createBlankRph` returns `undefined` and the buttons toast), which is the
- * honest answer during load — offering demo classes for one render is how the
- * bad id got into the database in the first place.
+ * (the penyunting waits for the class *and* the subject list before it will
+ * seed a document at all), which is the honest answer during load — offering
+ * demo classes for one render is how a fixture id got into the database in
+ * the first place.
  */
 export interface SchoolData<T> {
   items: T[];

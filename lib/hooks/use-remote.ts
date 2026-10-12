@@ -94,11 +94,11 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
       // Expired session: leave rather than fall back to demo data — a reviewer
       // must never be shown fake plans as if they were the real queue.
       if (handleExpiredSession(res.status)) return { items: [] };
-      // Local mode has no backend, and there the bundled dataset *is* the data.
-      if (res.status === 503) return { items: QUEUE };
-      // Anything else — a Guru Biasa's 403, a 500 — must not be papered over
-      // with fabricated plans. An empty queue reads as "nothing to do", which
-      // is the truth; three colleagues' demo RPH read as work that is not there.
+      // Everything else — a Guru Biasa's 403, a 500, and a 503 from a proxy
+      // or a deployment mid-restart — is an empty queue, not the demo one.
+      // This query only ever runs in synced mode (`enabled` below), so a 503
+      // here means the school's own service did not answer, which is exactly
+      // when three colleagues' demo RPH would be the worst thing to show.
       if (!res.ok) return { items: [] };
       return (await res.json()) as { items: QueueItem[] };
     },

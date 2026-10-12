@@ -35,7 +35,24 @@ export interface SchoolContext {
 
 const FALLBACK: SchoolContext = { session: SESSION, school: SCHOOL };
 
+/**
+ * What a *synced* deployment shows when it cannot read its own school row.
+ *
+ * Deliberately blank rather than the bundled school. A statutory document
+ * headed with another school's name, printed on this school's own paper, is
+ * worse than an unbranded one — and a blank one is what makes a missing row
+ * (or a missing `SUPABASE_SECRET_KEY`, which `adminDb` throws on) findable,
+ * instead of quietly rebranding the school to somewhere in Keningau. The
+ * session year is left alone: an empty one would stamp every new plan with a
+ * year that matches nothing and queue it forever.
+ */
+const UNKNOWN: SchoolContext = {
+  session: SESSION,
+  school: { name: "", place: "", motto: "", logo: SCHOOL.logo },
+};
+
 export async function resolveSchool(): Promise<SchoolContext> {
+  // Local mode has no row to read, so the bundled school *is* the school.
   if (!supabaseConfigured) return FALLBACK;
 
   try {
@@ -52,8 +69,11 @@ export async function resolveSchool(): Promise<SchoolContext> {
       .limit(1)
       .maybeSingle();
     if (error || !school) {
-      if (error) console.error("[school] lookup failed:", error.message);
-      return FALLBACK;
+      console.error(
+        "[school] lookup failed:",
+        error?.message ?? "no active school row — add one in /pentadbiran",
+      );
+      return UNKNOWN;
     }
 
     const { data: setting } = await db
@@ -73,15 +93,23 @@ export async function resolveSchool(): Promise<SchoolContext> {
     return {
       session: (setting as { current_session: string } | null)?.current_session ?? SESSION,
       school: {
-        name: row.nama?.trim() || SCHOOL.name,
-        place: placeFrom(row.ppd, row.jpn) || SCHOOL.place,
-        motto: row.motto?.trim() || SCHOOL.motto,
+        // A field the administrator has left blank stays blank. Substituting
+        // the bundled school's name for a row that *exists* is the same lie as
+        // substituting it for one that does not, and the printed form has an
+        // em dash for an empty cell already. The crest is different: it is a
+        // file in this deployment's own `public/`, so whatever it depicts is
+        // the deployment's to show.
+        name: row.nama?.trim() || "",
+        place: placeFrom(row.ppd, row.jpn) || "",
+        motto: row.motto?.trim() || "",
         logo: row.logo_url || SCHOOL.logo,
       },
     };
-  } catch {
-    // adminDb throws when the secret key is missing — fall back rather than
-    // turning a configuration gap into a blank app shell.
-    return FALLBACK;
+  } catch (err) {
+    // `adminDb` throws when the secret key is missing. Logged rather than
+    // swallowed: a configuration gap that quietly renders the wrong school is
+    // one that nobody ever fixes.
+    console.error("[school] resolve failed:", err);
+    return UNKNOWN;
   }
 }

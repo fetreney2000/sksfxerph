@@ -52,7 +52,19 @@ export default function ArkibPage() {
    */
   const PAGE = 20;
   const [shown, setShown] = React.useState(PAGE);
-  React.useEffect(() => setShown(PAGE), [needle]);
+  /**
+   * A new search starts the window again at the top.
+   *
+   * Adjusted during render rather than in an effect: the effect version
+   * depends on `needle` without reading it, which is exactly the shape a
+   * linter warns about — and clearing one render late is a row of the wrong
+   * week's results on screen while it catches up.
+   */
+  const [searched, setSearched] = React.useState(needle);
+  if (searched !== needle) {
+    setSearched(needle);
+    setShown(PAGE);
+  }
   const visible = docs.slice(0, shown);
 
   const byWeek = new Map<number, typeof docs>();

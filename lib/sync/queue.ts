@@ -1,3 +1,4 @@
+import { supabaseConfigured } from "@/lib/config";
 import { db, queueDepth } from "@/lib/db";
 import { hashPayload } from "@/lib/sync/hash";
 import type { RphDocument, SyncResult } from "@/lib/types";
@@ -225,10 +226,13 @@ export const isOnline = () => typeof navigator !== "undefined" && navigator.onLi
 /**
  * Local-only mode: no Supabase env configured (see lib/config.ts).
  * The app is fully usable; sync simply never leaves the device.
+ *
+ * `supabaseConfigured` rather than the URL on its own — every read path
+ * already tests that, and a deployment that sets the URL without the anon key
+ * must be local everywhere rather than local to read and synced to write,
+ * which queued every plan forever against a server that answers 503.
  */
-export const hasBackend = () =>
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== undefined &&
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "";
+export const hasBackend = () => supabaseConfigured;
 
 export const pendingCount = queueDepth;
 
