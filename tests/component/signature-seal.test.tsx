@@ -100,13 +100,12 @@ describe("signature seal", () => {
       <SignatureSeal signature={SEAL} state="valid" variant="print" />,
     );
 
-    // The paper form has a signature block — right-aligned under its label,
-    // with a rule for a signature to rest on. What it does not have is the
-    // app's green panel: a card printed on every approved sheet is a
-    // screenshot, and screenshots are not filed.
+    // The paper form has a signature block — left-aligned under its label, like
+    // the rest of the sheet, with a rule for a signature to rest on. What it
+    // does not have is the app's green panel: a card printed on every approved
+    // sheet is a screenshot, and screenshots are not filed.
     const el = container.firstElementChild as HTMLElement;
-    expect(el.className).toContain("text-right");
-    expect(el.className).toContain("items-end");
+    expect(el.className).toContain("items-start");
     expect(el.className).not.toContain("bg-success-soft");
     expect(container.querySelector("[class*='border-t']")).toBeTruthy();
 

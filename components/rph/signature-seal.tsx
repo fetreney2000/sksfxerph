@@ -56,7 +56,7 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
   // has not happened.
   if (state === "none" || !signature) {
     return variant === "print" ? (
-      <div className={cn("mt-4 flex flex-col items-end text-right", className)}>
+      <div className={cn("mt-4 flex flex-col items-start", className)}>
         <div className="w-full max-w-64 border-t border-[#1d2939]" />
         <p className="mt-1 h-3.5 w-full max-w-64 text-[10.5px] leading-tight text-[#1d2939]">
           &nbsp;
@@ -113,10 +113,12 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
   // pen on, the name under it, the office under that, the moment — and the
   // verification kept to one quiet line. A green rounded panel printed on
   // every approved sheet is a screenshot of the app, and the district files
-  // forms, not screenshots.
+  // forms, not screenshots. Left-aligned, because that is how the rest of the
+  // sheet is set and a block that jumps to the far edge of a three-column cell
+  // reads as a stamp from somewhere else.
   if (variant === "print") {
     return (
-      <div className={cn("mt-4 flex flex-col items-end text-right", className)}>
+      <div className={cn("mt-4 flex flex-col items-start", className)}>
         <p className="inline-flex items-center gap-1.5 text-[8.5px] font-semibold tracking-[0.9px] text-[#067647] uppercase">
           <ShieldCheck className="h-3 w-3" strokeWidth={2.2} aria-hidden />
           Disahkan secara digital

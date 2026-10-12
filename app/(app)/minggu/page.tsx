@@ -15,7 +15,6 @@ import {
   Target,
   Upload,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type * as React from "react";
 import { useMemo, useRef } from "react";
@@ -208,19 +207,6 @@ export default function MingguPage() {
               className="mt-2 max-w-[420px]"
             />
           </div>
-          <Link
-            href="/editor"
-            className="hidden shrink-0 sm:block"
-            onClick={(e) => {
-              e.preventDefault();
-              void onNew();
-            }}
-          >
-            <Button>
-              {ms.dashboard.newRph}
-              <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </Button>
-          </Link>
         </div>
 
         {/* ── Stats ────────────────────────────────────────────────────────── */}

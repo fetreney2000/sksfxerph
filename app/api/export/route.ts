@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
                 // a quiet line of its own rather than shouting in the middle
                 // of the document.
                 new Paragraph({
-                  alignment: AlignmentType.RIGHT,
+                  alignment: AlignmentType.LEFT,
                   children: [
                     new TextRun({
                       text: "Disahkan secara digital",
@@ -330,7 +330,7 @@ export async function POST(request: NextRequest) {
                   spacing: { before: 400 },
                 }),
                 new Paragraph({
-                  alignment: AlignmentType.RIGHT,
+                  alignment: AlignmentType.LEFT,
                   border: {
                     bottom: { style: BorderStyle.SINGLE, size: 6, color: "1D2939" },
                   },
@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
                   spacing: { after: 80 },
                 }),
                 new Paragraph({
-                  alignment: AlignmentType.RIGHT,
+                  alignment: AlignmentType.LEFT,
                   children: [
                     new TextRun({ text: parsed.data.signerName, bold: true, size: 22 }),
                   ],
@@ -350,17 +350,17 @@ export async function POST(request: NextRequest) {
                 ...(parsed.data.signerTitle
                   ? [
                       new Paragraph({
-                        alignment: AlignmentType.RIGHT,
+                        alignment: AlignmentType.LEFT,
                         children: [new TextRun({ text: parsed.data.signerTitle, size: 18 })],
                       }),
                     ]
                   : []),
                 new Paragraph({
-                  alignment: AlignmentType.RIGHT,
+                  alignment: AlignmentType.LEFT,
                   children: [new TextRun({ text: signedAt ?? "", size: 16, color: "667085" })],
                 }),
                 new Paragraph({
-                  alignment: AlignmentType.RIGHT,
+                  alignment: AlignmentType.LEFT,
                   children: [
                     new TextRun({
                       text: [
