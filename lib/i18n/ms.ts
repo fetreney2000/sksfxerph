@@ -78,6 +78,15 @@ export const ms = {
     submitted: "Menunggu GPK",
     forwarded: "Menunggu Guru Besar",
     approved: "Lengkap (1)",
+    /**
+     * The same state as it is printed.
+     *
+     * `(1)` is KPM's grade, and it belongs on the reviewer's screen where the
+     * 0/1 *is* the decision being made. The STATUS row of a printed week is
+     * read by someone filing the stack, not grading it, and the paper form
+     * says "Lengkap".
+     */
+    approvedPaper: "Lengkap",
     returned: "Dikembalikan",
     scheduled: "Dijadualkan",
     complete: "Lengkap",

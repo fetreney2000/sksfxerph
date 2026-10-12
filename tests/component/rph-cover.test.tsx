@@ -3,7 +3,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { RphCover } from "@/components/rph/rph-cover";
-import { ms } from "@/lib/i18n/ms";
 
 /**
  * The cover sheet is the page a district reads first, and the only one that
@@ -109,11 +108,13 @@ describe("RphCover — the weekly summary", () => {
     expect(screen.getByText("Semak semula aktiviti minggu depan.")).toBeTruthy();
   });
 
-  it("shows the status under the same name the app uses", () => {
-    // The cover must not invent a word. A teacher who submits and then reads
-    // "Lengkap (1)" on the printed sheet should recognise it as the badge they
-    // just saw go green.
+  it("prints the status in the paper form's words, not the grader's mark", () => {
+    // The grade — `(1)` and `(0)` — is the reviewer's marking, and it belongs
+    // on the screens where they make it. A reader of a stapled stack needs
+    // the word, which is what the paper form has, so the printed cover says
+    // "Lengkap" while the badge beside it still says "Lengkap (1)".
     render(<RphCover {...BASE} status="approved" />);
-    expect(screen.getByText(ms.status.approved)).toBeTruthy();
+    expect(screen.getByText("Lengkap")).toBeTruthy();
+    expect(screen.queryByText(/Lengkap \(1\)/)).toBeNull();
   });
 });

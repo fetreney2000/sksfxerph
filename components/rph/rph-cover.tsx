@@ -22,11 +22,18 @@ import type { RphStatus } from "@/lib/types";
  * Printed ahead of the week it covers, so the district receiving a stapled
  * stack reads the summary before the detail.
  */
+/**
+ * How each status is written on the printed cover sheet.
+ *
+ * Deliberately not the screen's labels: the grade — `(1)` and `(0)` — is the
+ * reviewer's marking and belongs on the screens where they make it. What a
+ * reader of a stapled stack needs is the word, as the paper form has it.
+ */
 const STATUS_LABEL: Record<RphStatus, string> = {
   draft: ms.status.draft,
   submitted: ms.status.submitted,
   forwarded: ms.status.forwarded,
-  approved: ms.status.approved,
+  approved: ms.status.approvedPaper,
   returned: ms.status.returned,
 };
 
