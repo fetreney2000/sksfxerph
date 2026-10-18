@@ -328,6 +328,31 @@ describe("pentadbiran", () => {
     ).toBe("guru_biasa");
   });
 
+  it("lays the roster out as cards, and searches it", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mount();
+
+    await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
+
+    // Cards rather than table rows: a seven-column table is a strip that
+    // scrolls sideways on a phone, and this roster is seventy people long.
+    expect(screen.queryByRole("table")).toBeNull();
+
+    // Every field the table had is still on the card, under its own label.
+    expect(screen.getAllByLabelText(/^Peranan /)).toHaveLength(4);
+    expect(screen.getAllByLabelText(/^Jawatan /)).toHaveLength(4);
+
+    const search = screen.getByLabelText("Cari akaun") as HTMLInputElement;
+    fireEvent.change(search, { target: { value: "ramlan" } });
+    await waitFor(() => expect(screen.getByText("Ramlan bin Yusof")).toBeTruthy());
+    expect(screen.queryByText("Nurul Aisyah binti Rahim")).toBeNull();
+
+    // A search that matches nothing says so, rather than showing an empty grid
+    // that reads as "this school has no accounts".
+    fireEvent.change(search, { target: { value: "tiada seorang pun begini" } });
+    await waitFor(() => expect(screen.getByText(/Tiada akaun sepadan dengan/)).toBeTruthy());
+  });
+
   it("lists classes with plan counts, archived ones included", async () => {
     vi.stubGlobal("fetch", fakeFetch);
     await mount();

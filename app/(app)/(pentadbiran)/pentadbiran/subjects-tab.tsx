@@ -6,13 +6,6 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogBody,
   DialogContent,
@@ -22,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select } from "@/components/ui/field";
-import { TableContainer } from "@/components/ui/table";
+import { RecordCard } from "@/components/ui/record-card";
 import { createSubject, listAdminSubjects, setSubject } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import type { Curriculum } from "@/lib/types";
@@ -61,93 +54,66 @@ export function SubjectsTab() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <BookOpen className="h-4 w-4 text-ink-4" strokeWidth={1.9} aria-hidden />
-          <div>
-            <CardTitle>Mata pelajaran</CardTitle>
-            <CardDescription>
-              Mata pelajaran yang ditawarkan kepada guru. Mematikan satu item menyembunyikannya
-              daripada penyunting — rancangan sedia ada tidak terjejas.
-            </CardDescription>
-          </div>
-          <Button
-            className="ml-auto"
-            size="sm"
-            disabled={busy}
-            onClick={() => setCreating(true)}
-          >
-            <Plus className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-            Tambah mata pelajaran
-          </Button>
-        </CardHeader>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <BookOpen className="h-4 w-4 shrink-0 text-ink-4" strokeWidth={1.9} aria-hidden />
+        <div className="min-w-0">
+          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Mata pelajaran</h2>
+          <p className="text-[12.5px] text-ink-3">
+            Mata pelajaran yang ditawarkan kepada guru. Mematikan satu item menyembunyikannya
+            daripada penyunting — rancangan sedia ada tidak terjejas.
+          </p>
+        </div>
+        <Button className="ml-auto" size="sm" disabled={busy} onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+          Tambah mata pelajaran
+        </Button>
+      </div>
 
-        <CardContent className="p-0">
-          {subjects.isLoading ? (
-            <p className="px-4 py-8 text-center text-[12.5px] text-ink-4">
-              Memuatkan mata pelajaran…
-            </p>
-          ) : items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[12.5px] text-ink-4">
-              Tiada mata pelajaran.
-            </p>
-          ) : (
-            <TableContainer>
-              <table className="w-full border-collapse text-[13px]">
-                <thead>
-                  <tr className="bg-surface-2">
-                    {["Kod", "Mata pelajaran", "Kurikulum", "Status", "Rancangan", ""].map(
-                      (h) => (
-                        <th
-                          key={h}
-                          className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                        >
-                          {h}
-                        </th>
-                      ),
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((s) => (
-                    <tr key={s.code} className="border-b border-border last:border-b-0">
-                      <td className="px-4 py-2.5 font-mono text-[12.5px] font-semibold text-ink-2">
-                        {s.code}
-                      </td>
-                      <td className="px-4 py-2.5 font-semibold text-ink">{s.nama}</td>
-                      <td className="px-4 py-2.5 text-ink-3">{s.curriculum}</td>
-                      <td className="px-4 py-2.5">
-                        <Badge variant={s.is_active ? "success" : "neutral"}>
-                          {s.is_active ? "Ditawarkan" : "Tidak ditawarkan"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5 text-[12.5px] text-ink-3">{s.doc_count}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            save(
-                              () => setSubject(s.code, !s.is_active),
-                              s.is_active
-                                ? `${s.nama} disembunyikan daripada penyunting`
-                                : `${s.nama} ditawarkan semula`,
-                              () => void subjects.refetch(),
-                            )
-                          }
-                        >
-                          {s.is_active ? "Matikan" : "Hidupkan"}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
+      {subjects.isLoading ? (
+        <p className="py-12 text-center text-[12.5px] text-ink-4">Memuatkan mata pelajaran…</p>
+      ) : items.length === 0 ? (
+        <p className="py-12 text-center text-[12.5px] text-ink-4">Tiada mata pelajaran.</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((s) => (
+            <RecordCard
+              key={s.code}
+              title={s.nama}
+              subtitle={
+                <>
+                  <span className="font-mono font-semibold text-ink-2">{s.code}</span>
+                  <span className="text-ink-4"> · {s.curriculum}</span>
+                </>
+              }
+              badge={
+                <Badge variant={s.is_active ? "success" : "neutral"}>
+                  {s.is_active ? "Ditawarkan" : "Tidak ditawarkan"}
+                </Badge>
+              }
+              footer={
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    save(
+                      () => setSubject(s.code, !s.is_active),
+                      s.is_active
+                        ? `${s.nama} disembunyikan daripada penyunting`
+                        : `${s.nama} ditawarkan semula`,
+                      () => void subjects.refetch(),
+                    )
+                  }
+                >
+                  {s.is_active ? "Matikan" : "Hidupkan"}
+                </Button>
+              }
+            >
+              <p className="text-[12.5px] text-ink-3">{s.doc_count} rancangan</p>
+            </RecordCard>
+          ))}
+        </div>
+      )}
 
       <SubjectDialog
         open={creating}

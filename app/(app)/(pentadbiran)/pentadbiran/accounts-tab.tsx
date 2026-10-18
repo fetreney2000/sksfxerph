@@ -1,18 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Unlock, UserPlus, Users } from "lucide-react";
+import { KeyRound, Search, Unlock, UserPlus, Users } from "lucide-react";
 import * as React from "react";
 import { useUser } from "@/components/shell/user-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogBody,
@@ -23,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select } from "@/components/ui/field";
-import { TableContainer } from "@/components/ui/table";
+import { CardField, RecordCard } from "@/components/ui/record-card";
 import {
   createAccount,
   listMembers,
@@ -159,259 +152,240 @@ export function AccountsTab() {
 
   const items = accounts.data?.items ?? [];
 
+  // Seventy-odd cards is a list to search rather than to scroll. Matches the
+  // name, the username or the email — the three things someone is holding when
+  // they come here looking for one person.
+  const [q, setQ] = React.useState("");
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? items.filter((m) =>
+        [m.full_name, m.username, m.email ?? ""].some((f) => f.toLowerCase().includes(needle)),
+      )
+    : items;
+
   return (
     <>
-      <Card>
-        <CardHeader>
-          <Users className="h-4 w-4 text-ink-4" strokeWidth={1.9} aria-hidden />
-          <div>
-            <CardTitle>Akaun &amp; peranan</CardTitle>
-            <CardDescription>
-              Peranan menentukan apa yang boleh dilihat dan dilakukan; jawatan ialah gelaran
-              yang tertera pada baris JAWATAN dalam cetakan mingguan. Kesemua lima peranan
-              mempunyai akses kepada RPH sendiri.
-            </CardDescription>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Users className="h-4 w-4 shrink-0 text-ink-4" strokeWidth={1.9} aria-hidden />
+        <div className="min-w-0">
+          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Akaun &amp; peranan</h2>
+          <p className="text-[12.5px] text-ink-3">
+            Peranan menentukan apa yang boleh dilihat dan dilakukan; jawatan ialah gelaran yang
+            tertera pada baris JAWATAN dalam cetakan mingguan. Kesemua lima peranan mempunyai
+            akses kepada RPH sendiri.
+          </p>
+        </div>
+        <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="relative w-full sm:w-64">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink-4"
+              strokeWidth={1.9}
+              aria-hidden
+            />
+            <Input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Cari nama, nama pengguna atau emel…"
+              aria-label="Cari akaun"
+              className="pl-9"
+            />
           </div>
-          <Button
-            className="ml-auto"
-            size="sm"
-            disabled={busy}
-            onClick={() => setCreating(true)}
-          >
+          <Button size="sm" disabled={busy} onClick={() => setCreating(true)}>
             <UserPlus className="h-4 w-4" strokeWidth={1.9} aria-hidden />
             Tambah akaun
           </Button>
-        </CardHeader>
+        </div>
+      </div>
 
-        <CardContent className="p-0">
-          {accounts.isLoading ? (
-            <p className="px-4 py-8 text-center text-[12.5px] text-ink-4">Memuatkan akaun…</p>
-          ) : items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[12.5px] text-ink-4">
-              Tiada akaun ditemui.
-            </p>
-          ) : (
-            <TableContainer>
-              <table className="w-full border-collapse text-[13px]">
-                <thead>
-                  <tr className="bg-surface-2">
-                    {[
-                      "Nama",
-                      "Peranan",
-                      "Jawatan",
-                      "Penyelia",
-                      "Status",
-                      "Log masuk terakhir",
-                      "",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
+      {accounts.isLoading ? (
+        <p className="py-12 text-center text-[12.5px] text-ink-4">Memuatkan akaun…</p>
+      ) : shown.length === 0 ? (
+        <p className="py-12 text-center text-[12.5px] text-ink-4">
+          {needle ? `Tiada akaun sepadan dengan “${q.trim()}”.` : "Tiada akaun ditemui."}
+        </p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {shown.map((m) => {
+            const own = m.user_id === myId;
+            const state = lockState(m);
+            const status = STATUS[state];
+
+            const changeRole = (role: MemberRole) =>
+              save(
+                () => setMember(m.user_id, role, m.is_active),
+                // A role change can take an office away with it — SQL
+                // clears a jawatan the new role cannot hold, so say so
+                // rather than let the row quietly empty itself.
+                m.jawatan !== null && !(JAWATAN_BY_ROLE[role] ?? []).includes(m.jawatan)
+                  ? `Peranan ${m.full_name} dikemas kini — jawatan lama ditanggalkan`
+                  : `Peranan ${m.full_name} dikemas kini`,
+                () => void accounts.refetch(),
+              );
+
+            // The offices this role may hold; empty for the pentadbir
+            // and the service account, which hold none at all.
+            const offices = JAWATAN_BY_ROLE[m.role] ?? [];
+
+            const changeJawatan = (jawatan: Jawatan | null) =>
+              save(
+                () => setJawatan(m.user_id, jawatan),
+                jawatan
+                  ? `Jawatan ${m.full_name} dikemas kini`
+                  : `Jawatan ${m.full_name} dikosongkan`,
+                () => void accounts.refetch(),
+              );
+
+            const toggleActive = () =>
+              save(
+                () => setMember(m.user_id, m.role, !m.is_active),
+                m.is_active ? `${m.full_name} dinyahaktifkan` : `${m.full_name} diaktifkan`,
+                () => void accounts.refetch(),
+              );
+
+            // The level above this member, so a GPK's own RPH is not
+            // left reviewable by a peer. See `supervisorsFor`.
+            const supervisors = supervisorsFor(m, items);
+
+            const changeSupervisor = (supervisorId: string | null) =>
+              save(
+                () => setSupervisor(m.user_id, supervisorId),
+                supervisorId
+                  ? `Penyelia ${m.full_name} dikemas kini`
+                  : m.role === "guru_biasa"
+                    ? `${m.full_name} kini hanya kelihatan kepada Guru Besar`
+                    : `Penyelia ${m.full_name} dikosongkan`,
+                () => void accounts.refetch(),
+              );
+
+            return (
+              <RecordCard
+                key={m.user_id}
+                title={m.full_name}
+                subtitle={
+                  <>
+                    {m.username}
+                    {m.email ? ` · ${m.email}` : ""}
+                  </>
+                }
+                badge={<Badge variant={status.variant}>{status.label}</Badge>}
+                footer={
+                  <>
+                    {state === "locked" && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() =>
+                          save(
+                            () => unlockMember(m.user_id),
+                            `Kunci ${m.full_name} dibuka`,
+                            () => void accounts.refetch(),
+                          )
+                        }
                       >
-                        {h}
-                      </th>
+                        <Unlock className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                        Buka kunci
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => setResetting(m)}
+                    >
+                      <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                      Tetap semula kata laluan
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy || own}
+                      title={own ? "Anda tidak boleh menyahaktifkan akaun sendiri" : undefined}
+                      onClick={toggleActive}
+                    >
+                      {m.is_active ? "Nyahaktif" : "Aktifkan"}
+                    </Button>
+                  </>
+                }
+              >
+                <CardField label="Peranan">
+                  <Select
+                    aria-label={`Peranan ${m.full_name}`}
+                    value={m.role}
+                    className="w-full py-1.5 text-[12.5px]"
+                    disabled={busy || own}
+                    title={own ? "Anda tidak boleh mengubah peranan sendiri" : undefined}
+                    onChange={(e) => changeRole(e.target.value as MemberRole)}
+                  >
+                    {ASSIGNABLE.map((r) => (
+                      <option key={r} value={r}>
+                        {ms.roles[r]}
+                      </option>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((m) => {
-                    const own = m.user_id === myId;
-                    const state = lockState(m);
-                    const status = STATUS[state];
-
-                    const changeRole = (role: MemberRole) =>
-                      save(
-                        () => setMember(m.user_id, role, m.is_active),
-                        // A role change can take an office away with it — SQL
-                        // clears a jawatan the new role cannot hold, so say so
-                        // rather than let the row quietly empty itself.
-                        m.jawatan !== null && !(JAWATAN_BY_ROLE[role] ?? []).includes(m.jawatan)
-                          ? `Peranan ${m.full_name} dikemas kini — jawatan lama ditanggalkan`
-                          : `Peranan ${m.full_name} dikemas kini`,
-                        () => void accounts.refetch(),
-                      );
-
-                    // The offices this role may hold; empty for the pentadbir
-                    // and the service account, which hold none at all.
-                    const offices = JAWATAN_BY_ROLE[m.role] ?? [];
-
-                    const changeJawatan = (jawatan: Jawatan | null) =>
-                      save(
-                        () => setJawatan(m.user_id, jawatan),
-                        jawatan
-                          ? `Jawatan ${m.full_name} dikemas kini`
-                          : `Jawatan ${m.full_name} dikosongkan`,
-                        () => void accounts.refetch(),
-                      );
-
-                    const toggleActive = () =>
-                      save(
-                        () => setMember(m.user_id, m.role, !m.is_active),
-                        m.is_active
-                          ? `${m.full_name} dinyahaktifkan`
-                          : `${m.full_name} diaktifkan`,
-                        () => void accounts.refetch(),
-                      );
-
-                    // The level above this member, so a GPK's own RPH is not
-                    // left reviewable by a peer. See `supervisorsFor`.
-                    const supervisors = supervisorsFor(m, items);
-
-                    const changeSupervisor = (supervisorId: string | null) =>
-                      save(
-                        () => setSupervisor(m.user_id, supervisorId),
-                        supervisorId
-                          ? `Penyelia ${m.full_name} dikemas kini`
-                          : m.role === "guru_biasa"
-                            ? `${m.full_name} kini hanya kelihatan kepada Guru Besar`
-                            : `Penyelia ${m.full_name} dikosongkan`,
-                        () => void accounts.refetch(),
-                      );
-
-                    return (
-                      <tr key={m.user_id} className="border-b border-border last:border-b-0">
-                        <td className="px-4 py-2.5">
-                          <span className="block font-semibold text-ink">{m.full_name}</span>
-                          <span className="block text-[11.5px] text-ink-4">
-                            {m.username}
-                            {m.email ? ` · ${m.email}` : ""}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Select
-                            aria-label={`Peranan ${m.full_name}`}
-                            value={m.role}
-                            className="w-[190px] py-1.5 text-[12.5px]"
-                            disabled={busy || own}
-                            title={
-                              own ? "Anda tidak boleh mengubah peranan sendiri" : undefined
-                            }
-                            onChange={(e) => changeRole(e.target.value as MemberRole)}
-                          >
-                            {ASSIGNABLE.map((r) => (
-                              <option key={r} value={r}>
-                                {ms.roles[r]}
-                              </option>
-                            ))}
-                          </Select>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {/* The office, not the permission — it is what the
-                              cover sheet prints under the signer's name, which
-                              is why it is chosen per person instead of being
-                              derived from the role beside it: one GPK role
-                              covers three different Penolong Kanan offices. */}
-                          {offices.length === 0 ? (
-                            <span className="text-[12.5px] text-ink-4">—</span>
-                          ) : (
-                            <Select
-                              aria-label={`Jawatan ${m.full_name}`}
-                              value={m.jawatan ?? ""}
-                              className="w-[190px] py-1.5 text-[12.5px]"
-                              disabled={busy}
-                              onChange={(e) =>
-                                changeJawatan((e.target.value || null) as Jawatan | null)
-                              }
-                            >
-                              <option value="">— belum ditetapkan —</option>
-                              {offices.map((j) => (
-                                <option key={j} value={j}>
-                                  {ms.jawatan[j]}
-                                </option>
-                              ))}
-                            </Select>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {/* Scope, not decoration: this decides who may open
-                            and review this person's RPH. The list is the level
+                  </Select>
+                </CardField>
+                {/* The office, not the permission — it is what the cover
+                            sheet prints under the signer's name, which is why it
+                            is chosen per person instead of being derived from the
+                            role beside it: one GPK role covers three different
+                            Penolong Kanan offices. */}
+                <CardField label="Jawatan">
+                  {offices.length === 0 ? (
+                    <p className="py-1.5 text-[12.5px] text-ink-4">—</p>
+                  ) : (
+                    <Select
+                      aria-label={`Jawatan ${m.full_name}`}
+                      value={m.jawatan ?? ""}
+                      className="w-full py-1.5 text-[12.5px]"
+                      disabled={busy}
+                      onChange={(e) =>
+                        changeJawatan((e.target.value || null) as Jawatan | null)
+                      }
+                    >
+                      <option value="">— belum ditetapkan —</option>
+                      {offices.map((j) => (
+                        <option key={j} value={j}>
+                          {ms.jawatan[j]}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </CardField>
+                {/* Scope, not decoration: this decides who may open and
+                            review this person's RPH. The list is the level
                             above — a GPK's own work is reviewed by the Guru
-                            Besar, and a Guru Besar by another Guru Besar if
-                            the school has one. */}
-                          {supervisors.length === 0 ? (
-                            <span className="text-[12px] text-ink-4">
-                              {noSupervisorText(m.role)}
-                            </span>
-                          ) : (
-                            <Select
-                              aria-label={`Penyelia ${m.full_name}`}
-                              value={m.supervisor_id ?? ""}
-                              className="w-[190px] py-1.5 text-[12.5px]"
-                              disabled={busy}
-                              onChange={(e) => changeSupervisor(e.target.value || null)}
-                            >
-                              <option value="">{UNASSIGNED[m.role]}</option>
-                              {supervisors.map((s) => (
-                                <option key={s.user_id} value={s.user_id}>
-                                  {s.full_name} · {ms.roles[s.role]}
-                                </option>
-                              ))}
-                            </Select>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Badge variant={status.variant}>{status.label}</Badge>
-                          {state === "locked" && (
-                            <span className="mt-1 block text-[11.5px] text-ink-4">
-                              {m.failed_logins} percubaan gagal
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5 text-[12.5px] text-ink-3">
-                          {when(m.last_login_at)}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex flex-wrap justify-end gap-1.5">
-                            {state === "locked" && (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={busy}
-                                onClick={() =>
-                                  save(
-                                    () => unlockMember(m.user_id),
-                                    `Kunci ${m.full_name} dibuka`,
-                                    () => void accounts.refetch(),
-                                  )
-                                }
-                              >
-                                <Unlock className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                                Buka kunci
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              disabled={busy}
-                              onClick={() => setResetting(m)}
-                            >
-                              <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                              Tetap semula kata laluan
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              disabled={busy || own}
-                              title={
-                                own
-                                  ? "Anda tidak boleh menyahaktifkan akaun sendiri"
-                                  : undefined
-                              }
-                              onClick={toggleActive}
-                            >
-                              {m.is_active ? "Nyahaktif" : "Aktifkan"}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
+                            Besar, and a Guru Besar by another Guru Besar if the
+                            school has one. */}
+                <CardField label="Penyelia">
+                  {supervisors.length === 0 ? (
+                    <p className="py-1.5 text-[12px] text-ink-4">{noSupervisorText(m.role)}</p>
+                  ) : (
+                    <Select
+                      aria-label={`Penyelia ${m.full_name}`}
+                      value={m.supervisor_id ?? ""}
+                      className="w-full py-1.5 text-[12.5px]"
+                      disabled={busy}
+                      onChange={(e) => changeSupervisor(e.target.value || null)}
+                    >
+                      <option value="">{UNASSIGNED[m.role]}</option>
+                      {supervisors.map((s) => (
+                        <option key={s.user_id} value={s.user_id}>
+                          {s.full_name} · {ms.roles[s.role]}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </CardField>
+                <p className="flex flex-wrap items-baseline gap-x-3 text-[11.5px] text-ink-4">
+                  {state === "locked" && <span>{m.failed_logins} percubaan gagal</span>}
+                  <span>Log masuk terakhir {when(m.last_login_at)}</span>
+                </p>
+              </RecordCard>
+            );
+          })}
+        </div>
+      )}
 
       <CreateAccountDialog
         open={creating}

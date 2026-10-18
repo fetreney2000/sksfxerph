@@ -6,13 +6,6 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogBody,
   DialogContent,
@@ -22,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label } from "@/components/ui/field";
-import { TableContainer } from "@/components/ui/table";
+import { RecordCard } from "@/components/ui/record-card";
 import { type ClassRow, createClass, listAdminClasses, setClass } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 
@@ -60,120 +53,94 @@ export function ClassesTab() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <LayoutGrid className="h-4 w-4 text-ink-4" strokeWidth={1.9} aria-hidden />
-          <div>
-            <CardTitle>Kelas</CardTitle>
-            <CardDescription>
-              Kelas yang tersedia untuk sesi {session || "semasa"} — inilah yang dipaparkan
-              dalam penyunting. Kelas yang diarkibkan tidak lagi ditawarkan, tetapi rancangan
-              sedia ada kekal.
-            </CardDescription>
-          </div>
-          <Button
-            className="ml-auto"
-            size="sm"
-            disabled={busy || !session}
-            onClick={() => setDialog({ mode: "add" })}
-          >
-            <Plus className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-            Tambah kelas
-          </Button>
-        </CardHeader>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <LayoutGrid className="h-4 w-4 shrink-0 text-ink-4" strokeWidth={1.9} aria-hidden />
+        <div className="min-w-0">
+          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Kelas</h2>
+          <p className="text-[12.5px] text-ink-3">
+            Kelas yang tersedia untuk sesi {session || "semasa"} — inilah yang dipaparkan dalam
+            penyunting. Kelas yang diarkibkan tidak lagi ditawarkan, tetapi rancangan sedia ada
+            kekal.
+          </p>
+        </div>
+        <Button
+          className="ml-auto"
+          size="sm"
+          disabled={busy || !session}
+          onClick={() => setDialog({ mode: "add" })}
+        >
+          <Plus className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+          Tambah kelas
+        </Button>
+      </div>
 
-        <CardContent className="p-0">
-          {classes.isLoading ? (
-            <p className="px-4 py-8 text-center text-[12.5px] text-ink-4">Memuatkan kelas…</p>
-          ) : items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[12.5px] text-ink-4">
-              Tiada kelas untuk sesi ini lagi. Tambah kelas pertama untuk mula menulis RPH.
-            </p>
-          ) : (
-            <TableContainer>
-              <table className="w-full border-collapse text-[13px]">
-                <thead>
-                  <tr className="bg-surface-2">
-                    {["Kelas", "Tahun", "Status", "Rancangan", ""].map((h) => (
-                      <th
-                        key={h}
-                        className="border-b border-border px-4 py-2.5 text-left text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((c) => (
-                    <tr key={c.id} className="border-b border-border last:border-b-0">
-                      <td className="px-4 py-2.5 font-semibold text-ink">{c.nama}</td>
-                      <td className="px-4 py-2.5 text-ink-3">
-                        {c.tahun
-                          ? `Tahun ${c.tahun}`
-                          : c.tingkatan
-                            ? `Tingkatan ${c.tingkatan}`
-                            : "—"}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Badge variant={c.is_active ? "success" : "neutral"}>
-                          {c.is_active ? "Aktif" : "Diarkibkan"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5 text-[12.5px] text-ink-3">
-                        {c.doc_count} rancangan
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex flex-wrap justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={busy}
-                            onClick={() => setDialog({ mode: "edit", row: c })}
-                          >
-                            <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                            Sunting
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={busy}
-                            onClick={() =>
-                              save(
-                                () =>
-                                  setClass({
-                                    id: c.id,
-                                    nama: c.nama,
-                                    tahun: c.tahun,
-                                    session,
-                                    isActive: !c.is_active,
-                                  }),
-                                c.is_active ? `${c.nama} diarkibkan` : `${c.nama} dipulihkan`,
-                                () => void classes.refetch(),
-                              )
-                            }
-                          >
-                            {c.is_active ? (
-                              <Archive className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                            ) : (
-                              <ArchiveRestore
-                                className="h-3.5 w-3.5"
-                                strokeWidth={1.9}
-                                aria-hidden
-                              />
-                            )}
-                            {c.is_active ? "Arkibkan" : "Pulihkan"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
+      {classes.isLoading ? (
+        <p className="py-12 text-center text-[12.5px] text-ink-4">Memuatkan kelas…</p>
+      ) : items.length === 0 ? (
+        <p className="py-12 text-center text-[12.5px] text-ink-4">
+          Tiada kelas untuk sesi ini lagi. Tambah kelas pertama untuk mula menulis RPH.
+        </p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((c) => (
+            <RecordCard
+              key={c.id}
+              title={c.nama}
+              subtitle={
+                c.tahun ? `Tahun ${c.tahun}` : c.tingkatan ? `Tingkatan ${c.tingkatan}` : "—"
+              }
+              badge={
+                <Badge variant={c.is_active ? "success" : "neutral"}>
+                  {c.is_active ? "Aktif" : "Diarkibkan"}
+                </Badge>
+              }
+              footer={
+                <>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => setDialog({ mode: "edit", row: c })}
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                    Sunting
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      save(
+                        () =>
+                          setClass({
+                            id: c.id,
+                            nama: c.nama,
+                            tahun: c.tahun,
+                            session,
+                            isActive: !c.is_active,
+                          }),
+                        c.is_active ? `${c.nama} diarkibkan` : `${c.nama} dipulihkan`,
+                        () => void classes.refetch(),
+                      )
+                    }
+                  >
+                    {c.is_active ? (
+                      <Archive className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                    ) : (
+                      <ArchiveRestore className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                    )}
+                    {c.is_active ? "Arkibkan" : "Pulihkan"}
+                  </Button>
+                </>
+              }
+            >
+              {/* The count is what turns "archive this class" from a guess into
+                  a decision, so it is on the card rather than in a column. */}
+              <p className="text-[12.5px] text-ink-3">{c.doc_count} rancangan</p>
+            </RecordCard>
+          ))}
+        </div>
+      )}
 
       <ClassDialog
         state={dialog}
