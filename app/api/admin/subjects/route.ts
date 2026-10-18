@@ -21,10 +21,25 @@ import type { adminDb } from "@/lib/server/db";
  * handler holds the secret key, so RLS would not stop it on its own.
  */
 
-const toggleSchema = z.object({
-  code: z.string().min(1).max(12),
-  isActive: z.boolean(),
-});
+/**
+ * Matikan/Hidupkan, or correcting a subject that already exists — one shape,
+ * told apart by which field came in.
+ *
+ * `code` is never editable: it is a foreign key on every plan, DSKP standard
+ * and teaching assignment, so the two things that *can* be wrong with a
+ * subject — what it is called, and which curriculum it belongs to — are the
+ * two this accepts.
+ */
+const patchSchema = z
+  .object({
+    code: z.string().min(1).max(12),
+    isActive: z.boolean().optional(),
+    nama: z.string().min(1, "Nama mata pelajaran diperlukan").max(80).optional(),
+    curriculum: z.enum(["KSSR", "KSSM", "PRASEKOLAH"]).optional(),
+  })
+  .refine((d) => d.nama !== undefined || d.isActive !== undefined, {
+    message: "Tiada perubahan diminta",
+  });
 
 const createSchema = z.object({
   code: z
@@ -115,18 +130,42 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
   }
-  const parsed = toggleSchema.safeParse(raw);
+
+  const parsed = patchSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Data tidak sah" },
       { status: 422 },
     );
   }
+  const body = parsed.data;
 
+  if (body.nama !== undefined) {
+    // Both halves or neither: a name with no curriculum would silently put a
+    // subject back under the wrong syllabus.
+    if (body.curriculum === undefined) {
+      return NextResponse.json({ error: "Kurikulum diperlukan" }, { status: 422 });
+    }
+    const { error } = await gate.db.rpc("admin_edit_subject", {
+      p_school: gate.schoolId,
+      p_code: body.code,
+      p_nama: body.nama,
+      p_curriculum: body.curriculum,
+    });
+    if (error) {
+      console.error("[admin] edit subject failed:", error.message);
+      return NextResponse.json({ error: error.message }, { status: 422 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.isActive === undefined) {
+    return NextResponse.json({ error: "Tiada perubahan diminta" }, { status: 422 });
+  }
   const { error } = await gate.db.rpc("admin_set_subject", {
     p_school: gate.schoolId,
-    p_code: parsed.data.code,
-    p_active: parsed.data.isActive,
+    p_code: body.code,
+    p_active: body.isActive,
   });
   if (error) {
     console.error("[admin] set subject failed:", error.message);

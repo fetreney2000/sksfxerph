@@ -75,6 +75,9 @@ def main() -> int:
     delta14 = (ROOT / "db" / "migrations" / "014_compliance_truth.sql").read_text(
         encoding="utf-8"
     )
+    delta15 = (ROOT / "db" / "migrations" / "015_edit_existing.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -185,8 +188,9 @@ def main() -> int:
             run(delta12, "012")
             run(delta13, "013")
             run(delta14, "014")
+            run(delta15, "015")
         print(
-            "  [OK ] migration applied (001a→014, old signature pre-installed)"
+            "  [OK ] migration applied (001a→015, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -891,6 +895,85 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         conn.rollback()
         check("014 role reconciliation", False, str(e).splitlines()[0][:140])
+
+    # ── 015: what could only be created ──────────────────────────────────────
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select p.proname, count(*)::int from pg_proc p "
+                "join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='erph' and p.proname in "
+                "('admin_edit_subject','admin_set_profile') group by 1 order by 1"
+            )
+            counts = dict(cur.fetchall())
+            check(
+                "015 both edits exist, exactly once",
+                counts == {"admin_edit_subject": 1, "admin_set_profile": 1},
+                str(counts),
+            )
+    except Exception as e:  # noqa: BLE001
+        check("015 functions exist", False, str(e).splitlines()[0][:140])
+
+    # …and they actually write. Both are pentadbir-gated, so this runs as one.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+
+            cur.execute(
+                "select id from erph.user where role = 'guru_biasa' and is_active limit 1"
+            )
+            uid = cur.fetchone()[0]
+            cur.execute(
+                "select erph.admin_set_profile((select id from erph.school limit 1), "
+                "%s, 'Nama Telah Diperbetulkan', 'baik@moe-dl.edu.my')",
+                (uid,),
+            )
+            conn.commit()
+            cur.execute("select full_name, email from erph.user where id = %s", (uid,))
+            full_name, email = cur.fetchone()
+            check(
+                "015 a name and address can be corrected in place",
+                full_name == "Nama Telah Diperbetulkan" and email == "baik@moe-dl.edu.my",
+                f"{full_name} / {email}",
+            )
+
+            cur.execute("select code from erph.subject limit 1")
+            row = cur.fetchone()
+            code = row[0] if row else None
+            if code is None:
+                cur.execute(
+                    "insert into erph.subject (code, nama, curriculum) "
+                    "values ('UJI', 'Subjek Uji', 'KSSR') returning code"
+                )
+                code = cur.fetchone()[0]
+                conn.commit()
+            cur.execute(
+                "select erph.admin_edit_subject((select id from erph.school limit 1), "
+                "%s, 'Mata Pelajaran Uji', 'KSSM')",
+                (code,),
+            )
+            conn.commit()
+            cur.execute(
+                "select nama, curriculum::text from erph.subject where code = %s", (code,)
+            )
+            nama, curriculum = cur.fetchone()
+            check(
+                "015 a subject's name and curriculum can be corrected in place",
+                nama == "Mata Pelajaran Uji" and curriculum == "KSSM",
+                f"{nama} / {curriculum}",
+            )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("015 the edits write", False, str(e).splitlines()[0][:140])
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("select set_config('request.jwt.claims', null, false)")
+            conn.commit()
 
     print()
     for label, ok, detail in checks:

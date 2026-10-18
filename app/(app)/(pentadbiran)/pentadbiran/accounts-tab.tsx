@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Search, Unlock, UserPlus, Users } from "lucide-react";
+import { KeyRound, Pencil, Search, Unlock, UserPlus, Users } from "lucide-react";
 import * as React from "react";
 import { useUser } from "@/components/shell/user-context";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import {
   resetPassword,
   setJawatan,
   setMember,
+  setProfile,
   setSupervisor,
   unlockMember,
 } from "@/lib/client/admin";
@@ -149,6 +150,7 @@ export function AccountsTab() {
 
   const [creating, setCreating] = React.useState(false);
   const [resetting, setResetting] = React.useState<Member | null>(null);
+  const [editing, setEditing] = React.useState<Member | null>(null);
 
   const items = accounts.data?.items ?? [];
 
@@ -274,6 +276,15 @@ export function AccountsTab() {
                 badge={<Badge variant={status.variant}>{status.label}</Badge>}
                 footer={
                   <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => setEditing(m)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                      Sunting
+                    </Button>
                     {state === "locked" && (
                       <Button
                         size="sm"
@@ -404,6 +415,18 @@ export function AccountsTab() {
         save={(fn, ok) =>
           save(fn, ok, () => {
             setResetting(null);
+            void accounts.refetch();
+          })
+        }
+      />
+
+      <EditAccountDialog
+        member={editing}
+        onOpenChange={(o) => !o && setEditing(null)}
+        busy={busy}
+        save={(fn, ok) =>
+          save(fn, ok, () => {
+            setEditing(null);
             void accounts.refetch();
           })
         }
@@ -644,6 +667,116 @@ function ResetPasswordDialog({
           </Button>
           <Button disabled={busy} onClick={submit}>
             Tetapkan semula
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Correct what an account was created with.
+ *
+ * The name and the address were both frozen at creation — the name printed on
+ * every RPH this person writes, and the one Google sign-in matches on a first
+ * visit — so a typo used to mean deleting the account and importing it again,
+ * taking that teacher's plans with them.
+ *
+ * The username is deliberately absent: it is what every device is already
+ * signed in as, and for an imported account it is the id the school's own
+ * directory handed out.
+ */
+function EditAccountDialog({
+  member,
+  onOpenChange,
+  busy,
+  save,
+}: {
+  member: Member | null;
+  onOpenChange: (open: boolean) => void;
+  busy: boolean;
+  save: (fn: () => Promise<unknown>, ok: string) => void;
+}) {
+  const [fullName, setFullName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Adopt the member's values only when the dialog changes identity — reading
+  // them on every render would fight the person typing into the fields.
+  React.useEffect(() => {
+    if (!member) return;
+    setFullName(member.full_name);
+    setEmail(member.email ?? "");
+    setError(null);
+  }, [member]);
+
+  const submit = () => {
+    if (!member) return;
+    if (!fullName.trim()) {
+      setError("Nama penuh diperlukan.");
+      return;
+    }
+    const value = email.trim();
+    // The same shape the route and the database check, so a bad address is
+    // caught where the administrator can still see which field they meant.
+    if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setError("Emel tidak sah.");
+      return;
+    }
+    setError(null);
+    save(
+      () => setProfile(member.user_id, fullName.trim(), value || null),
+      "Maklumat akaun dikemas kini",
+    );
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={member !== null} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Sunting akaun</DialogTitle>
+          <DialogDescription>
+            {member
+              ? `${member.username} · nama pada setiap RPH, dan emel untuk log masuk Google.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="grid gap-3">
+          <div>
+            <Label htmlFor="edit-account-name" required>
+              Nama penuh
+            </Label>
+            <Input
+              id="edit-account-name"
+              value={fullName}
+              autoComplete="off"
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-account-email">Emel</Label>
+            <Input
+              id="edit-account-email"
+              type="email"
+              value={email}
+              autoComplete="off"
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="pilihan"
+            />
+            <p className="mt-1.5 text-[11.5px] text-ink-4">
+              Alamat yang dipautkan pada log masuk Google pertama kali. Nama pengguna tidak
+              ditukar di sini — ia yang peranti sudah log masuk dengannya.
+            </p>
+          </div>
+          {error && <FieldError>{error}</FieldError>}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Batal
+          </Button>
+          <Button disabled={busy} onClick={submit}>
+            Simpan
           </Button>
         </DialogFooter>
       </DialogContent>

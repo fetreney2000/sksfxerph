@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen, Pencil, Plus } from "lucide-react";
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select } from "@/components/ui/field";
 import { byName, RecordCard } from "@/components/ui/record-card";
-import { createSubject, listAdminSubjects, setSubject } from "@/lib/client/admin";
+import {
+  createSubject,
+  editSubject,
+  listAdminSubjects,
+  type SubjectRow,
+  setSubject,
+} from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import type { Curriculum } from "@/lib/types";
 
@@ -50,6 +56,7 @@ export function SubjectsTab() {
   });
 
   const [creating, setCreating] = React.useState(false);
+  const [editing, setEditing] = React.useState<SubjectRow | null>(null);
   // A→Z by the subject's name, which is what the card leads with. The endpoint
   // orders by curriculum first, so KSSR sits above KSSM whatever the names say.
   const items = [...(subjects.data?.items ?? [])].sort(byName((s) => s.nama));
@@ -93,22 +100,33 @@ export function SubjectsTab() {
                 </Badge>
               }
               footer={
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    save(
-                      () => setSubject(s.code, !s.is_active),
-                      s.is_active
-                        ? `${s.nama} disembunyikan daripada penyunting`
-                        : `${s.nama} ditawarkan semula`,
-                      () => void subjects.refetch(),
-                    )
-                  }
-                >
-                  {s.is_active ? "Matikan" : "Hidupkan"}
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => setEditing(s)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                    Sunting
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      save(
+                        () => setSubject(s.code, !s.is_active),
+                        s.is_active
+                          ? `${s.nama} disembunyikan daripada penyunting`
+                          : `${s.nama} ditawarkan semula`,
+                        () => void subjects.refetch(),
+                      )
+                    }
+                  >
+                    {s.is_active ? "Matikan" : "Hidupkan"}
+                  </Button>
+                </>
               }
             >
               <p className="text-[12.5px] text-ink-3">{s.doc_count} rancangan</p>
@@ -122,6 +140,18 @@ export function SubjectsTab() {
         onOpenChange={setCreating}
         busy={busy}
         save={(fn, ok) => save(fn, ok, () => void subjects.refetch())}
+      />
+
+      <EditSubjectDialog
+        subject={editing}
+        onOpenChange={(o) => !o && setEditing(null)}
+        busy={busy}
+        save={(fn, ok) =>
+          save(fn, ok, () => {
+            setEditing(null);
+            void subjects.refetch();
+          })
+        }
       />
     </>
   );
@@ -221,6 +251,115 @@ function SubjectDialog({
           </Button>
           <Button disabled={busy} onClick={submit}>
             Tambah
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Correct a subject that already exists.
+ *
+ * Name and curriculum only. The code is shown because it is what the subject is
+ * filed under — on every plan, every DSKP standard and every teaching
+ * assignment — and left read-only for exactly that reason: renaming one would
+ * leave all of them pointing at a code that no longer exists.
+ */
+function EditSubjectDialog({
+  subject,
+  onOpenChange,
+  busy,
+  save,
+}: {
+  subject: SubjectRow | null;
+  onOpenChange: (open: boolean) => void;
+  busy: boolean;
+  save: (fn: () => Promise<unknown>, ok: string) => void;
+}) {
+  const [nama, setNama] = React.useState("");
+  const [curriculum, setCurriculum] = React.useState<Curriculum>("KSSR");
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Adopt the subject's values only when the dialog changes identity, so a
+  // re-render never overwrites what the administrator is typing.
+  React.useEffect(() => {
+    if (!subject) return;
+    setNama(subject.nama);
+    setCurriculum(subject.curriculum);
+    setError(null);
+  }, [subject]);
+
+  const submit = () => {
+    if (!subject) return;
+    if (!nama.trim()) {
+      setError("Nama mata pelajaran diperlukan.");
+      return;
+    }
+    setError(null);
+    save(
+      () => editSubject({ code: subject.code, nama: nama.trim(), curriculum }),
+      "Mata pelajaran dikemas kini",
+    );
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={subject !== null} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Sunting mata pelajaran</DialogTitle>
+          <DialogDescription>
+            {subject ? `${subject.code} · ${subject.nama}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="grid gap-3">
+          <div>
+            <Label htmlFor="edit-subject-code">Kod</Label>
+            <Input
+              id="edit-subject-code"
+              className="num"
+              value={subject?.code ?? ""}
+              readOnly
+              aria-describedby="subject-code-hint"
+            />
+            <p id="subject-code-hint" className="mt-1.5 text-[11.5px] text-ink-4">
+              Kod tidak boleh ditukar — setiap rancangan yang sudah ditulis merujuk kepadanya.
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="edit-subject-name" required>
+              Nama mata pelajaran
+            </Label>
+            <Input
+              id="edit-subject-name"
+              value={nama}
+              autoComplete="off"
+              onChange={(e) => setNama(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-subject-curriculum">Kurikulum</Label>
+            <Select
+              id="edit-subject-curriculum"
+              value={curriculum}
+              onChange={(e) => setCurriculum(e.target.value as Curriculum)}
+            >
+              {CURRICULUMS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {error && <FieldError>{error}</FieldError>}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Batal
+          </Button>
+          <Button disabled={busy} onClick={submit}>
+            Simpan
           </Button>
         </DialogFooter>
       </DialogContent>

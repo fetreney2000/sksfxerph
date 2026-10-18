@@ -67,12 +67,29 @@ ENV_LIMITED = ["pg_trgm", "gin_trgm_ops"]
 
 
 def split_statements(sql: str):
-    stmts, start, i, in_dollar, in_comment, in_str = [], 0, 0, False, False, False
+    """Split on semicolons, ignoring those inside strings, $$ bodies and comments.
+
+    Block comments matter as much as line comments: `--` ends at the newline,
+    but `/* … */` can span lines and carry an apostrophe — a doc comment
+    saying "the school's directory" would open a phantom string, swallow the
+    next dozen statements into one, and report the first `create type` after it
+    as a syntax error. That is not a hypothetical: migration 015's comment
+    broke the runner that validates migrations 001–014.
+    """
+    stmts, start, i = [], 0, 0
+    in_dollar = in_line_comment = in_block_comment = in_str = False
     while i < len(sql):
         ch = sql[i]
-        if in_comment:
+        if in_line_comment:
             if ch == "\n":
-                in_comment = False
+                in_line_comment = False
+            i += 1
+            continue
+        if in_block_comment:
+            if sql.startswith("*/", i):
+                in_block_comment = False
+                i += 2
+                continue
             i += 1
             continue
         if in_dollar:
@@ -95,7 +112,11 @@ def split_statements(sql: str):
             i += 2
             continue
         if sql.startswith("--", i):
-            in_comment = True
+            in_line_comment = True
+            i += 2
+            continue
+        if sql.startswith("/*", i):
+            in_block_comment = True
             i += 2
             continue
         if ch == "'":
@@ -249,8 +270,9 @@ def main() -> int:
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
     # Bump when adding a function — this count is a guard against one being
-    # lost, not a formality. 012 added `jawatan_for` and `admin_set_jawatan`.
-    check("37 functions in erph", n_funcs == 37, f"found {n_funcs}")
+    # lost, not a formality. 012 added `jawatan_for` and `admin_set_jawatan`;
+    # 015 added `admin_set_profile` and `admin_edit_subject`.
+    check("39 functions in erph", n_funcs == 39, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.

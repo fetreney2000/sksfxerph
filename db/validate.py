@@ -164,6 +164,25 @@ TYPES = [
     "notification_type",
 ]
 
+
+def strip_block_comments(text: str) -> str:
+    """Blank out `/* … */` without disturbing line numbers.
+
+    A doc comment is prose, and prose contains the very words this check scans
+    for — "…the name and curriculum of a subject…" is not a type reference.
+    Only `--` lines were skipped before, so a `/** … */` comment could fail a
+    schema that was perfectly correct. The replacement keeps every newline so
+    the line numbers reported still point at the original file.
+    """
+
+    def blank(match: re.Match) -> str:
+        return re.sub(r"[^\n]", " ", match.group(0))
+
+    return re.sub(r"/\*.*?\*/", blank, text, flags=re.S)
+
+
+SCAN = strip_block_comments(SQL)
+
 # A bare type name is a bug only in **type position** — immediately after an
 # identifier and whitespace (`role member_role`, `v_status rph_status`). A
 # column merely named `curriculum` never sits in that shape:
@@ -175,7 +194,7 @@ TYPES = [
 type_alt = "|".join(TYPES)
 
 unqualified_types = []
-for i, line in enumerate(SQL.split("\n"), 1):
+for i, line in enumerate(SCAN.split("\n"), 1):
     if line.lstrip().startswith("--"):
         continue
     code = line.split("--", 1)[0]
@@ -198,7 +217,7 @@ for i, line in enumerate(SQL.split("\n"), 1):
         unqualified_types.append(f"L{i}: {line.strip()[:90]}")
 
 leaked_literals = []
-for i, line in enumerate(SQL.split("\n"), 1):
+for i, line in enumerate(SCAN.split("\n"), 1):
     if line.lstrip().startswith("--"):
         continue
     for lit in re.findall(r"'([^']*)'", line):

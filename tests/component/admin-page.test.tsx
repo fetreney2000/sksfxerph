@@ -162,12 +162,12 @@ const SCHOOL_INFO = {
 let lastPatch: FormData | null = null;
 
 /** Every request the page made, so a test can prove a write went out. */
-const calls: { url: string; method: string }[] = [];
+const calls: { url: string; method: string; body: string }[] = [];
 
 async function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? input : input.toString();
   const method = (init?.method ?? "GET").toUpperCase();
-  calls.push({ url, method });
+  calls.push({ url, method, body: typeof init?.body === "string" ? init.body : "" });
   const json = (body: unknown) =>
     new Response(JSON.stringify(body), {
       status: 200,
@@ -410,6 +410,51 @@ describe("pentadbiran", () => {
         true,
       ),
     );
+  });
+
+  it("corrects what an account and a subject were created with", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mount();
+
+    await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
+
+    // 1. An account: the name and email come prefilled from the row, and the
+    //    corrected pair is what leaves the browser. Both at once, because a
+    //    name without the address it corrects is half an edit.
+    fireEvent.click(screen.getAllByRole("button", { name: /Sunting/ })[0]!);
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
+    const name = screen.getByLabelText(/Nama penuh/) as HTMLInputElement;
+    expect(name.value).toBe("Nurul Aisyah binti Rahim");
+
+    fireEvent.change(name, { target: { value: "Nurul Aisyah Binti Rahim" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() => {
+      const sent = calls.find(
+        (c) => c.method === "PATCH" && c.url.includes("/api/admin/accounts"),
+      );
+      expect(sent?.body).toContain("Nurul Aisyah Binti Rahim");
+      expect(sent?.body).toContain("email");
+    });
+
+    // 2. A subject: the code is shown but not offered — every plan written
+    //    against it points there — and the new name goes out.
+    clickTab("Mata pelajaran");
+    await waitFor(() => expect(screen.getByText("Bahasa Inggeris")).toBeTruthy());
+    fireEvent.click(screen.getAllByRole("button", { name: /Sunting/ })[0]!);
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
+
+    const subjectName = screen.getByLabelText(/Nama mata pelajaran/) as HTMLInputElement;
+    expect(subjectName.value).toBe("Bahasa Inggeris");
+    fireEvent.change(subjectName, { target: { value: "Bahasa Inggeris (Dwi)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+    await waitFor(() => {
+      const sent = calls.find(
+        (c) => c.method === "PATCH" && c.url.includes("/api/admin/subjects"),
+      );
+      expect(sent?.body).toContain("Bahasa Inggeris (Dwi)");
+      expect(sent?.body).toContain("curriculum");
+    });
   });
 
   it("lists classes with plan counts, archived ones included", async () => {

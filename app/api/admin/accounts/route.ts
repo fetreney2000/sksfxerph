@@ -49,6 +49,8 @@ const postSchema = z.object({
  * themselves). `jawatan` is separate for the same reason: it is an office
  * rather than a permission, so `erph.admin_set_jawatan` — not the role write —
  * is what accepts it, and it refuses one that does not fit the account.
+ * `fullName` and `email` travel together as `admin_set_profile`, because a
+ * name without the address it corrects is half an edit.
  */
 const patchSchema = z
   .object({
@@ -61,6 +63,10 @@ const patchSchema = z
     supervisorId: z.string().uuid().nullable().optional(),
     /** null clears it — the cover sheet's JAWATAN row prints "—". */
     jawatan: z.enum(JAWATAN).nullable().optional(),
+    /** The name printed on every RPH this person writes. */
+    fullName: z.string().min(1, "Nama penuh diperlukan").max(120).optional(),
+    /** null clears it; a value has to be an address Google can match. */
+    email: z.string().email("Emel tidak sah").max(200).nullable().optional(),
   })
   .refine(
     (d) =>
@@ -68,6 +74,7 @@ const patchSchema = z
       d.unlock !== undefined ||
       d.supervisorId !== undefined ||
       d.jawatan !== undefined ||
+      (d.fullName !== undefined && d.email !== undefined) ||
       (d.role !== undefined && d.isActive !== undefined),
     { message: "Tiada perubahan diminta" },
   );
@@ -191,6 +198,16 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   } else if (body.unlock) {
     rpc = "admin_unlock_member";
     args = { p_school: schoolId, p_user: body.userId };
+  } else if (body.fullName !== undefined && body.email !== undefined) {
+    // Name and address together — the refine above makes it impossible to
+    // send one without the other, so there is no half-edit to fall back on.
+    rpc = "admin_set_profile";
+    args = {
+      p_school: schoolId,
+      p_user: body.userId,
+      p_full_name: body.fullName,
+      p_email: body.email,
+    };
   } else if (body.supervisorId !== undefined) {
     rpc = "admin_set_supervisor";
     args = {

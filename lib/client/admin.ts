@@ -99,6 +99,15 @@ export const setMember = (userId: string, role: MemberRole, isActive: boolean) =
 export const setJawatan = (userId: string, jawatan: Jawatan | null) =>
   request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, jawatan }));
 
+/**
+ * The name printed on every RPH this person writes, and the address Google
+ * sign-in links to on a first visit. Sent together — a name without the
+ * address it corrects is half an edit, and the server refuses one without the
+ * other for exactly that reason.
+ */
+export const setProfile = (userId: string, fullName: string, email: string | null) =>
+  request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, fullName, email }));
+
 export const resetPassword = (userId: string, password: string) =>
   request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, password }));
 
@@ -157,6 +166,14 @@ export const createSubject = (body: { code: string; nama: string; curriculum: Cu
 
 export const setSubject = (code: string, isActive: boolean) =>
   request<{ ok: boolean }>("/api/admin/subjects", patch({ code, isActive }));
+
+/**
+ * What a subject is called and which syllabus it belongs to. The code is not
+ * part of it: every plan written against the subject points at that, so it is
+ * shown read-only in the dialog rather than offered as a field.
+ */
+export const editSubject = (body: { code: string; nama: string; curriculum: Curriculum }) =>
+  request<{ ok: boolean }>("/api/admin/subjects", patch(body));
 
 /* ── Settings ─────────────────────────────────────────────────────────────── */
 

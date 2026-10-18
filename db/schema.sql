@@ -1765,6 +1765,76 @@ begin
   values (p_code, trim(p_nama), p_curriculum, true);
 end $$;
 
+/**
+ * Name and email for an account that already exists.
+ *
+ * Both were frozen at creation: the name printed on every RPH the person
+ * writes, and the address Google sign-in links to on a first visit. A typo or
+ * a name change could only be fixed by deleting the account and importing it
+ * again — taking that teacher's plans with them, which is not a fix, it is a
+ * different way of losing them.
+ *
+ * The *username* is deliberately not offered. It is what the app signs a
+ * person in as, and for an imported DELIMa account it is the id the school's
+ * directory handed out; renaming it would strand every device already signed
+ * in on the old one.
+ */
+create or replace function erph.admin_set_profile(p_school uuid, p_user uuid,
+                                                  p_full_name text, p_email text)
+returns void language plpgsql security definer set search_path = erph, public as $$
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if not exists (select 1 from erph.school_member
+                  where school_id = p_school and user_id = p_user) then
+    raise exception 'Akaun bukan ahli sekolah ini';
+  end if;
+  if nullif(trim(p_full_name), '') is null then
+    raise exception 'Nama penuh diperlukan';
+  end if;
+  -- Optional — an account with no address is allowed — but a value that is
+  -- present has to be an address. `email` is what `resolveAccount` matches on
+  -- the first time someone signs in with Google, so a malformed one would
+  -- quietly deny them rather than fail anywhere they could see.
+  if p_email is not null and p_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'Emel tidak sah';
+  end if;
+
+  update erph.user
+     set full_name = trim(p_full_name),
+         email = nullif(lower(trim(p_email)), '')
+   where id = p_user;
+end $$;
+
+/**
+ * The name and curriculum of a subject that already exists.
+ *
+ * The code is not offered: `rph_document.subject_code`,
+ * `dskp_standard.subject_code` and `teaching_assignment.subject_code` all
+ * point at it, so renaming one would either fail outright or leave every plan
+ * already written against the subject pointing at nothing.
+ */
+create or replace function erph.admin_edit_subject(p_school uuid, p_code text,
+                                                   p_nama text,
+                                                   p_curriculum erph.curriculum)
+returns void language plpgsql security definer set search_path = erph, public as $$
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if nullif(trim(p_nama), '') is null then
+    raise exception 'Nama mata pelajaran diperlukan';
+  end if;
+  if not exists (select 1 from erph.subject where code = p_code) then
+    raise exception 'Mata pelajaran tidak dijumpai';
+  end if;
+
+  update erph.subject
+     set nama = trim(p_nama), curriculum = p_curriculum
+   where code = p_code;
+end $$;
+
 -- The school's own identity — code, name, district/state, motto, logo.
 --
 -- `kod_sekolah` travels with the rest of the identity rather than being locked
