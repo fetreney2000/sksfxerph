@@ -56,6 +56,19 @@ export function RecordCard({
 }
 
 /**
+ * A→Z by the name on the card, in the app's own locale.
+ *
+ * The endpoints order differently and each was chosen for a table with headers
+ * to explain it: accounts by role, classes with the archived ones pushed down,
+ * subjects by curriculum. Those groupings look like a shuffle once every row
+ * carries its own labels — what someone scanning a grid came for is the name
+ * they came for, so that is the key.
+ */
+export function byName<T>(key: (row: T) => string) {
+  return (a: T, b: T) => key(a).localeCompare(key(b), "ms");
+}
+
+/**
  * A labelled control or figure inside a record card.
  *
  * The label is a real `<label>`, not a caption: the pickers in the accounts

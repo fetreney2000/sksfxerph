@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select } from "@/components/ui/field";
-import { RecordCard } from "@/components/ui/record-card";
+import { byName, RecordCard } from "@/components/ui/record-card";
 import { createSubject, listAdminSubjects, setSubject } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import type { Curriculum } from "@/lib/types";
@@ -50,7 +50,9 @@ export function SubjectsTab() {
   });
 
   const [creating, setCreating] = React.useState(false);
-  const items = subjects.data?.items ?? [];
+  // A→Z by the subject's name, which is what the card leads with. The endpoint
+  // orders by curriculum first, so KSSR sits above KSSM whatever the names say.
+  const items = [...(subjects.data?.items ?? [])].sort(byName((s) => s.nama));
 
   return (
     <>

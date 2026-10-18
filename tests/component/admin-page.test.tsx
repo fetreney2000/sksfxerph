@@ -43,6 +43,26 @@ const ME: Member = {
 };
 
 const MEMBERS: Member[] = [
+  // Deliberately not in alphabetical order. An assertion of A→Z against a
+  // fixture that is already A→Z tests nothing — the sort has to have
+  // something to move.
+  {
+    user_id: "00000000-0000-4000-8000-000000000004",
+    username: "zulkifli.rahman",
+    full_name: "Zulkifli bin Rahman",
+    email: null,
+    // The Guru Besar. Their own card has nobody above them — the school has
+    // one — so it must say that rather than offer an empty menu.
+    role: "guru_besar",
+    jawatan: "guru_besar",
+    is_active: true,
+    last_login_at: null,
+    locked_until: null,
+    failed_logins: 0,
+    password_changed_at: null,
+    supervisor_id: null,
+    supervisor_name: null,
+  },
   ME,
   {
     user_id: "00000000-0000-4000-8000-000000000002",
@@ -77,23 +97,6 @@ const MEMBERS: Member[] = [
     // Supervised, so the select has a value rather than being blank.
     supervisor_id: "00000000-0000-4000-8000-000000000002",
     supervisor_name: "Ramlan bin Yusof",
-  },
-  {
-    user_id: "00000000-0000-4000-8000-000000000004",
-    username: "zulkifli.rahman",
-    full_name: "Zulkifli bin Rahman",
-    email: null,
-    // The Guru Besar. Their own row has nobody above them — the school has
-    // one — so it must say that rather than offer an empty menu.
-    role: "guru_besar",
-    jawatan: "guru_besar",
-    is_active: true,
-    last_login_at: null,
-    locked_until: null,
-    failed_logins: 0,
-    password_changed_at: null,
-    supervisor_id: null,
-    supervisor_name: null,
   },
 ];
 
@@ -330,13 +333,23 @@ describe("pentadbiran", () => {
 
   it("lays the roster out as cards, and searches it", async () => {
     vi.stubGlobal("fetch", fakeFetch);
-    await mount();
+    const view = await mount();
 
     await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
 
     // Cards rather than table rows: a seven-column table is a strip that
     // scrolls sideways on a phone, and this roster is seventy people long.
     expect(screen.queryByRole("table")).toBeNull();
+
+    // A→Z by the name on the card. The endpoint orders by role, and the
+    // fixture is deliberately shuffled, so this can only be the sort.
+    const html = view.container.innerHTML;
+    expect(html.indexOf("Nurul Aisyah binti Rahim")).toBeLessThan(
+      html.indexOf("Zulkifli bin Rahman"),
+    );
+    expect(html.indexOf("Ramlan bin Yusof")).toBeLessThan(
+      html.indexOf("Siti Rahmah binti Ali"),
+    );
 
     // Every field the table had is still on the card, under its own label.
     expect(screen.getAllByLabelText(/^Peranan /)).toHaveLength(4);

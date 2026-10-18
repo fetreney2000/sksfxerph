@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select } from "@/components/ui/field";
-import { CardField, RecordCard } from "@/components/ui/record-card";
+import { byName, CardField, RecordCard } from "@/components/ui/record-card";
 import {
   createAccount,
   listMembers,
@@ -162,6 +162,9 @@ export function AccountsTab() {
         [m.full_name, m.username, m.email ?? ""].some((f) => f.toLowerCase().includes(needle)),
       )
     : items;
+  // A→Z by the name on the card: the endpoint orders by role, which grouped the
+  // roster sensibly under headers and shuffles it into a grid.
+  const ordered = [...shown].sort(byName((m) => m.full_name));
 
   return (
     <>
@@ -206,7 +209,7 @@ export function AccountsTab() {
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {shown.map((m) => {
+          {ordered.map((m) => {
             const own = m.user_id === myId;
             const state = lockState(m);
             const status = STATUS[state];

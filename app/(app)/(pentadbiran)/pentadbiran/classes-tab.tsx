@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FieldError, Input, Label } from "@/components/ui/field";
-import { RecordCard } from "@/components/ui/record-card";
+import { byName, RecordCard } from "@/components/ui/record-card";
 import { type ClassRow, createClass, listAdminClasses, setClass } from "@/lib/client/admin";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 
@@ -48,7 +48,10 @@ export function ClassesTab() {
     { mode: "add" } | { mode: "edit"; row: ClassRow } | null
   >(null);
 
-  const items = classes.data?.items ?? [];
+  // A→Z by the class name. The endpoint pushes the archived ones down, which
+  // read as a deliberate order under a header row and reads as a shuffle in a
+  // grid of cards — the badge on each card already says which are archived.
+  const items = [...(classes.data?.items ?? [])].sort(byName((c) => c.nama));
   const session = classes.data?.session ?? "";
 
   return (
