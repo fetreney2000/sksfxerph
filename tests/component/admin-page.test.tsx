@@ -161,9 +161,13 @@ const SCHOOL_INFO = {
 /** The last PATCH to /api/admin/school, so a test can inspect what was sent. */
 let lastPatch: FormData | null = null;
 
+/** Every request the page made, so a test can prove a write went out. */
+const calls: { url: string; method: string }[] = [];
+
 async function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? input : input.toString();
   const method = (init?.method ?? "GET").toUpperCase();
+  calls.push({ url, method });
   const json = (body: unknown) =>
     new Response(JSON.stringify(body), {
       status: 200,
@@ -186,6 +190,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   lastPatch = null;
+  calls.length = 0;
 });
 
 /** Mount the page with a fresh QueryClient — each test gets an empty cache. */
@@ -364,6 +369,47 @@ describe("pentadbiran", () => {
     // that reads as "this school has no accounts".
     fireEvent.change(search, { target: { value: "tiada seorang pun begini" } });
     await waitFor(() => expect(screen.getByText(/Tiada akaun sepadan dengan/)).toBeTruthy());
+  });
+
+  it("edits and archives from the cards, not just renders the buttons", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mount();
+
+    await waitFor(() => expect(screen.getByText("Ramlan bin Yusof")).toBeTruthy());
+
+    // 1. The reset-password dialog still opens from a card's footer — this is
+    //    the control that exists only on an account row.
+    fireEvent.click(screen.getAllByRole("button", { name: /Tetap semula kata laluan/ })[0]!);
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    // 2. A role change on a card sends the write. The handler is the one the
+    //    table row had; what changed is what it is rendered inside.
+    fireEvent.change(screen.getByLabelText("Peranan Ramlan bin Yusof"), {
+      target: { value: "guru_besar" },
+    });
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.method === "PATCH" && c.url.includes("/api/admin/accounts")),
+      ).toBe(true),
+    );
+
+    // 3. Classes: the edit dialog opens…
+    clickTab("Kelas");
+    await waitFor(() => expect(screen.getByText("5 Amanah")).toBeTruthy());
+    fireEvent.click(screen.getAllByRole("button", { name: /Sunting/ })[0]!);
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    // 4. …and archiving writes.
+    fireEvent.click(screen.getByRole("button", { name: /Arkibkan/ }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "PATCH" && c.url.includes("/api/classes"))).toBe(
+        true,
+      ),
+    );
   });
 
   it("lists classes with plan counts, archived ones included", async () => {
