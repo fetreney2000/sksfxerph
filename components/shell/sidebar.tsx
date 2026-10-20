@@ -1,17 +1,16 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navFor } from "@/components/shell/nav";
 import { homeFor, reviewStageFor } from "@/lib/auth/permissions";
-import { handleExpiredSession } from "@/lib/client/auth-session";
+import { signOut } from "@/lib/client/sign-out";
 import { cn } from "@/lib/cn";
-import { currentWeek, supabaseConfigured } from "@/lib/config";
+import { currentWeek } from "@/lib/config";
 import { db } from "@/lib/db";
-import { QUEUE } from "@/lib/demo/review";
+import { useReviewQueueData } from "@/lib/hooks/use-remote";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
@@ -33,19 +32,6 @@ export function Sidebar({
       .map((w) => w[0]?.toUpperCase() ?? "")
       .join("") || "U";
   const roleLabel = ms.roles[user.role];
-
-  const signOut = async () => {
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "same-origin",
-      });
-    } finally {
-      // Full navigation: the (app) layout reads the cookie server-side, so the
-      // server must re-render rather than hydrate a shell it can no longer auth.
-      window.location.assign("/login");
-    }
-  };
 
   const session = useSession();
   // Whose drafts this badge counts: IndexedDB is shared by every account that
@@ -69,31 +55,14 @@ export function Sidebar({
    *
    * It was the constant 4, printed on every reviewer's sidebar whatever the
    * school had actually sent in — a badge reporting work that may not exist,
-   * which is the same lie as a dashboard of another school's figures. In local
-   * mode the demo queue *is* the queue, so it is counted there; in synced mode
-   * it is fetched, and a request that has not answered yet shows nothing at
-   * all rather than a number.
+   * which is the same lie as a dashboard of another school's figures. It now
+   * uses the same hook as the Semakan screen and the band on Minggu Ini, so the
+   * three cannot disagree and the home does not fetch the queue twice. A
+   * request that has not answered yet shows nothing at all rather than a number.
    */
   const stage = reviewStageFor(user.role);
-  const queueCount = useQuery<number | null>({
-    queryKey: ["review-queue-count", session],
-    queryFn: async () => {
-      const res = await fetch("/api/queue", { credentials: "same-origin" });
-      if (handleExpiredSession(res.status)) return null;
-      if (!res.ok) return null;
-      const body = (await res.json()) as { items: unknown[] };
-      return body.items.length;
-    },
-    // Only a reviewer may ask, and only where there is someone to ask.
-    enabled: supabaseConfigured && stage !== null,
-    retry: false,
-    staleTime: 60_000,
-  });
-  const pending = supabaseConfigured
-    ? (queueCount.data ?? null)
-    : stage
-      ? QUEUE.filter((q) => q.status === stage.status).length
-      : null;
+  const queue = useReviewQueueData(stage?.status ?? null);
+  const pending = stage ? (queue.loading ? null : queue.items.length) : null;
 
   return (
     <aside

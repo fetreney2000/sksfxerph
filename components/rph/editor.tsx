@@ -13,11 +13,13 @@ import {
   Send,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { RphPaper } from "@/components/rph/rph-paper";
+import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -928,8 +930,25 @@ export function RphEditor({ docId }: { docId?: string }) {
             ))}
           </div>
 
-          {/* Document identity + completeness: one card, nothing nested. */}
+          {/* Document identity + completeness: one card, nothing nested.
+              The editor is an action, not a nav destination, so it carries its
+              own way back and says whether this is a new plan or a saved one
+              before the teacher starts reading fields. */}
           <section className="rounded-[14px] border border-border bg-surface px-4 py-4 shadow-sm">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <Link
+                href="/minggu"
+                className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-3 transition-colors hover:text-primary-ink"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+                {ms.nav.minggu}
+              </Link>
+              {persisted ? (
+                <StatusBadge status={live.status} grade={live.grade} />
+              ) : (
+                <Badge variant="neutral">RPH baharu</Badge>
+              )}
+            </div>
             <div className="min-w-0">
               <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
                 {live.className} · {live.subjectName}
@@ -949,7 +968,7 @@ export function RphEditor({ docId }: { docId?: string }) {
                   <span className="num text-[12.5px] text-ink-3">
                     — {doneCount} daripada 4 bahagian · {score}%
                   </span>
-                  <HelpHint label="Keluargaan dokumen">
+                  <HelpHint label="Kelengkapan dokumen">
                     Empat bahagian wajib mengikut borang RPH sekolah: (1) Standard Kandungan +
                     Standard Pembelajaran, (2) objektif + Kriteria Kejayaan, (3)
                     sekurang-kurangnya satu Aktiviti PdPC, (4) refleksi. Setiap bahagian = 25%.
@@ -1141,35 +1160,41 @@ export function RphEditor({ docId }: { docId?: string }) {
               <Row k="Dihantar kepada" v="GPK sekolah" />
               <Row k="Kesiapan" v={`${score}%`} tone={ready ? "ok" : "warn"} />
             </dl>
-            {/* Generated from the same list the form shows — the two can never
-              disagree about *what* is missing. */}
-            {blocking.length > 0 && (
-              <div className="mt-3.5 flex gap-2.5 rounded-[10px] border border-warning-line bg-warning-soft p-3 text-[12.5px] leading-[1.55] text-warning-ink">
-                <AlertTriangle
-                  className="mt-0.5 h-4 w-4 shrink-0"
-                  strokeWidth={1.9}
-                  aria-hidden
-                />
-                <div>
-                  <p className="font-semibold">
-                    {ms.editor.incompleteHeading(blocking.length)}
-                  </p>
-                  <ul className="mt-1 list-disc pl-4">
-                    {blocking.map((n) => (
-                      <li key={n.text}>{n.text}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-1.5">{ms.editor.draftWarning}</p>
-                </div>
+            {/* The warning is always shown: this dialog only opens when the
+              server refused a normal submission, so pressing the force button
+              sends a plan the server considers incomplete even if the local
+              meter disagrees. */}
+            <div className="mt-3.5 flex gap-2.5 rounded-[10px] border border-warning-line bg-warning-soft p-3 text-[12.5px] leading-[1.55] text-warning-ink">
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0"
+                strokeWidth={1.9}
+                aria-hidden
+              />
+              <div>
+                {blocking.length > 0 && (
+                  <>
+                    <p className="font-semibold">
+                      {ms.editor.incompleteHeading(blocking.length)}
+                    </p>
+                    <ul className="mt-1 list-disc pl-4">
+                      {blocking.map((n) => (
+                        <li key={n.text}>{n.text}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <p className={blocking.length > 0 ? "mt-1.5" : undefined}>
+                  {ms.editor.draftWarning}
+                </p>
               </div>
-            )}
+            </div>
           </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setSubmitOpen(false)}>
               Batal
             </Button>
             <Button variant="danger" onClick={() => void onSubmit(true)}>
-              Hantar sebagai draf
+              {ms.editor.submitIncomplete}
             </Button>
             <Button
               onClick={() => {
@@ -1189,7 +1214,7 @@ export function RphEditor({ docId }: { docId?: string }) {
 /**
  * One collapsible section of the RPH.
  *
- * The header always shows "Langkah n · <name>" plus a status pill, so the
+ * The header always shows "Bahagian n · <name>" plus a status pill, so the
  * whole document is scannable while collapsed — a teacher should be able to
  * read what is missing without opening anything. Content only mounts when
  * open, so a collapsed section costs nothing.
@@ -1240,7 +1265,7 @@ function SectionCard({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[14.5px] font-bold tracking-[-0.15px]">
-              Langkah {index + 1} · {title}
+              Bahagian {index + 1} · {title}
             </span>
             <span className="block truncate text-[11.5px] text-ink-4">{sub}</span>
           </span>

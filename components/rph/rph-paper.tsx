@@ -38,8 +38,12 @@ export function Label({ children, span = 1 }: { children: React.ReactNode; span?
   return (
     <td
       colSpan={span}
-      className="border px-2.5 py-1.5 text-right align-middle font-medium"
-      style={{ background: LABEL_BG, borderColor: RULE, width: span === 1 ? "20%" : undefined }}
+      className="border px-2.5 py-1.5 text-right align-middle font-medium break-words"
+      style={{
+        background: LABEL_BG,
+        borderColor: RULE,
+        width: span === 1 ? "var(--erph-label-width, 20%)" : undefined,
+      }}
     >
       {children}
     </td>
@@ -89,6 +93,12 @@ interface Props {
   /** Verified material, or null when the plan carries no seal. */
   signature?: SignaturePayload | null;
   signatureState?: SignatureState;
+  /**
+   * Phone review uses a narrower sheet than the desktop card. In that mode the
+   * table is allowed to size its own columns; the print form keeps the fixed
+   * 20% label column so paper output does not change.
+   */
+  compact?: boolean;
 }
 
 export function RphPaper({
@@ -105,6 +115,7 @@ export function RphPaper({
   weekNo,
   signature,
   signatureState = "none",
+  compact = false,
 }: Props) {
   // "2. Isnin" — the school's form numbers the day, and derives it from the
   // date rather than asking, so a plan cannot claim a Monday that is a Tuesday.
@@ -114,6 +125,7 @@ export function RphPaper({
     <article
       className={cn(
         "erph-sheet rounded-lg bg-white p-6 text-[12.5px] leading-[1.5] text-[#1d2939] shadow-lg",
+        compact && "erph-sheet-compact",
         sheetClass,
       )}
     >

@@ -71,7 +71,7 @@ export async function resolveSchool(): Promise<SchoolContext> {
     if (error || !school) {
       console.error(
         "[school] lookup failed:",
-        error?.message ?? "no active school row — add one in /pentadbiran",
+        error?.message ?? "no active school row — add one in Papan Pemuka",
       );
       return UNKNOWN;
     }

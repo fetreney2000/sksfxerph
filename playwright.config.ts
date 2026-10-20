@@ -25,7 +25,12 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npx next start -p 3111",
+    // The suite signs in with the local demo accounts. Blank the Supabase
+    // values here as well as in `build:local`, so a developer's .env with real
+    // credentials cannot flip the running server into synced mode and turn
+    // every login into a 401.
+    command:
+      "npx cross-env NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= next start -p 3111",
     url: "http://localhost:3111/api/heartbeat",
     reuseExistingServer: true,
     timeout: 60_000,

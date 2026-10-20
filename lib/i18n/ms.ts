@@ -41,9 +41,11 @@ export const ms = {
     semakan: "Semakan RPH",
     sekolah: "Paparan Sekolah",
     guru: "Guru",
+    penyeliaan: "Penyeliaan",
     pentadbiran: "Pentadbiran",
+    sumber: "Sumber",
     urus: "Urus eRPH",
-    utama: "Utama",
+    utama: "Papan Pemuka",
   },
 
   dashboard: {
@@ -60,7 +62,7 @@ export const ms = {
       malam: "Selamat malam",
     },
     deadline: "Tarikh akhir",
-    submitted: "Dihantar",
+    approved: "Disahkan",
     waiting: "Menunggu semakan",
     needsAction: "Perlu tindakan",
     onTime: "Ketepatan masa",
@@ -77,7 +79,7 @@ export const ms = {
     draft: "Draf",
     submitted: "Menunggu GPK",
     forwarded: "Menunggu Guru Besar",
-    approved: "Lengkap (1)",
+    approved: "Disahkan",
     /**
      * The same state as it is printed.
      *
@@ -130,9 +132,10 @@ export const ms = {
     successCriteria: "Kriteria Kejayaan",
     theme: "Tema / Bidang / Tajuk",
     reflection: "Refleksi",
-    completeness: "Keluargaan dokumen",
+    completeness: "Kelengkapan dokumen",
     preview: "Pratonton langsung",
     submit: "Hantar untuk semakan",
+    submitIncomplete: "Hantar juga (tidak lengkap)",
     exportPdf: "Eksport PDF",
     required: "diperlukan",
     totalTime: "Jumlah masa aktif",
@@ -148,7 +151,7 @@ export const ms = {
     attentionLabel: "Perkara perlu diberi perhatian",
     incompleteHeading: (n: number) => `${n} perkara perlu diberi perhatian`,
     draftWarning:
-      "Dokumen boleh dihantar sebagai draf tidak lengkap, tetapi GPK mungkin mengembalikannya (gred 0).",
+      "RPH ini akan dihantar kepada GPK sekarang walaupun belum lengkap. GPK boleh mengembalikannya sebagai Tidak lengkap (0).",
     missing: {
       sk: "Standard Kandungan belum diisi",
       sp: "Standard Pembelajaran belum diisi",
@@ -165,11 +168,17 @@ export const ms = {
     // `forward`, `forwardHint`, `gpkNote` and `gbNote` are gone with the hop
     // they described: there is nobody left to send it *to*.
     approve: "Sahkan · Lengkap (1)",
+    approveShort: "Sahkan",
     approveHint: "sahkan",
     return: "Kembalikan · Tidak lengkap (0)",
+    returnShort: "Kembalikan",
     saveAndContinue: "Simpan & teruskan",
+    tapHint: "Ketik RPH untuk buka paparan penuh.",
     comment: "Komen sulit",
-    commentHint: "hanya guru melihat",
+    commentHint: "wajib untuk kembalikan, hanya guru melihat",
+    returnReasonRequired: "Tulis sebab atau pilih checklist sebelum kembalikan.",
+    approvedThisSession: "Disahkan sesi ini",
+    returnedThisSession: "Dikembalikan sesi ini",
     autoCheck: "Semakan automatik",
     pending: "Belum disemak",
     all: "Semua",

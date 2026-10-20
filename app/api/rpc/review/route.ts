@@ -66,6 +66,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // A returned plan without a reason leaves the teacher with only the generic
+  // "RPH perlu dibaiki" notification. The UI disables the button until a
+  // comment exists; enforce the same contract here for any other caller.
+  if (body.decision === "hantar_balik" && !body.comment?.trim()) {
+    return NextResponse.json({ error: "Sebab pengembalian diperlukan" }, { status: 400 });
+  }
+
   const rpc = body.decision === "sahkan" ? stage.approveRpc : stage.returnRpc;
 
   if (body.decision === "sahkan") {
@@ -75,7 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { data, error } = await gate.db.rpc(rpc, {
     p_document: body.documentId,
-    p_comment: body.comment ?? null,
+    p_comment: body.comment?.trim() || null,
   });
 
   if (error) {

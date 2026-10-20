@@ -2,19 +2,26 @@
 
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowRight,
   BookOpen,
   CalendarCheck,
+  CheckCircle2,
+  Circle,
+  Clock3,
   LayoutGrid,
   ShieldCheck,
   UserCheck,
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import type { Overview } from "@/app/api/admin/overview/route";
+import { AdminConsole, type AdminTab } from "@/components/admin/admin-console";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableContainer } from "@/components/ui/table";
 import { can, type Permission, permissionsFor } from "@/lib/auth/permissions";
+import { getSettings } from "@/lib/client/admin";
 import { supabaseConfigured } from "@/lib/config";
 import { ms } from "@/lib/i18n/ms";
 import { MEMBER_ROLES, type MemberRole } from "@/lib/types";
@@ -28,6 +35,12 @@ import { MEMBER_ROLES, type MemberRole } from "@/lib/types";
  * are registered, how much of the app is configured, and whether the week's
  * submissions are landing — plus the one thing only they need: a map of who can
  * do what, which is the definition of the roles they hand out.
+ *
+ * The overview and the set-up console used to live on two screens (`/utama` and
+ * `/pentadbiran`), which read as two homes and made "see the school" and "set
+ * up the school" a choice. They are now one Papan Pemuka: the checklist names
+ * the five things a school must have, each row opens the matching tab, and the
+ * tabs themselves sit below the figures they explain.
  *
  * The matrix is derived from `permissionsFor`, not transcribed. A hard-coded
  * table would drift from `lib/auth/permissions.ts` the first time a permission
@@ -62,7 +75,20 @@ interface Stat {
   icon: ReactNode;
 }
 
+interface SetupItem {
+  key: AdminTab;
+  label: string;
+  detail: string;
+  /**
+   * `null` means "not measured yet" — a checklist that paints five grey checks
+   * while the figures are still arriving is a checklist that lies twice.
+   */
+  done: boolean | null;
+}
+
 export default function UtamaPage() {
+  const [tab, setTab] = useState<AdminTab>("akaun");
+
   const overview = useQuery<{ overview: Overview | null }>({
     queryKey: ["admin-overview"],
     queryFn: async () => {
@@ -75,6 +101,16 @@ export default function UtamaPage() {
     staleTime: 30_000,
   });
 
+  // Same key as SettingsTab, so opening that tab reuses this answer instead of
+  // issuing a second request for the same row.
+  const settings = useQuery({
+    queryKey: ["admin-settings"],
+    queryFn: getSettings,
+    enabled: supabaseConfigured,
+    retry: false,
+    staleTime: 30_000,
+  });
+
   const o = overview.data?.overview ?? null;
 
   if (!supabaseConfigured) {
@@ -82,10 +118,12 @@ export default function UtamaPage() {
       <Card>
         <CardContent className="py-12 text-center">
           <p className="text-[13.5px] font-semibold">
-            Papan pemuka pentadbir memerlukan mod disegerakkan.
+            Papan Pemuka memerlukan mod disegerakkan.
           </p>
           <p className="mx-auto mt-1.5 max-w-[460px] text-[12.5px] text-ink-3">
             Mod setempat hanya mempunyai akaun demo dan tiada pangkalan data untuk dikira.
+            Apabila Supabase ditetapkan, halaman ini mengandungi ringkasan sekolah, senarai
+            semak persediaan, dan tab akaun, kelas, mata pelajaran, sekolah serta sesi.
           </p>
         </CardContent>
       </Card>
@@ -137,24 +175,82 @@ export default function UtamaPage() {
     },
   ];
 
+  const setting = settings.data?.setting ?? null;
+  const schoolInfo = settings.data?.school ?? null;
+  const settingsLoading = settings.isLoading;
+  const settingsError = settings.isError;
+
+  const setup: SetupItem[] = [
+    {
+      key: "akaun",
+      label: "Akaun guru",
+      detail: o ? `${o.members.teachers} guru berdaftar` : "Memuatkan…",
+      done: o ? o.members.teachers > 0 : null,
+    },
+    {
+      key: "kelas",
+      label: "Kelas",
+      detail: o ? `${o.classes} kelas sesi ini` : "Memuatkan…",
+      done: o ? o.classes > 0 : null,
+    },
+    {
+      key: "subjek",
+      label: "Mata pelajaran",
+      detail: o ? `${o.subjects} subjek aktif` : "Memuatkan…",
+      done: o ? o.subjects > 0 : null,
+    },
+    {
+      key: "sekolah",
+      label: "Maklumat sekolah",
+      detail: settingsError
+        ? "Tidak dapat dibaca"
+        : schoolInfo
+          ? `${schoolInfo.nama} · ${schoolInfo.kod_sekolah}`
+          : settingsLoading
+            ? "Memuatkan…"
+            : "Belum lengkap",
+      done: settingsError
+        ? null
+        : settings.isSuccess
+          ? Boolean(schoolInfo?.nama && schoolInfo?.kod_sekolah)
+          : null,
+    },
+    {
+      key: "tetapan",
+      label: "Sesi & tarikh akhir",
+      detail: settingsError
+        ? "Tidak dapat dibaca"
+        : setting
+          ? `${setting.current_session} · serah ${setting.submit_time}`
+          : settingsLoading
+            ? "Memuatkan…"
+            : "Belum ditetapkan",
+      done: settingsError ? null : settings.isSuccess ? Boolean(setting) : null,
+    },
+  ];
+
+  const setupDone = setup.filter((s) => s.done === true).length;
+  const setupLoaded = o !== null && !settingsLoading;
+
+  const openTab = (next: AdminTab) => {
+    setTab(next);
+    document
+      .getElementById("urus-erph")
+      ?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  };
+
   const roles = MEMBER_ROLES.filter((r) => r !== "system");
 
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Papan pemuka pentadbir</h2>
+          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Papan Pemuka</h2>
           <p className="mt-0.5 text-[12.5px] text-ink-3">
-            Ringkasan sekolah dan apa yang setiap peranan boleh lakukan.
+            Ringkasan sekolah, persediaan, dan tetapan — semuanya di satu tempat.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/pentadbiran"
-            className="rounded-[9px] border border-border-strong bg-surface px-3 py-2 text-[12.5px] font-semibold text-ink-2 shadow-xs transition-colors hover:bg-surface-3"
-          >
-            Urus akaun &amp; tetapan
-          </Link>
           <Link
             href="/templat"
             className="rounded-[9px] border border-border-strong bg-surface px-3 py-2 text-[12.5px] font-semibold text-ink-2 shadow-xs transition-colors hover:bg-surface-3"
@@ -163,6 +259,66 @@ export default function UtamaPage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Persediaan sekolah ─────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <ShieldCheck className="h-4 w-4 text-ink-4" strokeWidth={1.9} aria-hidden />
+          <div className="flex-1">
+            <CardTitle>Persediaan sekolah</CardTitle>
+            <p className="text-xs text-ink-3">
+              Lengkapkan asas ini sebelum guru mula menghantar RPH.
+            </p>
+          </div>
+          <Badge variant={setupLoaded && setupDone === setup.length ? "success" : "warning"}>
+            {setupLoaded ? `${setupDone}/${setup.length} selesai` : "Memuatkan…"}
+          </Badge>
+        </CardHeader>
+        <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          {setup.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => openTab(item.key)}
+              aria-label={`${item.label} — ${item.detail}${
+                item.done === true
+                  ? " (selesai)"
+                  : item.done === false
+                    ? " (belum selesai)"
+                    : ""
+              }`}
+              className="flex items-center gap-2.5 rounded-[11px] border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-border-strong hover:bg-surface-2"
+            >
+              <span
+                className={
+                  item.done === true
+                    ? "text-success-ink"
+                    : item.done === false
+                      ? "text-warning-ink"
+                      : "text-ink-4"
+                }
+              >
+                {item.done === true ? (
+                  <CheckCircle2 className="h-4.5 w-4.5" strokeWidth={2} aria-hidden />
+                ) : item.done === false ? (
+                  <Circle className="h-4.5 w-4.5" strokeWidth={2} aria-hidden />
+                ) : (
+                  <Clock3 className="h-4.5 w-4.5" strokeWidth={2} aria-hidden />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-semibold text-ink">{item.label}</span>
+                <span className="block truncate text-[11.5px] text-ink-4">{item.detail}</span>
+              </span>
+              <ArrowRight
+                className="h-3.5 w-3.5 shrink-0 text-ink-4"
+                strokeWidth={2}
+                aria-hidden
+              />
+            </button>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* ── The school, in numbers ─────────────────────────────────────── */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -198,6 +354,9 @@ export default function UtamaPage() {
           </Card>
         ))}
       </div>
+
+      {/* ── Set-up console ─────────────────────────────────────────────── */}
+      <AdminConsole tab={tab} onTabChange={setTab} />
 
       {/* ── Matriks peranan ────────────────────────────────────────────── */}
       <Card>

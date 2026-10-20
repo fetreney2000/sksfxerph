@@ -8,11 +8,11 @@ import type { Member } from "@/lib/client/admin";
 /**
  * The administrator console, rendered.
  *
- * `/pentadbiran` cannot be reached by e2e: local mode stops at "Pentadbiran
- * memerlukan mod disegerakkan" by design, and the synced deployment this is
- * built against has no usable service key in CI. So the five tabs — which are
- * the entire deliverable — would otherwise ship with no test ever having drawn
- * them. These assert the things a regression would silently break: that each
+ * The console cannot be reached by e2e: local mode stops at "Papan pemuka
+ * pentadbir memerlukan mod disegerakkan" by design, and the synced deployment
+ * this is built against has no usable service key in CI. So the five tabs —
+ * which are the entire deliverable — would otherwise ship with no test ever
+ * having drawn them. These assert the things a regression would silently break: that each
  * tab exists, that the rows actually arrive, that the session and the school
  * code are *editable* (both were read-only for the whole life of this page),
  * and that the consequence of changing them is stated before the write rather
@@ -147,6 +147,21 @@ const SETTINGS = {
   },
 };
 
+const OVERVIEW = {
+  members: { total: 18, teachers: 16, byRole: { guru_biasa: 15, gpk: 1, pentadbir: 1 } },
+  classes: 12,
+  subjects: 9,
+  templates: 4,
+  week: {
+    expected: 80,
+    submitted: 42,
+    approved: 30,
+    compliance: 52.5,
+    returned_t: 3,
+    drafts: 7,
+  },
+};
+
 const SCHOOL_INFO = {
   id: "33333333-3333-4333-8333-333333333333",
   kod_sekolah: "SK0000",
@@ -174,6 +189,7 @@ async function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
       headers: { "content-type": "application/json" },
     });
 
+  if (url.includes("/api/admin/overview")) return json({ overview: OVERVIEW });
   if (url.includes("/api/admin/school") && method === "PATCH") {
     lastPatch = (init?.body as FormData) ?? null;
     return json({ school: { ...SCHOOL_INFO, kod_sekolah: lastPatch?.get("kod_sekolah") } });
@@ -195,7 +211,7 @@ afterEach(() => {
 
 /** Mount the page with a fresh QueryClient — each test gets an empty cache. */
 async function mount() {
-  const { default: Page } = await import("@/app/(app)/(pentadbiran)/pentadbiran/page");
+  const { AdminConsole } = await import("@/components/admin/admin-console");
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
@@ -203,7 +219,23 @@ async function mount() {
       <UserProvider
         user={{ id: ME.user_id, fullName: "Faridah binti Salleh", role: "pentadbir" }}
       >
-        <Page />
+        <AdminConsole />
+      </UserProvider>
+    </QueryClientProvider>,
+  );
+}
+
+/** The whole Papan Pemuka, not just the console inside it. */
+async function mountHome() {
+  const { default: Home } = await import("@/app/(app)/(utama)/utama/page");
+  return render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
+    >
+      <UserProvider
+        user={{ id: ME.user_id, fullName: "Faridah binti Salleh", role: "pentadbir" }}
+      >
+        <Home />
       </UserProvider>
     </QueryClientProvider>,
   );
@@ -221,6 +253,24 @@ function clickTab(name: string) {
 }
 
 describe("pentadbiran", () => {
+  it("shows one Papan Pemuka with a checklist that opens the matching tab", async () => {
+    vi.stubGlobal("fetch", fakeFetch);
+    await mountHome();
+
+    expect(screen.getByRole("heading", { name: "Papan Pemuka" })).toBeTruthy();
+    expect(screen.getByText("Persediaan sekolah")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("16 guru berdaftar")).toBeTruthy());
+    expect(screen.getByRole("tab", { name: "Akaun & peranan" })).toBeTruthy();
+
+    // The checklist is not decoration: a row is the route into its tab.
+    fireEvent.click(screen.getByRole("button", { name: /^Kelas/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Kelas" }).getAttribute("aria-selected")).toBe(
+        "true",
+      ),
+    );
+  }, 20_000);
+
   // Mounts the whole console against six fixtures. Its timeout is not only its
   // own problem: an aborted mount leaves the previous render in the document,
   // and the next test then fails with a confusing "multiple elements" instead

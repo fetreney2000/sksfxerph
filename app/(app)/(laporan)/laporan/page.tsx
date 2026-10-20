@@ -39,9 +39,9 @@ const EXPORTS = [
     id: "plan",
     icon: PenLine,
     title: "RPH tunggal (DOCX)",
-    desc: "Penyunting mengeksport satu rancangan sebagai .docx, sedia untuk disunting di Word.",
-    href: "/editor",
-    cta: "Buka Penyunting",
+    desc: "Buka RPH daripada Minggu Ini, kemudian eksport sebagai .docx yang boleh disunting dalam Word.",
+    href: "/minggu",
+    cta: "Pilih RPH",
   },
 ];
 

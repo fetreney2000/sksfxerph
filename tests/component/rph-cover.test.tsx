@@ -112,7 +112,7 @@ describe("RphCover — the weekly summary", () => {
     // The grade — `(1)` and `(0)` — is the reviewer's marking, and it belongs
     // on the screens where they make it. A reader of a stapled stack needs
     // the word, which is what the paper form has, so the printed cover says
-    // "Lengkap" while the badge beside it still says "Lengkap (1)".
+    // "Lengkap" while the in-app badge uses the teacher-facing "Disahkan".
     render(<RphCover {...BASE} status="approved" />);
     expect(screen.getByText("Lengkap")).toBeTruthy();
     expect(screen.queryByText(/Lengkap \(1\)/)).toBeNull();

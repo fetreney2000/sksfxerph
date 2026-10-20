@@ -88,6 +88,8 @@ test.describe("authentication", () => {
     await expect(page.getByRole("link", { name: /Paparan Sekolah/ })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Laporan & Eksport/ })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Minggu Ini/ })).toHaveCount(1);
+    // A Guru Biasa holds no review stage, so the queue band is not for them.
+    await expect(page.getByRole("link", { name: /RPH menunggu semakan/ })).toHaveCount(0);
 
     await page.keyboard.press("Control+k");
     await page.getByPlaceholder(/Cari arahan/).fill("sekolah");
@@ -107,7 +109,7 @@ test.describe("authentication", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("/pentadbiran is the Administrator's alone", async ({ page }) => {
+  test("the consolidated admin home is the Administrator's alone", async ({ page }) => {
     // A Guru Besar supervises but does not run the app — answer to "does the
     // Guru Besar get the setup page" was none.
     const errors = collectErrors(page);
@@ -122,9 +124,9 @@ test.describe("authentication", () => {
 
     // The Administrator reaches it, and in local mode is told why it is empty.
     await login(page, PENTADBIR_USER, PENTADBIR_PASS);
-    // They land on their own dashboard, not a teacher's.
+    // They land on their one dashboard, not a teacher's and not a second home.
     await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
-    await expect(page.getByRole("link", { name: /Urus eRPH/ })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Papan Pemuka" })).toHaveCount(1);
 
     // A teacher's screens must refuse them — they hold no plans to show.
     await page.goto("/minggu");
@@ -134,9 +136,10 @@ test.describe("authentication", () => {
     await page.goto("/arkib");
     await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
 
+    // The old route is a redirect into the one home, not a second console.
     await page.goto("/pentadbiran");
-    await expect(page).toHaveURL(/\/pentadbiran/, { timeout: 15_000 });
-    await expect(page.getByText(/Pentadbiran memerlukan mod disegerakkan/)).toBeVisible();
+    await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
+    await expect(page.getByText(/Papan Pemuka memerlukan mod disegerakkan/)).toBeVisible();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -147,6 +150,10 @@ test.describe("authentication", () => {
 
     // Identity comes from the cookie, resolved server-side in the layout.
     await expect(page.getByRole("heading", { name: GREETING })).toBeVisible();
+    // cikgu is a Guru Besar. The review queue is the first thing above her own
+    // teaching week — the home answers "what needs my decision?" without
+    // taking the week away.
+    await expect(page.getByRole("link", { name: /RPH menunggu semakan/ })).toBeVisible();
     // Scoped to the sidebar on purpose. The teacher's name also prints on the
     // weekly sheets waiting in the hidden print container — one row per plan
     // — so an unscoped query is ambiguous by design, not by accident.
@@ -181,7 +188,15 @@ test.describe("authentication", () => {
     // 1. A teacher signs in on the staff-room laptop and has a week of plans.
     //    They live in IndexedDB, which the next account on this machine shares.
     await login(page);
-    await expect(page.getByText(/5 Amanah/).first()).toBeVisible({ timeout: 15_000 });
+    // Scope to the visible table: the phone cards carry the same class text in
+    // the DOM but are `display:none` at this viewport, and an unscoped
+    // `.first()` now resolves to the hidden copy.
+    await expect(
+      page
+        .getByRole("table")
+        .getByText(/5 Amanah/)
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
 
     // 2. Sign out. Nothing is deleted: the point of an offline cache is that
     //    the plans are still here when this teacher comes back.
@@ -193,14 +208,24 @@ test.describe("authentication", () => {
     //    shared owner, so the previous teacher's week rendered as theirs.
     await login(page, GURU_BIASA_USER, GURU_BIASA_PASS);
     await expect(page.getByText(/5 Amanah/)).toHaveCount(0);
-    await expect(page.getByText(/Tiada RPH lagi/)).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page
+        .getByRole("table")
+        .getByText(/Tiada RPH lagi/)
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
 
     // 4. And the first teacher gets theirs back — the cache was scoped, not
     //    emptied.
     await page.getByRole("button", { name: "Log keluar" }).click();
     await page.waitForURL(/\/login/, { timeout: 15_000 });
     await login(page);
-    await expect(page.getByText(/5 Amanah/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page
+        .getByRole("table")
+        .getByText(/5 Amanah/)
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -215,7 +240,9 @@ test.describe("eRPH smoke", () => {
     const errors = collectErrors(page);
 
     await expect(page.getByRole("heading", { name: GREETING })).toBeVisible();
-    await expect(page.getByText("5 Amanah").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("table").getByText("5 Amanah").first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     // The deadline must be a real Friday 16:00, not the off-by-a-month bug.
     await expect(page.getByText(/Jumaat, \d+ Oktober 2026 · 16:00/)).toBeVisible();
@@ -271,14 +298,31 @@ test.describe("eRPH smoke", () => {
     await sambung.click();
 
     await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
-    await expect(page.getByText(/Keluargaan dokumen/)).toBeVisible();
+    await expect(page.getByText(/Kelengkapan dokumen/)).toBeVisible();
     await expect(page.getByText("Pratonton langsung")).toBeVisible();
+    // The topbar resolves the nested editor route instead of falling back to
+    // "eRPH", and the crumb names the page rather than only the week.
+    await expect(
+      page.locator("header").getByRole("heading", { name: "Penyunting RPH" }),
+    ).toBeVisible();
+    await expect(page.locator("header").getByText("Draf aktif", { exact: true })).toBeVisible();
 
     await page
       .getByRole("button", { name: /Refleksi/ })
       .first()
       .click();
-    await expect(page.getByText(/Langkah 4/).first()).toBeVisible();
+    await expect(page.getByText(/Bahagian 4/).first()).toBeVisible();
+
+    // An incomplete plan cannot be submitted without acknowledging that it is
+    // going to the GPK now, not saved as a draft.
+    await page.getByRole("button", { name: "Hantar untuk semakan" }).click();
+    const submit = page.getByRole("dialog", { name: "Hantar RPH untuk semakan?" });
+    await expect(submit).toBeVisible();
+    await expect(
+      submit.getByRole("button", { name: "Hantar juga (tidak lengkap)" }),
+    ).toBeVisible();
+    await expect(submit.getByText(/akan dihantar kepada GPK sekarang/)).toBeVisible();
+    await submit.getByRole("button", { name: "Batal" }).click();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -287,7 +331,7 @@ test.describe("eRPH smoke", () => {
     const errors = collectErrors(page);
     await page.goto("/semakan");
 
-    await expect(page.getByText("Baris gilir")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baris gilir" })).toBeVisible();
     const before = await page.getByText(/Belum semak \((\d+)\)/).textContent();
 
     // `1` = sahkan. There is no longer a Guru Besar to forward to: a GPK
@@ -302,6 +346,28 @@ test.describe("eRPH smoke", () => {
     });
     const after = await page.getByText(/Belum semak \((\d+)\)/).textContent();
     expect(after).not.toBe(before);
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("returning a plan needs a reason", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto("/semakan");
+
+    await expect(page.getByRole("heading", { name: "Baris gilir" })).toBeVisible();
+    // These KPIs count this browser session; their labels must say so rather
+    // than implying they are totals for the queue.
+    await expect(page.getByText("Disahkan sesi ini")).toBeVisible();
+    await expect(page.getByText("Dikembalikan sesi ini")).toBeVisible();
+
+    const kembali = page.getByRole("button", { name: /^Kembalikan/ });
+    await expect(kembali).toBeDisabled();
+    await expect(page.getByText(/Tulis sebab atau pilih checklist/).first()).toBeVisible();
+
+    // A quick checklist chip is a reason too; filling the comment is the
+    // general path and must re-enable the decision.
+    await page.getByLabel(/Komen sulit/).fill("Sila lengkapkan Refleksi & Intervensi.");
+    await expect(kembali).toBeEnabled();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -445,6 +511,87 @@ test.describe("eRPH smoke", () => {
         { timeout: 15_000 },
       )
       .toBe("registered");
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+});
+
+test.describe("mobile layout", () => {
+  test("the bottom bar keeps four primary tabs and moves the rest into Lagi", async ({
+    page,
+  }) => {
+    const errors = collectErrors(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page);
+
+    const nav = page.getByRole("navigation", { name: "Navigasi utama mudah alih" });
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Minggu" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Semak" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Sekolah" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Laporan" })).toBeVisible();
+    // Arkib and Templat are still reachable; they are just not a fifth and
+    // sixth tab squeezed into 390px.
+    await expect(nav.getByRole("link", { name: "Arkib" })).toHaveCount(0);
+
+    await nav.getByRole("button", { name: "Lagi" }).click();
+    const sheet = page.getByRole("dialog", { name: "Lagi" });
+    await expect(sheet.getByRole("link", { name: /Sejarah & Arkib/ })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: /Perpustakaan Templat/ })).toBeVisible();
+
+    await sheet.getByRole("link", { name: /Sejarah & Arkib/ }).click();
+    await expect(page).toHaveURL(/\/arkib/, { timeout: 15_000 });
+    await expect(page.getByRole("dialog", { name: "Lagi" })).toBeHidden();
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("the avatar opens the account menu and signs out on a phone", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page);
+
+    await page.getByRole("button", { name: "Akaun Nurul Aisyah binti Rahim" }).click();
+    const menu = page.getByRole("menu", { name: "Akaun" });
+    await expect(menu.getByText("Nurul Aisyah binti Rahim")).toBeVisible();
+    await expect(menu.getByText("Guru Besar")).toBeVisible();
+
+    await menu.getByRole("menuitem", { name: "Log keluar" }).click();
+    await page.waitForURL(/\/login/, { timeout: 15_000 });
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("Semakan opens a plan full-screen with the decisions in reach", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page);
+    await page.goto("/semakan");
+
+    await expect(page.getByRole("heading", { name: "Baris gilir" })).toBeVisible();
+    await page.getByRole("button", { name: /Ramlan/ }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    const viewport = page.viewportSize() ?? { width: 390, height: 844 };
+    // The plan gets the whole viewport, not a centred 480px card. Compare
+    // against the viewport rather than a hardcoded 390: a one-pixel rounding
+    // difference from `100vw` is not a layout failure.
+    expect(box?.width ?? 0).toBeGreaterThan(viewport.width * 0.98);
+    expect(box?.height ?? 0).toBeGreaterThan(viewport.height * 0.98);
+
+    // Scroll the long printed plan as far as the auto-check panel, then prove
+    // both decisions are still on screen. This is the whole point of keeping
+    // them outside the scrolling body.
+    await dialog.getByText("Semakan automatik").scrollIntoViewIfNeeded();
+    await expect(dialog.getByRole("button", { name: "Sahkan" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Kembalikan" })).toBeVisible();
+
+    await dialog.getByRole("button", { name: "Sahkan" }).click();
+    await expect(page.getByText(/Disahkan dan ditandatangani/)).toBeVisible({
+      timeout: 10_000,
+    });
 
     expect(errors, errors.join("\n")).toEqual([]);
   });

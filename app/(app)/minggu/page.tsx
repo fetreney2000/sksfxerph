@@ -3,7 +3,9 @@
 import {
   ArrowRight,
   Bolt,
+  CalendarDays,
   CheckCircle2,
+  ClipboardCheck,
   Clock3,
   FileText,
   History,
@@ -15,6 +17,7 @@ import {
   Target,
   Upload,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type * as React from "react";
 import { useMemo, useRef } from "react";
@@ -35,10 +38,11 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { reuseLastWeek } from "@/lib/actions/plans";
-import { can } from "@/lib/auth/permissions";
+import { can, reviewStageFor } from "@/lib/auth/permissions";
+import { cn } from "@/lib/cn";
 import { currentWeek, weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel, greetingPart, longDateOf } from "@/lib/date";
-import { useSchoolStats } from "@/lib/hooks/use-remote";
+import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { useWeek } from "@/lib/hooks/use-week";
@@ -56,6 +60,11 @@ export default function MingguPage() {
   const me = useUser();
   const week = useWeek();
   const stats = useSchoolStats();
+  // Reviewers also teach. Rather than taking their own week away by landing
+  // them on Semakan, the queue is the first thing above it.
+  const stage = reviewStageFor(me.role);
+  const reviewQueue = useReviewQueueData(stage?.status ?? null);
+  const pendingReviews = stage ? reviewQueue.items.length : 0;
   // Nothing to count yet — the figures have not loaded, or the school owes
   // nothing this week. Both read as "—" rather than as a school that has
   // handed in zero plans: a number nobody has measured is not zero.
@@ -64,8 +73,9 @@ export default function MingguPage() {
   const { items: subjects } = useSchoolSubjects();
 
   const deadline = weekDeadline(WEEK);
-  const approved = week.documents.filter((d) => d.status === "approved").length;
-  const pct = week.total === 0 ? 0 : Math.round((approved / week.total) * 100);
+  // approved + waiting + action is the whole week; the greeting, cards and
+  // deadline banner all read from that one partition.
+  const remaining = week.total - week.approved;
 
   // "RPH baharu" has to mean *new*: resuming unfinished work is what the
   // per-row "Sambung" buttons are for. It now navigates rather than creating —
@@ -135,6 +145,38 @@ export default function MingguPage() {
           instead, so printing the week does not also print the dashboard the
           teacher was looking at when they pressed the button. */}
       <div data-print="screen">
+        {/* ── Reviewer queue ─────────────────────────────────────────────────
+            The Guru Besar and GPK also hold plans of their own, so they keep
+            Minggu Ini as their home. Their real job still comes first: the
+            queue the red sidebar badge points at is now a band above the week,
+            not a number they have to notice and decode. */}
+        {pendingReviews > 0 && (
+          <Link
+            href="/semakan"
+            className="group mb-4 flex flex-wrap items-center gap-3 rounded-[14px] border border-info-line bg-info-soft px-4 py-3 text-info-ink shadow-xs transition-colors hover:bg-info-soft/80"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[11px] border border-info-line bg-surface shadow-xs">
+              <ClipboardCheck className="h-5 w-5" strokeWidth={1.9} aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <b className="block text-[13.5px] font-bold">
+                {pendingReviews} RPH menunggu semakan
+              </b>
+              <span className="block text-[12.5px] text-ink-2">
+                Sahkan atau kembalikan RPH yang telah dihantar.
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1 text-[12.5px] font-bold">
+              Semak sekarang
+              <ArrowRight
+                className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                strokeWidth={2.2}
+                aria-hidden
+              />
+            </span>
+          </Link>
+        )}
+
         {/* ── Greeting ─────────────────────────────────────────────────────── */}
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -149,12 +191,23 @@ export default function MingguPage() {
               {ms.dashboard.greeting[greetingPart()]}, {givenName(me.fullName)}
             </h2>
             <p className="text-[13px] text-ink-3">
-              Anda sudah menghantar{" "}
-              <b className="text-ink">
-                {week.submitted} daripada {week.total || "—"}
-              </b>{" "}
-              RPH minggu ini.
-              {week.drafts > 0 && ` Tinggal ${week.drafts} sebelum Jumaat.`}
+              {week.total === 0 ? (
+                "Belum ada RPH untuk minggu ini."
+              ) : remaining === 0 ? (
+                <>
+                  Semua <b className="text-ink">{week.total} RPH</b> minggu ini sudah disahkan.
+                </>
+              ) : (
+                <>
+                  <b className="text-ink">
+                    {week.approved} daripada {week.total}
+                  </b>{" "}
+                  RPH disahkan minggu ini.{" "}
+                  {week.action > 0
+                    ? `${week.action} lagi perlu tindakan sebelum Jumaat.`
+                    : `${week.waiting} masih menunggu semakan.`}
+                </>
+              )}
             </p>
           </div>
           {/* Wraps on a narrow screen rather than pushing the page sideways:
@@ -194,30 +247,35 @@ export default function MingguPage() {
               {ms.dashboard.deadline}: <span className="num">{deadlineLabel(deadline)}</span>
             </h4>
             <p className="text-[12.8px] text-ink-2">
-              {week.drafts > 0 ? (
+              {week.action > 0 ? (
                 <>
-                  <b>{week.drafts} RPH</b> belum dihantar untuk Minggu {WEEK}.{" "}
+                  <b>{week.action} RPH</b> belum selesai untuk Minggu {WEEK}
+                  {week.drafts > 0 && week.returned > 0
+                    ? ` (${week.drafts} draf · ${week.returned} dikembalikan). `
+                    : week.drafts > 0
+                      ? ` (${week.drafts} draf). `
+                      : ` (${week.returned} dikembalikan). `}
                 </>
               ) : null}
               <b>{ms.dashboard.noPrint}</b>
             </p>
             <Progress
-              value={pct}
-              tone={pct >= 80 ? "success" : "primary"}
+              value={week.approvedPct}
+              tone={week.approvedPct >= 80 ? "success" : "primary"}
               className="mt-2 max-w-[420px]"
             />
           </div>
         </div>
 
         {/* ── Stats ────────────────────────────────────────────────────────── */}
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
-            label={`${ms.dashboard.submitted} · Minggu ${WEEK}`}
-            value={`${week.submitted}`}
+            label={`${ms.dashboard.approved} · Minggu ${WEEK}`}
+            value={`${week.approved}`}
             sub={` / ${week.total}`}
             icon={<CheckCircle2 className="h-4 w-4" strokeWidth={2} />}
             tone="ok"
-            footer={<Progress value={pct} tone="success" />}
+            footer={<Progress value={week.approvedPct} tone="success" />}
           />
           <StatCard
             label={ms.dashboard.waiting}
@@ -227,17 +285,26 @@ export default function MingguPage() {
           />
           <StatCard
             label={ms.dashboard.needsAction}
-            value={String(week.returned)}
+            value={String(week.action)}
             icon={<Bolt className="h-4 w-4" strokeWidth={2} />}
             tone="bad"
             badge={
-              week.returned > 0 ? <Badge variant="danger">Dikembalikan · GPK</Badge> : undefined
+              week.action > 0 ? (
+                <span className="flex flex-wrap gap-1.5">
+                  {week.drafts > 0 && <Badge variant="neutral">{week.drafts} draf</Badge>}
+                  {week.returned > 0 && (
+                    <Badge variant="danger">{week.returned} dikembalikan</Badge>
+                  )}
+                </span>
+              ) : undefined
             }
           />
           <StatCard
             label={ms.dashboard.onTime}
             value={week.onTimePct === null ? "—" : String(week.onTimePct)}
-            sub={week.onTimePct === null ? "" : "%"}
+            sub={
+              week.onTimePct === null ? "" : `% · ${week.onTimeCount}/${week.handedIn} dihantar`
+            }
             icon={<Target className="h-4 w-4" strokeWidth={2} />}
             tone={week.onTimePct === null || week.onTimePct >= 80 ? "ok" : "bad"}
           />
@@ -306,7 +373,30 @@ export default function MingguPage() {
           </span>
         </div>
 
-        <Card className="mb-4">
+        {/* The six-column table is usable on a desktop and clips status and
+            action on a phone. Below `lg`, the same rows become cards with one
+            full-width action, so the thing a teacher came to press is never
+            off-screen. */}
+        <Card className="mb-4 overflow-hidden lg:hidden">
+          {week.loading ? (
+            <p className="px-4 py-8 text-center text-ink-4">Memuatkan…</p>
+          ) : week.documents.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <p className="mb-3 text-ink-3">Tiada RPH lagi untuk Minggu {WEEK}.</p>
+              <Button size="sm" onClick={() => void onNew()}>
+                <Plus className="h-4 w-4" aria-hidden /> {ms.dashboard.newRph}
+              </Button>
+            </div>
+          ) : (
+            <ul className="list-none divide-y divide-border">
+              {week.documents.map((doc) => (
+                <PlanCard key={doc.id} doc={doc} />
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="mb-4 hidden lg:block">
           <TableContainer>
             <Table>
               <THead>
@@ -492,9 +582,20 @@ export default function MingguPage() {
   );
 }
 
+function planAction(doc: RphDocument): {
+  label: string;
+  variant: "ghost" | "danger" | "primary" | "secondary";
+} {
+  if (doc.status === "approved") return { label: "Lihat", variant: "ghost" };
+  if (doc.status === "returned") return { label: "Baiki", variant: "danger" };
+  if (doc.status === "draft") return { label: "Sambung", variant: "primary" };
+  return { label: "Lihat", variant: "secondary" };
+}
+
 function PlanRow({ doc }: { doc: RphDocument }) {
   const router = useRouter();
   const actionable = doc.status === "draft" || doc.status === "returned";
+  const action = planAction(doc);
 
   return (
     <TR className={doc.status === "draft" ? "bg-primary-soft" : undefined}>
@@ -522,7 +623,7 @@ function PlanRow({ doc }: { doc: RphDocument }) {
             — the number was already computed, it was just only ever shown
             inside the editor. Shown for drafts and returns, because a
             submitted plan has already passed the gate that requires all four. */}
-        {(doc.status === "draft" || doc.status === "returned") && (
+        {actionable && (
           <span className="num mt-1 block text-[11px] text-ink-4">
             {completeness(doc.payload) / 25}/4 seksyen
           </span>
@@ -552,27 +653,74 @@ function PlanRow({ doc }: { doc: RphDocument }) {
       <TD className="text-right">
         <Button
           size="sm"
-          variant={
-            doc.status === "approved"
-              ? "ghost"
-              : doc.status === "returned"
-                ? "danger"
-                : actionable
-                  ? "primary"
-                  : "secondary"
-          }
+          variant={action.variant}
           onClick={() => router.push(`/editor/${doc.id}`)}
         >
-          {doc.status === "approved"
-            ? "Lihat"
-            : doc.status === "returned"
-              ? "Baiki"
-              : doc.status === "draft"
-                ? "Sambung"
-                : "Lihat"}
+          {action.label}
         </Button>
       </TD>
     </TR>
+  );
+}
+
+/**
+ * The phone row.
+ *
+ * Deliberately not a squeezed table: class/subject, date/time, status and one
+ * action, in that order. The standard is kept as a two-line secondary detail
+ * because it is how a teacher tells two plans in the same class apart; the
+ * reviewer name and the six-column grid are noise at 390px.
+ */
+function PlanCard({ doc }: { doc: RphDocument }) {
+  const router = useRouter();
+  const actionable = doc.status === "draft" || doc.status === "returned";
+  const action = planAction(doc);
+
+  return (
+    <li className={cn("p-4", doc.status === "draft" && "bg-primary-soft")}>
+      <div className="flex items-start gap-3">
+        <Avatar initials={doc.className.slice(0, 2)} tone="blue" small />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-bold">
+                {doc.className} · {doc.subjectName}
+              </p>
+              <p className="text-[11.5px] text-ink-3">{doc.subjectCode}</p>
+            </div>
+            <StatusBadge status={doc.status} grade={doc.grade} className="shrink-0" />
+          </div>
+
+          <p className="mt-2 flex items-center gap-1.5 text-[12.5px] font-medium text-ink-2">
+            <CalendarDays
+              className="h-3.5 w-3.5 shrink-0 text-ink-4"
+              strokeWidth={1.9}
+              aria-hidden
+            />
+            <span className="num">{daySlot(doc.planDate, doc.slotTime)}</span>
+          </p>
+
+          <p className="mt-1 line-clamp-2 text-[12.5px] leading-[1.45] text-ink-3">
+            {doc.payload.standard_kandungan || "Standard Kandungan belum diisi."}
+          </p>
+
+          {actionable && (
+            <p className="num mt-1 text-[11px] text-ink-4">
+              {completeness(doc.payload) / 25}/4 seksyen
+            </p>
+          )}
+        </div>
+      </div>
+
+      <Button
+        size="md"
+        variant={action.variant}
+        className="mt-3 w-full"
+        onClick={() => router.push(`/editor/${doc.id}`)}
+      >
+        {action.label}
+      </Button>
+    </li>
   );
 }
 
@@ -596,7 +744,7 @@ function StatCard({
   spark?: number[];
 }) {
   return (
-    <Card className="relative overflow-hidden p-4">
+    <Card className="relative overflow-hidden p-3 sm:p-4">
       <span
         className="absolute inset-x-0 top-0 h-0.5"
         style={{
@@ -610,10 +758,12 @@ function StatCard({
         aria-hidden
       />
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[12.5px] font-semibold text-ink-3">{label}</span>
+        <span className="text-[11px] leading-tight font-semibold text-ink-3 sm:text-[12.5px]">
+          {label}
+        </span>
         <span
           className={
-            "grid h-8 w-8 place-items-center rounded-[9px] " +
+            "grid h-7 w-7 shrink-0 place-items-center rounded-[8px] sm:h-8 sm:w-8 sm:rounded-[9px] " +
             (tone === "ok"
               ? "bg-success-soft text-success-ink"
               : tone === "bad"
@@ -625,14 +775,16 @@ function StatCard({
           {icon}
         </span>
       </div>
-      <div className="num mt-1.5 text-[28px] leading-none font-extrabold tracking-[-1.2px]">
+      <div className="num mt-1.5 text-[24px] leading-none font-extrabold tracking-[-1px] sm:text-[28px] sm:tracking-[-1.2px]">
         {value}
         {sub && (
-          <small className="text-sm font-semibold tracking-normal text-ink-4">{sub}</small>
+          <small className="text-[12px] font-semibold tracking-normal text-ink-4 sm:text-sm">
+            {sub}
+          </small>
         )}
       </div>
-      {badge && <div className="mt-2">{badge}</div>}
-      {footer && <div className="mt-2">{footer}</div>}
+      {badge && <div className="mt-1.5 sm:mt-2">{badge}</div>}
+      {footer && <div className="mt-1.5 sm:mt-2">{footer}</div>}
       {spark && (
         <div className="mt-1 flex h-6 items-end gap-[3px]">
           {spark.map((v, i) => (

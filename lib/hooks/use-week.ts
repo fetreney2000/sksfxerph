@@ -8,23 +8,29 @@ import { useSession } from "@/lib/hooks/use-session";
 import { ownerId } from "@/lib/owner";
 import { normalisePayload } from "@/lib/schemas/rph";
 import type { RphDocument } from "@/lib/types";
+import { summariseWeek, type WeekCounts } from "@/lib/week-summary";
 
 export const WEEK = currentWeek();
 
-export interface WeekSummary {
+export interface WeekSummary extends WeekCounts {
   weekNo: number;
   days: string[];
   documents: RphDocument[];
-  submitted: number;
-  waiting: number;
-  returned: number;
-  drafts: number;
-  total: number;
-  completenessPct: number;
-  /** Share of this teacher's submitted plans that beat the Friday deadline. */
-  onTimePct: number | null;
   loading: boolean;
 }
+
+const EMPTY_WEEK_COUNTS: WeekCounts = {
+  total: 0,
+  approved: 0,
+  waiting: 0,
+  returned: 0,
+  drafts: 0,
+  action: 0,
+  handedIn: 0,
+  onTimeCount: 0,
+  onTimePct: null,
+  approvedPct: 0,
+};
 
 /**
  * Everything the dashboard and archive need from IndexedDB, in one live query.
@@ -43,48 +49,21 @@ export function useWeek(): WeekSummary {
 
   const summary = useLiveQuery(async () => {
     const documents = await documentsForWeek(owner, session, WEEK);
-    const total = documents.length || 0;
-    const count = (s: RphDocument["status"]) => documents.filter((d) => d.status === s).length;
-    // "Left the teacher" and "still awaiting a decision" are the same set at
-    // either rung: a plan is with the GPK (`submitted`) or with the Guru Besar
-    // (`forwarded`) until it is approved or returned.
-    const outForDecision = count("submitted") + count("forwarded");
-
-    // Punctuality, computed rather than asserted: of the plans that have been
-    // handed in, how many arrived before Friday 16:00. Nothing submitted yet
-    // is `null`, not 0 — "no data" and "all late" are different answers.
-    const deadline = weekDeadline(WEEK).getTime();
-    const handed = documents.filter((d) => d.submittedAt !== undefined);
-    const onTime = handed.filter((d) => (d.submittedAt ?? 0) <= deadline).length;
-
     return {
-      weekNo: WEEK,
-      days: schoolDays(WEEK),
       documents,
-      total,
-      submitted: outForDecision,
-      waiting: outForDecision,
-      returned: count("returned"),
-      drafts: count("draft"),
-      completenessPct:
-        total === 0
-          ? 0
-          : Math.round((documents.filter((d) => d.status === "approved").length / total) * 100),
-      onTimePct: handed.length === 0 ? null : Math.round((onTime / handed.length) * 100),
+      ...summariseWeek(documents, weekDeadline(WEEK).getTime()),
     };
   }, [owner, session]);
+
+  // `summariseWeek` owns the definitions — approved, waiting, action and the
+  // punctuality denominator all come from the same pass over the same rows.
+  const counts = summary ?? EMPTY_WEEK_COUNTS;
 
   return {
     weekNo: WEEK,
     days: schoolDays(WEEK),
     documents: summary?.documents ?? [],
-    submitted: summary?.submitted ?? 0,
-    waiting: summary?.waiting ?? 0,
-    returned: summary?.returned ?? 0,
-    drafts: summary?.drafts ?? 0,
-    total: summary?.total ?? 0,
-    completenessPct: summary?.completenessPct ?? 0,
-    onTimePct: summary?.onTimePct ?? null,
+    ...counts,
     loading: summary === undefined,
   };
 }

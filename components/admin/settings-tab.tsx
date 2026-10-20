@@ -225,7 +225,7 @@ export function SettingsTab() {
               className="mt-0.5 h-4 w-4 accent-[var(--color-primary)]"
             />
             <span>
-              Halang penghantaran sehingga keluargaan 100%
+              Halang penghantaran sehingga kelengkapan 100%
               <span className="mt-0.5 block text-[11.5px] text-ink-4">
                 Guru hanya boleh menghantar apabila semua seksyen wajib telah diisi.
               </span>
@@ -283,7 +283,7 @@ export function SettingsTab() {
             "ketepatan masa" diukur — rancangan yang tiba selepas waktu ini dikira lewat.
           </p>
           <p>
-            <span className="font-semibold text-ink-2">Keluargaan 100%</span> menghalang
+            <span className="font-semibold text-ink-2">Kelengkapan 100%</span> menghalang
             penghantaran yang belum lengkap, supaya penyemak tidak menerima draf separuh siap.
           </p>
         </CardContent>

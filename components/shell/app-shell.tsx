@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import * as React from "react";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { MobileNav } from "@/components/shell/mobile-nav";
-import { ROUTE_META } from "@/components/shell/nav";
+import { routeMetaFor } from "@/components/shell/nav";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { type ShellUser, UserProvider } from "@/components/shell/user-context";
@@ -17,10 +17,7 @@ import { type ShellUser, UserProvider } from "@/components/shell/user-context";
  * heading should be told which screen they are on, not merely that it exists.
  */
 function titleFor(pathname: string): string {
-  const hit = Object.keys(ROUTE_META)
-    .filter((route) => pathname === route || pathname.startsWith(`${route}/`))
-    .sort((a, b) => b.length - a.length)[0];
-  return (hit && ROUTE_META[hit]?.title) || "eRPH";
+  return routeMetaFor(pathname).title;
 }
 
 /**
