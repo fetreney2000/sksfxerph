@@ -20,6 +20,121 @@ for m in re.finditer(r"create table erph\.(\w+) \((.*?)\n\);", sql, re.S):
 
 problems = 0
 
+# The only endpoints that are meant to answer without a session.
+#
+# Exact paths, not substrings: the old check was `any(k in rel for k in ...)`,
+# so a future `app/api/auth/members/route.ts` would have been classified
+# public because its path contains "auth/". The list is a decision about
+# these five routes and nothing else.
+PUBLIC_ROUTES = {
+    "app/api/auth/login/route.ts",
+    "app/api/auth/logout/route.ts",
+    "app/api/auth/me/route.ts",
+    "app/api/auth/google/route.ts",
+    "app/api/heartbeat/route.ts",
+}
+
+GUARDS = (
+    "requireUser(",
+    "requireDbUser(",
+    "requireReviewer(",
+    "requireAdministrator(",
+    "requirePermission(",
+)
+
+# A call that reaches for the database. The guard has to come first.
+DATA_ACCESS = (
+    ".from(",
+    ".rpc(",
+    "adminDb(",
+)
+
+HTTP_METHODS = ("GET", "POST", "PATCH", "PUT", "DELETE")
+
+# A top-level function declaration, exported or not.
+FN = re.compile(r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(", re.M)
+
+
+def top_level_functions(src: str) -> list[tuple[str, str, bool]]:
+    """(name, body, is_exported) for every top-level function in the file.
+
+    Cut on the next top-level declaration, so a handler's body stops where
+    the next function begins — otherwise the GET handler of a file would
+    swallow the local helper that follows it and appear to contain its guard.
+    """
+    matches = list(FN.finditer(src))
+    out: list[tuple[str, str, bool]] = []
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(src)
+        exported = src[m.start() : m.end()].startswith("export")
+        out.append((m.group(1), src[m.start() : end], exported))
+    return out
+
+
+def handlers_in(src: str) -> list[tuple[str, str]]:
+    """Every exported HTTP handler in a route file, with its body."""
+    return [
+        (name, body)
+        for name, body, exported in top_level_functions(src)
+        if exported and name in HTTP_METHODS
+    ]
+
+
+def local_functions(src: str) -> dict[str, str]:
+    """Every function declared in this file, by name — the ones a handler may
+    reach its guard through."""
+    return {name: body for name, body, _ in top_level_functions(src)}
+
+
+def has_guard(body: str) -> bool:
+    """Does this body call a guard directly?
+
+    A call, not an import: `requireUser(` with the parenthesis is the call.
+    """
+    return any(g in body for g in GUARDS)
+
+
+def guards_properly(body: str) -> bool:
+    """Is the guard called *before* the first reach for data?
+
+    A guard that runs after the first query protects nothing: the query has
+    already gone out by then.
+    """
+    guard_at = min((body.find(g) for g in GUARDS if g in body), default=-1)
+    data_at = min((body.find(d) for d in DATA_ACCESS if d in body), default=-1)
+    if guard_at < 0 or data_at < 0:
+        return guard_at >= 0
+    return guard_at < data_at
+
+
+def guarding_helpers(src: str) -> set[str]:
+    """The local functions that themselves guard, properly.
+
+    A route is allowed to reach its guard through one of these —
+    `adminGate(request)` and `canEdit(request, id)` are the two in this
+    codebase — so the checker follows the call rather than demanding that
+    every handler spell the guard out itself.
+    """
+    return {
+        name
+        for name, body in local_functions(src).items()
+        if name not in HTTP_METHODS and has_guard(body) and guards_properly(body)
+    }
+
+
+def guard_points(body: str, helpers: set[str]) -> list[int]:
+    """Where in this body a guard is reached — directly, or through a helper."""
+    points = [body.find(g) for g in GUARDS if g in body]
+    for name in helpers:
+        # The call site, not the definition — the definition is in another body.
+        for m in re.finditer(r"(?<![.\w])" + re.escape(name) + r"\s*\(", body):
+            points.append(m.start())
+    return points
+
+
+def first_data_access(body: str) -> int:
+    return min((body.find(d) for d in DATA_ACCESS if d in body), default=-1)
+
 
 def select_parts(spec: str) -> list[str]:
     """Split a PostgREST select on its *top-level* commas.
@@ -92,33 +207,38 @@ for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
             print(f"  WARN {f}: {fn}() params not supplied: {sorted(params - passed)}")
 
     # ---- route guard audit ----
+    #
+    # Per *handler*, not per file. A file with a guarded GET and an unguarded
+    # POST used to read as guarded, because the check was "does this file
+    # mention a guard anywhere" — so the one property the script claims to
+    # verify was the one thing it could not verify.
+    #
+    # Each exported method is cut out of the source and checked on its own:
+    # it must call a guard, and it must do so *before* it touches a table.
     rel = str(f).replace("\\", "/")
-    is_public = any(
-        k in rel
-        for k in ("auth/login", "auth/logout", "auth/me", "auth/google", "heartbeat")
-    )
-    # Substring match against the source, so a route that merely imports a
-    # guard without calling it would still read as protected — the same
-    # looseness every entry here has, and enough to catch the real failure,
-    # which is a route with no guard at all.
-    guarded = any(
-        g in src
-        for g in (
-            "requireUser(",
-            "requireDbUser(",
-            "requireReviewer(",
-            "requireAdministrator(",
-            "requirePermission(",
-        )
-    )
-    if is_public:
-        label = "public (intended)"
-    elif guarded:
-        label = "guarded"
-    else:
-        label = "BUG: UNPROTECTED"
+    is_public = rel in PUBLIC_ROUTES
+    handlers = handlers_in(src)
+    helpers = guarding_helpers(src)
+
+    if not handlers:
+        print(f"  [BUG: NO HANDLER  ] {rel}")
         problems += 1
-    print(f"  [{label:>20}] {rel}")
+    for method, body in handlers:
+        label = f"{rel} {method}"
+        if is_public:
+            print(f"  [{'public (intended)':>20}] {label}")
+            continue
+        points = guard_points(body, helpers)
+        if not points:
+            print(f"  [BUG: UNPROTECTED] {label}")
+            problems += 1
+            continue
+        data_at = first_data_access(body)
+        if data_at >= 0 and min(points) > data_at:
+            print(f"  [BUG: TOO LATE    ] {label} — data is read before the guard")
+            problems += 1
+            continue
+        print(f"  [{'guarded':>20}] {label}")
 
 print()
 print("RESULT:", "all contracts + guards OK" if problems == 0 else f"{problems} problem(s)")

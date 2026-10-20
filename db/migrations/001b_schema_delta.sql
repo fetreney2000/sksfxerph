@@ -90,6 +90,7 @@ returns jsonb language plpgsql security definer set search_path = erph, public a
 declare
   v_doc erph.rph_document%rowtype;
   v_pct smallint;
+  v_require boolean;
 begin
   perform set_config('app.rpc', '1', true);              -- unlocks guard_review_fields
 
@@ -117,9 +118,29 @@ begin
   if v_doc.status = 'forwarded' then raise exception 'Sedang dalam kelulusan Guru Besar'; end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
-  if v_pct < 100 and not p_force then
+
+  -- The school's own rule, read rather than assumed.
+  --
+  -- `school_setting.require_complete` is what the administrator sets on
+  -- /pentadbiran → Sesi & tarikh akhir ("Halang penghantaran sehingga
+  -- kelengkapan 100%"). It used to be written by `admin_set_setting` and read
+  -- by *nothing*: the gate below was hard-coded to 100%, so the switch in the
+  -- console did nothing at all — a setting that looked like a control and was
+  -- not one.
+  --
+  -- `p_force` is the teacher's acknowledged escape hatch, not a bypass: it is
+  -- what the editor's "send it anyway" button sends, and the reviewer sees
+  -- what it cost in the AutoCheck panel. When the school does not require
+  -- completeness, the force flag has nothing left to do.
+  select coalesce(
+           (select require_complete from erph.school_setting
+             where school_id = v_doc.school_id),
+           true)
+    into v_require;
+
+  if v_pct < 100 and v_require and not p_force then
     return jsonb_build_object('ok', false, 'completeness', v_pct,
-      'error', 'Refleksi/Intervensi belum lengkap');
+      'error', 'RPH belum lengkap — lengkapkan setiap seksyen wajib');
   end if;
 
   update erph.rph_document
@@ -205,7 +226,15 @@ begin
                  where school_id = p_school and user_id = p_user) then
     raise exception 'Akaun bukan ahli sekolah ini';
   end if;
-  update erph.school_member set role = p_role
+  -- Both rows, both halves of the change. `is_active` travels with the role
+  -- onto the membership as well as onto the account: every SQL policy reads
+  -- `school_member.is_active`, so deactivating an account that left
+  -- `school_member` active would keep a dismissed teacher in the monitoring
+  -- roster, still satisfy `has_role(..., 'guru_besar')` inside the review
+  -- RPCs, and still receive reminders. The route guard reads
+  -- `erph.user.is_active` and would have denied them, so the two models
+  -- would have disagreed about the same person.
+  update erph.school_member set role = p_role, is_active = p_active
    where school_id = p_school and user_id = p_user;
   -- The jawatan travels with the role: an office the new role cannot hold is
   -- cleared rather than left for the cover sheet to print under a name that

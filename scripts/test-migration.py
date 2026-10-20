@@ -10,10 +10,12 @@ over it, and then asserts the result.
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import subprocess
 import sys
+import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -76,6 +78,12 @@ def main() -> int:
         encoding="utf-8"
     )
     delta15 = (ROOT / "db" / "migrations" / "015_edit_existing.sql").read_text(
+        encoding="utf-8"
+    )
+    delta16 = (ROOT / "db" / "migrations" / "016_authorization_truth.sql").read_text(
+        encoding="utf-8"
+    )
+    delta17 = (ROOT / "db" / "migrations" / "017_school_rules.sql").read_text(
         encoding="utf-8"
     )
     old_schema = from_git(BASELINE, "db/schema.sql")
@@ -189,8 +197,10 @@ def main() -> int:
             run(delta13, "013")
             run(delta14, "014")
             run(delta15, "015")
+            run(delta16, "016")
+            run(delta17, "017")
         print(
-            "  [OK ] migration applied (001a→015, old signature pre-installed)"
+            "  [OK ] migration applied (001a→017, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -974,6 +984,341 @@ def main() -> int:
         with conn.cursor() as cur:
             cur.execute("select set_config('request.jwt.claims', null, false)")
             conn.commit()
+
+    # ── 016: one model of who may do what ────────────────────────────────────
+    # Three behaviours, each of which used to be the opposite of what the
+    # app's own route guards assumed.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute("select id from erph.school limit 1")
+            school = cur.fetchone()[0]
+            cur.execute(
+                "select id from erph.user where role = 'guru_biasa' and is_active limit 1"
+            )
+            teacher = cur.fetchone()[0]
+
+            # Deactivating must take the membership with it — every policy
+            # reads `school_member.is_active`, so a dismissed teacher left
+            # active there stayed inside the roster and the review RPCs.
+            cur.execute(
+                "select erph.admin_set_member(%s, %s, 'guru_biasa', false)",
+                (school, teacher),
+            )
+            conn.commit()
+            cur.execute(
+                "select is_active from erph.school_member "
+                "where school_id = %s and user_id = %s",
+                (school, teacher),
+            )
+            member_active = cur.fetchone()[0]
+            check(
+                "016 deactivating an account deactivates its membership",
+                member_active is False,
+                f"membership still active={member_active}",
+            )
+            cur.execute(
+                "select erph.admin_set_member(%s, %s, 'guru_biasa', true)",
+                (school, teacher),
+            )
+            conn.commit()
+
+            # The history answers for a member…
+            cur.execute(
+                "select count(*) from erph.school_week_history("
+                "%s, '2026/2027'::text, 1::smallint, 2::smallint)",
+                (school,),
+            )
+            own = cur.fetchone()[0]
+            check(
+                "016 a member still reads their own school's history",
+                own == 2,
+                f"got {own}",
+            )
+
+            # …and refuses for a school they are not in. It is SECURITY
+            # DEFINER, so the caller's own RLS is never consulted and this
+            # check inside it is the only thing standing there.
+            try:
+                cur.execute(
+                    "select count(*) from erph.school_week_history("
+                    "'00000000-0000-4000-8000-0000000000ff'::uuid, '2026/2027'::text, "
+                    "1::smallint, 2::smallint)"
+                )
+                conn.rollback()
+                check(
+                    "016 a school they do not belong to is refused",
+                    False,
+                    "no exception raised",
+                )
+            except Exception as e:  # noqa: BLE001
+                conn.rollback()
+                check(
+                    "016 a school they do not belong to is refused",
+                    "dibenarkan" in str(e),
+                    str(e).splitlines()[0][:120],
+                )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("016 authorization truth", False, str(e).splitlines()[0][:140])
+
+    # A plan under review is not rewritten by its owner, and an unrecognised
+    # status does not withdraw it from the reviewer's queue.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select id from erph.school limit 1")
+            school = cur.fetchone()[0]
+            cur.execute(
+                "select id from erph.user where role = 'guru_biasa' and is_active limit 1"
+            )
+            teacher = cur.fetchone()[0]
+            cur.execute("select id from erph.class where school_id = %s limit 1", (school,))
+            class_id = cur.fetchone()[0]
+            cur.execute(
+                "insert into erph.rph_document (school_id, owner_id, class_id, subject_code, "
+                "session, week_no, plan_date, payload) "
+                "values (%s, %s, %s, 'MAT', '2026/2027', 3, date '2026-10-19', "
+                "'{\"objektif\":\"asli\"}'::jsonb) returning id",
+                (school, teacher, class_id),
+            )
+            doc = cur.fetchone()[0]
+            conn.commit()
+
+            # Submitted the legitimate way, so the plan is genuinely under review.
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user where id = %s), false)",
+                (teacher,),
+            )
+            conn.commit()
+            cur.execute("select erph.submit_rph(%s, true)", (doc,))
+            conn.commit()
+            cur.execute(
+                "select version, status::text from erph.rph_document where id = %s", (doc,)
+            )
+            before = cur.fetchone()
+
+            op = json.dumps(
+                [
+                    {
+                        "op_id": str(uuid.uuid4()),
+                        "id": str(doc),
+                        "class_id": str(class_id),
+                        "subject_code": "MAT",
+                        "session": "2026/2027",
+                        "week_no": 3,
+                        "plan_date": "2026-10-19",
+                        "payload": {"objektif": "DIBAWAH"},
+                        "status": "draft",
+                    }
+                ]
+            )
+            cur.execute("select erph.sync_rph(%s::jsonb)", (op,))
+            conn.commit()
+            cur.execute(
+                "select payload::text, version, status::text "
+                "from erph.rph_document where id = %s",
+                (doc,),
+            )
+            after = cur.fetchone()
+            check(
+                "016 a plan under review keeps its content",
+                "DIBAWAH" not in after[0] and "asli" in after[0],
+                f"payload now {after[0][:70]}",
+            )
+            check(
+                "016 …and its version", after[1] == before[0], f"{before[0]} → {after[1]}"
+            )
+            check(
+                "016 …and stays in the reviewer's queue",
+                after[2] == "submitted",
+                f"status now {after[2]}",
+            )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("016 a plan under review is not rewritten", False, str(e).splitlines()[0][:140])
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("select set_config('request.jwt.claims', null, false)")
+            conn.commit()
+
+    # ── 017: the school's own rules ─────────────────────────────────────────
+    # Each of these was the opposite of what the app's own console said.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select id from erph.school limit 1")
+            school = cur.fetchone()[0]
+            cur.execute(
+                "select id from erph.user where role = 'guru_biasa' and is_active limit 1"
+            )
+            teacher = cur.fetchone()[0]
+            cur.execute("select id from erph.class where school_id = %s limit 1", (school,))
+            class_id = cur.fetchone()[0]
+
+            # `require_complete` was a switch that did nothing. It now decides.
+            # The setting is written by the Administrator, so the actor has to
+            # be one for that call and the teacher for the next.
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute(
+                "select erph.admin_set_setting(%s, 5::smallint, '16:00'::time, true, "
+                "'2026/2027', 5::smallint)",
+                (school,),
+            )
+            conn.commit()
+            cur.execute(
+                "insert into erph.rph_document (school_id, owner_id, class_id, subject_code, "
+                "session, week_no, plan_date, payload) "
+                "values (%s, %s, %s, 'MAT', '2026/2027', 7, date '2026-11-02', "
+                "'{\"objektif\":\"Hanya objektif\"}'::jsonb) returning id",
+                (school, teacher, class_id),
+            )
+            partial = cur.fetchone()[0]
+            conn.commit()
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user where id = %s), false)",
+                (teacher,),
+            )
+            conn.commit()
+
+            # Incomplete and the school requires completeness: refused.
+            verdict = cur.execute(
+                "select erph.submit_rph(%s, false)", (partial,)
+            ).fetchone()
+            check(
+                "017 an incomplete plan is refused when the school requires completeness",
+                verdict is not None and verdict[0].get("ok") is False,
+                str(verdict[0]) if verdict else "no verdict",
+            )
+
+            # The school turns the requirement off: now it goes through.
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute(
+                "select erph.admin_set_setting(%s, 5::smallint, '16:00'::time, false, "
+                "'2026/2027', 5::smallint)",
+                (school,),
+            )
+            conn.commit()
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user where id = %s), false)",
+                (teacher,),
+            )
+            conn.commit()
+            verdict = cur.execute(
+                "select erph.submit_rph(%s, false)", (partial,)
+            ).fetchone()
+            check(
+                "017 …and goes through when the school turns it off",
+                verdict is not None and verdict[0].get("ok") is True,
+                str(verdict[0]) if verdict else "no verdict",
+            )
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where username = 'pentadbir.sk'), false)"
+            )
+            conn.commit()
+            cur.execute(
+                "select erph.admin_set_setting(%s, 5::smallint, '16:00'::time, true, "
+                "'2026/2027', 5::smallint)",
+                (school,),
+            )
+            conn.commit()
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user where id = %s), false)",
+                (teacher,),
+            )
+            conn.commit()
+
+            # One malformed op must not take the batch with it. The op id is
+            # not a uuid, so the cast raises — and the good op beside it must
+            # still be applied.
+            cur.execute(
+                "insert into erph.rph_document (school_id, owner_id, class_id, subject_code, "
+                "session, week_no, plan_date, payload) "
+                "values (%s, %s, %s, 'MAT', '2026/2027', 8, date '2026-11-09', "
+                "'{\"objektif\":\"Baik\"}'::jsonb) returning id",
+                (school, teacher, class_id),
+            )
+            good = cur.fetchone()[0]
+            conn.commit()
+            cur.execute("select count(*) from erph.sync_op")
+            claims_before = cur.fetchone()[0]
+            cur.execute(
+                "select erph.sync_rph(jsonb_build_array("
+                "  jsonb_build_object('op_id', 'bukan-uuid', 'class_id', %s::text, "
+                "    'subject_code', 'MAT', 'session', '2026/2027', 'week_no', 9, "
+                "    'plan_date', '2026-11-16', 'payload', '{}'::jsonb),"
+                "  jsonb_build_object('op_id', gen_random_uuid()::text, 'id', %s::text, "
+                "    'class_id', %s::text, 'subject_code', 'MAT', 'session', '2026/2027', "
+                "    'week_no', 8, 'plan_date', '2026-11-09', "
+                "    'payload', '{\"objektif\":\"Baik\"}'::jsonb)"
+                "))",
+                (class_id, good, class_id),
+            )
+            batch = cur.fetchone()[0]
+            results = batch if isinstance(batch, list) else []
+            kinds = [r.get("result") for r in results]
+            check(
+                "017 one malformed op does not abort the batch",
+                "rejected" in kinds and "applied" in kinds,
+                str(kinds),
+            )
+            check(
+                "017 …and the malformed op is marked retryable",
+                any(r.get("result") == "rejected" and r.get("retryable") for r in results),
+                str(results)[:120],
+            )
+            # The claim on the failed op's id was rolled back with the rest of
+            # its work, so the id is still free — so only the *good* op left a
+            # claim behind, and the failed one can be retried with the very
+            # same op id.
+            cur.execute("select count(*) from erph.sync_op")
+            claims_after = cur.fetchone()[0]
+            check(
+                "017 a failed op leaves no claim behind",
+                claims_after == claims_before + 1,
+                f"{claims_before} → {claims_after} (one good op, one failed)",
+            )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("017 school rules", False, str(e).splitlines()[0][:140])
+
+    # The column grant: a signed-in teacher may correct their own name and
+    # address, and nothing else on their own row. `role` is the one that
+    # matters — the route guards read `erph.user.role`.
+    try:
+        with conn.cursor() as cur:
+            for column, expected in (("full_name", True), ("email", True), ("role", False)):
+                cur.execute(
+                    "select has_column_privilege('authenticated', 'erph.user', %s, 'UPDATE')",
+                    (column,),
+                )
+                check(
+                    f"017 authenticated may update erph.user.{column}: {expected}",
+                    cur.fetchone()[0] is expected,
+                    str(cur.fetchone()[0]) if False else "",
+                )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("017 column grants", False, str(e).splitlines()[0][:140])
 
     print()
     for label, ok, detail in checks:

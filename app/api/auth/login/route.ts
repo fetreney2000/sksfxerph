@@ -69,6 +69,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // A second limit, keyed on the account rather than the network.
+  //
+  // The one above bounds the total; this one bounds the guesses against a
+  // single account. It is derived from the request body, so no header can
+  // rotate it — which is what makes it the control that holds when the
+  // network key is forged. It applies to every username, existent or not, so
+  // the 429 says nothing about whether an account is real.
+  const accountLimited = rateLimit(`login:acct:${username.toLowerCase()}`);
+  if (accountLimited) return accountLimited;
+
   // ── local mode: same code path, demo accounts, no database ────────────────
   if (!supabaseConfigured) {
     // Matched by username: local mode has one account per role, and accepting
@@ -109,6 +119,17 @@ export async function POST(request: NextRequest) {
 
   const user = data as UserRow | null;
   const locked = Boolean(user?.locked_until && new Date(user.locked_until) > new Date());
+  /**
+   * A lock that has run out starts the count again.
+   *
+   * Carrying the old total forward would re-arm the lock on the very next
+   * guess, so one request per window could hold an account locked for good —
+   * and the account owner could do nothing about it, because the counter is
+   * only cleared by a successful sign-in. The lock below is not extended
+   * while it stands; this is the other half of that promise: the counter
+   * does not outlive it either.
+   */
+  const lockExpired = Boolean(user?.locked_until) && !locked;
 
   if (!user) {
     // Pay the same cost as a real verification so timing leaks nothing.
@@ -135,7 +156,10 @@ export async function POST(request: NextRequest) {
     // The lock is also not extended here: otherwise a flood of guesses could
     // keep a teacher locked out indefinitely.
     if (!locked) {
-      const failed = user.failed_logins + 1;
+      // An expired lock starts the count from nothing again, so an attacker
+      // has to land five guesses *inside* one window rather than re-arming a
+      // stale five.
+      const failed = (lockExpired ? 0 : user.failed_logins) + 1;
       const shouldLock = failed >= MAX_FAILURES;
       const { error: updErr } = await db
         .from("user")

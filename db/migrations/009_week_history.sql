@@ -32,7 +32,22 @@ create or replace function erph.school_week_history(p_school uuid, p_session tex
 returns table (week smallint, teachers int, expected int, submitted int,
                approved int, returned_t int, drafts int, compliance numeric,
                avg_minutes numeric)
-language sql stable security definer set search_path = erph, public as $$
+language plpgsql stable security definer set search_path = erph, public as $$
+begin
+  -- The same permission shape as the single-week function beside it: any
+  -- member of the school may read these figures, and nobody else may.
+  --
+  -- This check was missing, and because the function is SECURITY DEFINER the
+  -- caller's own RLS is never consulted — so the blanket grant on the schema's
+  -- routines let anyone holding the publishable key ask for any school's
+  -- year: headcount, submissions, approvals, compliance and how long the
+  -- school takes to review. Plpgsql rather than SQL so the refusal can be
+  -- the same exception its sibling raises.
+  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+    raise exception 'Tidak dibenarkan';
+  end if;
+
+  return query
   with active as (
     select count(*)::int n from erph.school_member
      where school_id = p_school and role = 'guru_biasa' and is_active
@@ -72,4 +87,4 @@ language sql stable security definer set search_path = erph, public as $$
     left join docs d on d.week_no = w.week
    group by w.week, a.n, c.per_week
    order by w.week;
-$$;
+end $$;

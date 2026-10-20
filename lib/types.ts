@@ -192,6 +192,16 @@ export interface SyncResult {
   status?: RphStatus;
   completeness?: number;
   error?: string;
+  /**
+   * Set on a `rejected` result: may this op succeed if it is tried again?
+   *
+   * The distinction is the difference between a teacher's edit being kept and
+   * being lost. A rejection the server decided on — a class that is not in
+   * this school — will be rejected forever, so the op is dropped and the
+   * teacher is told. A failure the server did not expect might well succeed
+   * next time, so the op stays in the queue and is retried.
+   */
+  retryable?: boolean;
 }
 
 export interface ReviewDecision {

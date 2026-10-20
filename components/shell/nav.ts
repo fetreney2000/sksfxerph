@@ -1,6 +1,5 @@
 import {
   BookOpen,
-  Clock3,
   FileText,
   History,
   LayoutGrid,
@@ -218,5 +217,3 @@ export function routeMetaFor(pathname: string): { title: string; crumb: string }
     ? (ROUTE_META[parent] ?? { title: "eRPH", crumb: "" })
     : { title: "eRPH", crumb: "" };
 }
-
-export { Clock3 };

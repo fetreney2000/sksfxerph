@@ -905,7 +905,22 @@ create or replace function erph.school_week_history(p_school uuid, p_session tex
 returns table (week smallint, teachers int, expected int, submitted int,
                approved int, returned_t int, drafts int, compliance numeric,
                avg_minutes numeric)
-language sql stable security definer set search_path = erph, public as $$
+language plpgsql stable security definer set search_path = erph, public as $$
+begin
+  -- The same permission shape as the single-week function beside it: any
+  -- member of the school may read these figures, and nobody else may.
+  --
+  -- This check was missing, and because the function is SECURITY DEFINER the
+  -- caller's own RLS is never consulted — so the blanket grant on the schema's
+  -- routines let anyone holding the publishable key ask for any school's
+  -- year: headcount, submissions, approvals, compliance and how long the
+  -- school takes to review. Plpgsql rather than SQL so the refusal can be
+  -- the same exception its sibling raises.
+  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+    raise exception 'Tidak dibenarkan';
+  end if;
+
+  return query
   with active as (
     select count(*)::int n from erph.school_member
      where school_id = p_school and role = 'guru_biasa' and is_active
@@ -945,7 +960,7 @@ language sql stable security definer set search_path = erph, public as $$
     left join docs d on d.week_no = w.week
    group by w.week, a.n, c.per_week
    order by w.week;
-$$;
+end $$;
 
 create or replace function erph.my_schools()
 returns uuid[] language sql stable security definer set search_path = erph, public as $$
@@ -1002,6 +1017,7 @@ returns jsonb language plpgsql security definer set search_path = erph, public a
 declare
   v_doc erph.rph_document%rowtype;
   v_pct smallint;
+  v_require boolean;
 begin
   perform set_config('app.rpc', '1', true);              -- unlocks guard_review_fields
 
@@ -1029,9 +1045,29 @@ begin
   if v_doc.status = 'forwarded' then raise exception 'Sedang dalam kelulusan Guru Besar'; end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
-  if v_pct < 100 and not p_force then
+
+  -- The school's own rule, read rather than assumed.
+  --
+  -- `school_setting.require_complete` is what the administrator sets on
+  -- /pentadbiran → Sesi & tarikh akhir ("Halang penghantaran sehingga
+  -- kelengkapan 100%"). It used to be written by `admin_set_setting` and read
+  -- by *nothing*: the gate below was hard-coded to 100%, so the switch in the
+  -- console did nothing at all — a setting that looked like a control and was
+  -- not one.
+  --
+  -- `p_force` is the teacher's acknowledged escape hatch, not a bypass: it is
+  -- what the editor's "send it anyway" button sends, and the reviewer sees
+  -- what it cost in the AutoCheck panel. When the school does not require
+  -- completeness, the force flag has nothing left to do.
+  select coalesce(
+           (select require_complete from erph.school_setting
+             where school_id = v_doc.school_id),
+           true)
+    into v_require;
+
+  if v_pct < 100 and v_require and not p_force then
     return jsonb_build_object('ok', false, 'completeness', v_pct,
-      'error', 'Refleksi/Intervensi belum lengkap');
+      'error', 'RPH belum lengkap — lengkapkan setiap seksyen wajib');
   end if;
 
   update erph.rph_document
@@ -1078,6 +1114,8 @@ create or replace function erph.sahkan_rph(p_document uuid,
 returns jsonb language plpgsql security definer set search_path = erph, public as $$
 declare
   v_doc erph.rph_document%rowtype;
+  v_pct smallint;
+  v_require boolean;
 begin
   perform set_config('app.rpc', '1', true);
 
@@ -1102,6 +1140,28 @@ begin
                     and document_version = v_doc.version
                     and signer_id = erph.actor()) then
     raise exception 'Tandatangan diperlukan';
+  end if;
+
+  -- The grade is a factual claim.
+  --
+  -- Lampiran 7 grades a plan 1 = lengkap, 0 = tidak lengkap. Recording 1 for
+  -- a plan that is missing sections would put a false statement into a
+  -- statutory record, and nothing downstream could tell it from a real one:
+  -- the review row carries the completeness, but the *grade* is what the
+  -- school's compliance figures are built from.
+  --
+  -- So an approval needs the same completeness the school asked for at
+  -- submission. A school that has turned the requirement off may still approve
+  -- an incomplete plan — that is its own policy, set by the administrator who
+  -- answers for it.
+  v_pct := erph.rph_completeness(v_doc.payload);
+  select coalesce(
+           (select require_complete from erph.school_setting
+             where school_id = v_doc.school_id),
+           true)
+    into v_require;
+  if v_pct < 100 and v_require then
+    raise exception 'RPH belum lengkap untuk disahkan — kembalikan kepada guru';
   end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
@@ -1196,136 +1256,184 @@ begin
   if v_school is null then raise exception 'Tiada keahlian sekolah aktif'; end if;
 
   for v_op in select * from jsonb_array_elements(p_ops) loop
-    v_op_id := (v_op->>'op_id')::uuid;
-    v_id    := coalesce((v_op->>'id')::uuid, gen_random_uuid());
-    v_pct    := erph.rph_completeness(v_op->'payload');
-    v_client_ts := coalesce((v_op->>'client_updated_at')::timestamptz, now());
+    -- One malformed op must not take the batch with it: the other
+    -- twenty-four are the teacher's real work, and they were not malformed.
+    -- So each op is applied inside its own block and a failure is reported
+    -- rather than raised.
+    --
+    -- `retryable` is the distinction the client acts on. A rejection the
+    -- server decided on — a class that is not in this school — will be
+    -- rejected forever, so the client drops the op and tells the teacher. A
+    -- failure the server did not expect may well succeed next time, so the
+    -- client keeps the op and tries again, which is only possible because the
+    -- block is a subtransaction: everything this op did, including the claim
+    -- on its op id, has been rolled back by the time the handler runs.
+    v_op_id := null;
+    v_id := null;
+    v_doc_id := null;
+    begin
+      v_op_id := (v_op->>'op_id')::uuid;
+      v_id    := coalesce((v_op->>'id')::uuid, gen_random_uuid());
+      v_pct    := erph.rph_completeness(v_op->'payload');
+      v_client_ts := coalesce((v_op->>'client_updated_at')::timestamptz, now());
 
-    -- 1) idempotency: replayed ops are no-ops
-    insert into erph.sync_op (op_id, user_id, entity, entity_id)
-    values (v_op_id, v_uid, 'rph', v_id)
-    on conflict (op_id) do nothing;
-    get diagnostics v_rows = row_count;
-    if v_rows = 0 then
-      v_out := v_out || jsonb_build_array(
-        jsonb_build_object('op_id', v_op_id, 'result', 'duplicate'));
-      continue;
-    end if;
+      -- 1) idempotency: replayed ops are no-ops
+      insert into erph.sync_op (op_id, user_id, entity, entity_id)
+      values (v_op_id, v_uid, 'rph', v_id)
+      on conflict (op_id) do nothing;
+      get diagnostics v_rows = row_count;
+      if v_rows = 0 then
+        v_out := v_out || jsonb_build_array(
+          jsonb_build_object('op_id', v_op_id, 'result', 'duplicate'));
+        continue;
+      end if;
 
-    -- 2) validate target class belongs to caller's school + session
-    if not exists (
-         select 1 from erph.class c
-          where c.id = (v_op->>'class_id')::uuid
-            and c.school_id = v_school and c.session = v_op->>'session' and c.is_active)
-    then
-      v_out := v_out || jsonb_build_array(
-        jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'kelas bukan dalam sekolah/sesi anda'));
-      continue;
-    end if;
-    if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
-      v_out := v_out || jsonb_build_array(
-        jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'mata pelajaran tidak dikenali'));
-      continue;
-    end if;
+      -- 2) validate target class belongs to caller's school + session
+      if not exists (
+           select 1 from erph.class c
+            where c.id = (v_op->>'class_id')::uuid
+              and c.school_id = v_school and c.session = v_op->>'session' and c.is_active)
+      then
+        v_out := v_out || jsonb_build_array(
+          jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
+                             'error', 'kelas bukan dalam sekolah/sesi anda'));
+        continue;
+      end if;
+      if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
+        v_out := v_out || jsonb_build_array(
+          jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
+                             'error', 'mata pelajaran tidak dikenali'));
+        continue;
+      end if;
 
-    -- 3) resolve canonical row: by id, else by natural key (merge duplicates)
-    select id, version, status into v_doc_id, v_ver, v_status
-      from erph.rph_document
-     where owner_id = v_uid and deleted_at is null
-       and (id = v_id
-            or (class_id = (v_op->>'class_id')::uuid
-                and subject_code = v_op->>'subject_code'
-                and session = v_op->>'session'
-                and week_no = (v_op->>'week_no')::smallint
-                and plan_date = (v_op->>'plan_date')::date))
-     order by (id = v_id) desc
-     limit 1;
+      -- 3) resolve canonical row: by id, else by natural key (merge duplicates)
+      select id, version, status into v_doc_id, v_ver, v_status
+        from erph.rph_document
+       where owner_id = v_uid and deleted_at is null
+         and (id = v_id
+              or (class_id = (v_op->>'class_id')::uuid
+                  and subject_code = v_op->>'subject_code'
+                  and session = v_op->>'session'
+                  and week_no = (v_op->>'week_no')::smallint
+                  and plan_date = (v_op->>'plan_date')::date))
+       order by (id = v_id) desc
+       limit 1;
 
-    if v_doc_id is not null then
-      update erph.rph_document
-         set payload = v_op->'payload',
-             version = version + 1,
-             client_updated_at = v_client_ts,
-             slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
-             slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end),
-             content_hash = coalesce(v_op->>'content_hash', content_hash),
-             -- Status is server-managed. The client may request only:
-             --   • nothing (null)     → keep current state
-             --   • 'submitted'        → allowed ONLY when 100% complete
-             -- Everything else (including leaving approved/returned) is dropped,
-             -- so sync can never bypass submit_rph()'s completeness gate or
-             -- let a teacher self-approve their own plan.
-             status = case
-                        when v_op->>'status' is null then status
-                        when status in ('approved', 'returned')
-                             and v_op->>'status' <> 'submitted' then status
-                        when v_op->>'status' = 'submitted' and v_pct = 100
-                          then 'submitted'::erph.rph_status
-                        when v_op->>'status' = 'submitted' then status
-                        else 'draft'::erph.rph_status
-                      end,
-             submitted_at = case when v_op->>'status' = 'submitted' and v_pct = 100
-                                 and submitted_at is null
-                                 then now() else submitted_at end
-       where id = v_doc_id and owner_id = v_uid
-      returning version, status into v_ver, v_status;
-    else
-      begin
-        insert into erph.rph_document
-          (id, school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
-           slot_time, slot_time_end, payload, status, version, client_updated_at, content_hash, submitted_at)
-        values
-          (v_id, v_school, v_uid, (v_op->>'class_id')::uuid, v_op->>'subject_code',
-           v_op->>'session', (v_op->>'week_no')::smallint, (v_op->>'plan_date')::date,
-           coalesce((v_op->>'slot_time')::time, '07:30'::time),
-           coalesce((v_op->>'slot_time_end')::time, '12:40'::time),
-           v_op->'payload',
-           -- New documents are always drafts: submitting is an explicit act
-           -- through submit_rph(), and the same 100% gate applies here.
-           case when v_op->>'status' = 'submitted' and v_pct = 100
-                then 'submitted'::erph.rph_status
-                else 'draft'::erph.rph_status end,
-           1, v_client_ts, v_op->>'content_hash',
-           case when v_op->>'status' = 'submitted' and v_pct = 100 then now() end)
-        returning id, version, status into v_doc_id, v_ver, v_status;
-      exception when unique_violation then
-        -- race: another request created the same logical plan → merge into it
+      if v_doc_id is not null then
         update erph.rph_document
-           set payload = v_op->'payload',
-               version = version + 1,
+           set -- A plan a reviewer is reading is not editable. The editor already
+               -- locks a plan once it has been submitted (`weekLocked`), and the
+               -- server now says the same: only a draft, or a returned plan the
+               -- teacher is fixing, may be rewritten. Without this a client that
+               -- bypassed the editor could change the content of a plan sitting
+               -- in a reviewer's queue — and the version would move under the
+               -- signature that reviewer is about to make.
+               payload = case when status in ('draft','returned')
+                              then v_op->'payload' else payload end,
+               version = version + case when status in ('draft','returned')
+                              then 1 else 0 end,
                client_updated_at = v_client_ts,
                slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
-               slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end)
-         where owner_id = v_uid
-           and class_id = (v_op->>'class_id')::uuid
-           and subject_code = v_op->>'subject_code'
-           and session = v_op->>'session'
-           and week_no = (v_op->>'week_no')::smallint
-           and plan_date = (v_op->>'plan_date')::date
-           and deleted_at is null
-        returning id, version, status into v_doc_id, v_ver, v_status;
-      end;
-    end if;
+               slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end),
+               content_hash = case when status in ('draft','returned')
+                              then coalesce(v_op->>'content_hash', content_hash)
+                              else content_hash end,
+               -- Status is server-managed. The client may request only:
+               --   • nothing (null)     → keep current state
+               --   • 'submitted'        → allowed ONLY when 100% complete
+               -- Everything else (including leaving approved/returned) is dropped,
+               -- so sync can never bypass submit_rph()'s completeness gate or
+               -- let a teacher self-approve their own plan.
+               status = case
+                          when v_op->>'status' is null then status
+                          when status in ('approved', 'returned')
+                               and v_op->>'status' <> 'submitted' then status
+                          when v_op->>'status' = 'submitted' and v_pct = 100
+                            then 'submitted'::erph.rph_status
+                          when v_op->>'status' = 'submitted' then status
+                          -- Dropped, as the comment above says: an unrecognised
+                          -- status leaves the plan where it is. It used to become
+                          -- 'draft', which let a client withdraw its own plan
+                          -- from a reviewer's queue without going through
+                          -- submit_rph() at all.
+                          else status
+                        end,
+               submitted_at = case when v_op->>'status' = 'submitted' and v_pct = 100
+                                   and submitted_at is null
+                                   then now() else submitted_at end
+         where id = v_doc_id and owner_id = v_uid
+        returning version, status into v_ver, v_status;
+      else
+        begin
+          insert into erph.rph_document
+            (id, school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
+             slot_time, slot_time_end, payload, status, version, client_updated_at, content_hash, submitted_at)
+          values
+            (v_id, v_school, v_uid, (v_op->>'class_id')::uuid, v_op->>'subject_code',
+             v_op->>'session', (v_op->>'week_no')::smallint, (v_op->>'plan_date')::date,
+             coalesce((v_op->>'slot_time')::time, '07:30'::time),
+             coalesce((v_op->>'slot_time_end')::time, '12:40'::time),
+             v_op->'payload',
+             -- New documents are always drafts: submitting is an explicit act
+             -- through submit_rph(), and the same 100% gate applies here.
+             case when v_op->>'status' = 'submitted' and v_pct = 100
+                  then 'submitted'::erph.rph_status
+                  else 'draft'::erph.rph_status end,
+             1, v_client_ts, v_op->>'content_hash',
+             case when v_op->>'status' = 'submitted' and v_pct = 100 then now() end)
+          returning id, version, status into v_doc_id, v_ver, v_status;
+        exception when unique_violation then
+          -- race: another request created the same logical plan → merge into it
+          update erph.rph_document
+             set -- Same rule as the branch above: a plan under review is not
+                 -- rewritten, and its version does not move either.
+                 payload = case when status in ('draft','returned')
+                                then v_op->'payload' else payload end,
+                 version = version + case when status in ('draft','returned')
+                                then 1 else 0 end,
+                 client_updated_at = v_client_ts,
+                 slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
+                 slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end)
+           where owner_id = v_uid
+             and class_id = (v_op->>'class_id')::uuid
+             and subject_code = v_op->>'subject_code'
+             and session = v_op->>'session'
+             and week_no = (v_op->>'week_no')::smallint
+             and plan_date = (v_op->>'plan_date')::date
+             and deleted_at is null
+          returning id, version, status into v_doc_id, v_ver, v_status;
+        end;
+      end if;
 
-    if v_doc_id is null then
+      if v_doc_id is null then
+        v_out := v_out || jsonb_build_array(
+          jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
+                             'error', 'tidak dapat menentukan dokumen'));
+        continue;
+      end if;
+
+      insert into erph.rph_revision (document_id, version, payload, completeness, actor_id, reason)
+      values (v_doc_id, v_ver, v_op->'payload', v_pct, v_uid, 'sync')
+      on conflict (document_id, version) do nothing;
+
+      update erph.sync_op set result = jsonb_build_object('id', v_doc_id, 'version', v_ver)
+       where op_id = v_op_id;
+
+      v_out := v_out || jsonb_build_array(jsonb_build_object(
+        'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
+        'version', v_ver, 'status', v_status, 'completeness', v_pct));
+    exception when others then
+      -- The block is a subtransaction, so everything this op did — the claim on
+      -- its op id included — has been rolled back by the time the handler
+      -- runs. The op id is therefore still free and the client can retry the
+      -- very same op. Burnt, it would come back as 'duplicate' and the
+      -- client's queue would drop it: the teacher's edit, gone, because the
+      -- server had a bad minute.
       v_out := v_out || jsonb_build_array(
-        jsonb_build_object('op_id', v_op_id, 'result', 'rejected',
-                           'error', 'tidak dapat menentukan dokumen'));
-      continue;
-    end if;
-
-    insert into erph.rph_revision (document_id, version, payload, completeness, actor_id, reason)
-    values (v_doc_id, v_ver, v_op->'payload', v_pct, v_uid, 'sync')
-    on conflict (document_id, version) do nothing;
-
-    update erph.sync_op set result = jsonb_build_object('id', v_doc_id, 'version', v_ver)
-     where op_id = v_op_id;
-
-    v_out := v_out || jsonb_build_array(jsonb_build_object(
-      'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
-      'version', v_ver, 'status', v_status, 'completeness', v_pct));
+        jsonb_build_object('op_id', coalesce(v_op_id::text, v_op->>'op_id'),
+                           'result', 'rejected', 'retryable', true,
+                           'error', left(sqlerrm, 160)));
+    end;
   end loop;
 
   return v_out;
@@ -1564,7 +1672,15 @@ begin
                  where school_id = p_school and user_id = p_user) then
     raise exception 'Akaun bukan ahli sekolah ini';
   end if;
-  update erph.school_member set role = p_role
+  -- Both rows, both halves of the change. `is_active` travels with the role
+  -- onto the membership as well as onto the account: every SQL policy reads
+  -- `school_member.is_active`, so deactivating an account that left
+  -- `school_member` active would keep a dismissed teacher in the monitoring
+  -- roster, still satisfy `has_role(..., 'guru_besar')` inside the review
+  -- RPCs, and still receive reminders. The route guard reads
+  -- `erph.user.is_active` and would have denied them, so the two models
+  -- would have disagreed about the same person.
+  update erph.school_member set role = p_role, is_active = p_active
    where school_id = p_school and user_id = p_user;
   -- The jawatan travels with the role: an office the new role cannot hold is
   -- cleared rather than left for the cover sheet to print under a name that
@@ -2236,3 +2352,20 @@ alter default privileges for role postgres in schema erph
 -- consulted. Column-level grants would still leak via PostgREST metadata, so
 -- the whole table goes.
 revoke all on erph.user from anon, authenticated;
+
+-- The one exception, and it is narrow: a signed-in teacher may correct their
+-- own name and address. `profile_self_update` below is the row-level rule for
+-- it — and a row-level rule cannot say *which* columns, so the column grant
+-- has to say it here.
+--
+-- This is the defence that survives a mistake elsewhere. With the whole table
+-- revoked, nothing can be updated through PostgREST at all; but the revoke is
+-- a single statement at the end of a 2,300-line file, and if it were ever
+-- lost — a regenerated grant, a hand-edited deployment — the policy alone
+-- would permit updating `role`, `is_active` and `password_hash` on one's own
+-- row. `role` alone would be enough: the route guards read `erph.user.role`,
+-- so a `guru_biasa` who could write it could make themselves a `pentadbir`.
+--
+-- Two layers, then: the policy says *whose* row, the grant says *which
+-- columns*. Neither is enough alone, and each fails closed on its own.
+grant update (full_name, email) on erph.user to authenticated;

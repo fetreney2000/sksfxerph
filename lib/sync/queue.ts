@@ -164,6 +164,10 @@ export async function flushQueue(): Promise<SyncResult[]> {
 async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> {
   const byOp = new Map(results.map((r) => [r.opId, r]));
   const merges: { localId: string; serverId: string }[] = [];
+  /** Ops the server refused outright, with the reason — the teacher is told. */
+  const refused: { entityId: string; error: string }[] = [];
+  /** Ops worth trying again: the server failed, not decided. */
+  const retry: { opId: string; error: string; attempts: number }[] = [];
 
   await db.transaction("rw", db.syncQueue, db.documents, async () => {
     for (const opId of opIds) {
@@ -185,11 +189,38 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
         }
       }
 
-      // duplicate/rejected both leave the queue permanently — a rejected op
-      // would be rejected forever, so keeping it would block the queue.
+      if (res.result === "rejected") {
+        if (res.retryable) {
+          // The server failed rather than decided. The op id was released
+          // along with the work it had done, so this very op can be tried
+          // again — and until it succeeds, the edit stays in the queue rather
+          // than being dropped on the floor.
+          retry.push({
+            opId,
+            error: res.error ?? "ralat pelayan",
+            attempts: op?.attempts ?? 0,
+          });
+          continue;
+        }
+        // A rejection the server decided on: it will refuse again, so keeping
+        // the op would block the queue behind it. It is dropped — but not
+        // silently: the edit never reached the server, and the teacher is
+        // the only person who can do anything about that.
+        refused.push({ entityId: op?.entityId ?? opId, error: res.error ?? "ditolak" });
+      }
+
+      // applied / duplicate / a permanent rejection: the op has left the queue.
       await db.syncQueue.delete(opId);
     }
   });
+
+  // The retries are put back with a delay, so a server that is having a bad
+  // minute is not asked again immediately — and with the same escalating
+  // backoff as a network failure, so a server that stays down is asked less
+  // and less often.
+  if (retry.length > 0) {
+    await backoff(retry, new Error(retry[0]?.error ?? "ralat pelayan"));
+  }
 
   if (merges.length > 0) {
     // One notification per flush rather than one per row — a burst of merges
@@ -203,6 +234,22 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
         merges.length === 1
           ? "RPH ini wujud dalam pelayan dan telah digabungkan. Semak dokumen untuk memastikan kandungan terkini."
           : `${merges.length} RPH digabungkan dengan versi pelayan. Semak dokumen terjejas.`,
+      createdAt: Date.now(),
+    });
+  }
+
+  if (refused.length > 0) {
+    // The edit is still on this device — it is the server that never took it.
+    // Saying so is the difference between a teacher checking and a teacher
+    // believing the plan was filed.
+    await db.notifications.add({
+      id: newId(),
+      type: "system",
+      title: "RPH tidak dihantar ke pelayan",
+      body:
+        refused.length === 1
+          ? `Pelayan menolak satu RPH (${refused[0]?.error}). RPH ini masih ada dalam peranti ini — semak dan hantar semula.`
+          : `Pelayan menolak ${refused.length} RPH. RPH tersebut masih ada dalam peranti ini — semak dan hantar semula.`,
       createdAt: Date.now(),
     });
   }

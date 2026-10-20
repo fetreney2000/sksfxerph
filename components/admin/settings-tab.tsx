@@ -227,7 +227,8 @@ export function SettingsTab() {
             <span>
               Halang penghantaran sehingga kelengkapan 100%
               <span className="mt-0.5 block text-[11.5px] text-ink-4">
-                Guru hanya boleh menghantar apabila semua seksyen wajib telah diisi.
+                Guru hanya boleh menghantar apabila semua seksyen wajib telah diisi. Pentadbir
+                tidak boleh mengesahkan RPH yang belum lengkap — gred 1 bermaksud lengkap.
               </span>
             </span>
           </label>

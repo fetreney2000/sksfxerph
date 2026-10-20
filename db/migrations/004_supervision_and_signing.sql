@@ -110,6 +110,8 @@ create or replace function erph.sahkan_rph(p_document uuid,
 returns jsonb language plpgsql security definer set search_path = erph, public as $$
 declare
   v_doc erph.rph_document%rowtype;
+  v_pct smallint;
+  v_require boolean;
 begin
   perform set_config('app.rpc', '1', true);
 
@@ -134,6 +136,28 @@ begin
                     and document_version = v_doc.version
                     and signer_id = erph.actor()) then
     raise exception 'Tandatangan diperlukan';
+  end if;
+
+  -- The grade is a factual claim.
+  --
+  -- Lampiran 7 grades a plan 1 = lengkap, 0 = tidak lengkap. Recording 1 for
+  -- a plan that is missing sections would put a false statement into a
+  -- statutory record, and nothing downstream could tell it from a real one:
+  -- the review row carries the completeness, but the *grade* is what the
+  -- school's compliance figures are built from.
+  --
+  -- So an approval needs the same completeness the school asked for at
+  -- submission. A school that has turned the requirement off may still approve
+  -- an incomplete plan — that is its own policy, set by the administrator who
+  -- answers for it.
+  v_pct := erph.rph_completeness(v_doc.payload);
+  select coalesce(
+           (select require_complete from erph.school_setting
+             where school_id = v_doc.school_id),
+           true)
+    into v_require;
+  if v_pct < 100 and v_require then
+    raise exception 'RPH belum lengkap untuk disahkan — kembalikan kepada guru';
   end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)

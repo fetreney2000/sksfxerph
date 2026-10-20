@@ -42,19 +42,47 @@ export function rateLimit(key: string): NextResponse | null {
   );
 }
 
-/** Best-effort client identity: JWT subject when present, else the socket. */
+/**
+ * Best-effort client identity: the caller's network address.
+ *
+ * This used to read the `Authorization` header and key on the JWT's `sub`.
+ * Nothing here verifies that JWT — it was decoded and trusted — so `sub` was
+ * simply whatever the caller put inside it. A caller could send
+ * `Authorization: Bearer <base64url of {"sub":"1"}>` and land in a fresh bucket
+ * on every request, which is precisely what the limiter exists to prevent: the
+ * login route's account lockout became a one-request-per-window denial of
+ * service against every account in the school.
+ *
+ * The browser never sends an Authorization header at all — sessions are
+ * httpOnly cookies and the publishable key is never used as a bearer token —
+ * so the JWT branch had no legitimate caller to serve. The limit that cannot
+ * be forged is the one keyed on the account: the login route adds a second
+ * bucket from the username in the request body, which no header can rotate.
+ */
 export function clientKey(request: Request, fallback: string): string {
-  const auth = request.headers.get("authorization");
-  if (auth) {
-    try {
-      const parts = auth.replace(/^bearer\s+/i, "").split(".");
-      const payload = parts[1];
-      if (!payload) return `ip:${fallback}`;
-      const json = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-      if (typeof json.sub === "string") return `u:${json.sub}`;
-    } catch {
-      // Malformed token — fall through to the network key.
-    }
+  return `ip:${clientIp(request, fallback)}`;
+}
+
+/**
+ * The caller's network address.
+ *
+ * The first hop of `x-forwarded-for` — the original client in the standard
+ * chain — then `x-real-ip`, then whatever the caller passed as the fallback.
+ * The first hop rather than the last because a school behind a shared proxy
+ * would otherwise put every teacher in one bucket, and one noisy teacher's
+ * retries would then lock the whole school out of logging in for a minute.
+ *
+ * A caller that can prepend to `x-forwarded-for` can still rotate this bucket.
+ * That is why the per-account limit exists alongside it: the account limit is
+ * derived from the request body, so forging headers does not help.
+ */
+export function clientIp(request: Request, fallback: string): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
   }
-  return `ip:${fallback}`;
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  return fallback;
 }

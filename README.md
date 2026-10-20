@@ -17,13 +17,13 @@ npm run verify       # typecheck → lint → SQL static → SQL execution → A
 | Check | Command | Status |
 |---|---|---|
 | TypeScript | `npm run typecheck` | clean, `strict` + `noUncheckedIndexedAccess` |
-| Lint/format | `npm run lint` | Biome, 0 errors (4 documented warnings) |
-| SQL — static | `npm run check:sql` | 124 statements parse, 16 function bodies balanced, RLS/grants/schema-leak checks |
-| **SQL — executed** | `npm run check:sql:exec` | runs against a real PostgreSQL: 17 tables, 26 policies, enum values, inserts, guard triggers, NULL-actor refusal |
+| Lint/format | `npm run lint` | Biome, 0 errors (2 documented warnings) |
+| SQL — static | `npm run check:sql` | 157 statements parse, 39 function bodies balanced, RLS/grants/schema-leak checks |
+| **SQL — executed** | `npm run check:sql:exec` | runs against a real PostgreSQL: 18 tables, 28 policies, enum values, inserts, guard triggers, NULL-actor refusal |
 | API contract | `npm run check:api` | every column/embed/RPC param the routes use exists; every route guarded |
-| Unit + component | `npm test` | 52 passing (incl. password + session-token) |
+| Unit + component | `npm test` | 208 passing (incl. password, session-token, rate-limit, lockout, heartbeat) |
 | Production build | `npm run build` | 14 routes |
-| E2E | `npm run test:e2e` | 13 passing (incl. login, logout, session gate) |
+| E2E | `npm run test:e2e` | 22 passing (incl. login, logout, session gate) |
 
 > **Why two SQL gates.** Static parsing proved the schema *parses*; a schema
 > Supabase rejected at runtime (`type "member_role" does not exist`) proved
@@ -97,6 +97,7 @@ tested against the pre-rename schema by `scripts/test-migration.py`.
 |---|---|
 | `db/migrations/001a_alter_types.sql` | **Six lines, one at a time** — select a line, press Run, repeat |
 | `db/migrations/001b_schema_delta.sql` | Paste the whole file |
+| `db/migrations/002…017_*.sql` | Paste each whole file, in order — every one is idempotent |
 
 001a is separate for two hard Postgres reasons: `rename value` refuses to run
 inside a transaction block, and a value added inside one cannot be used until

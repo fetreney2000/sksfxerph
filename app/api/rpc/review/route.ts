@@ -75,9 +75,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const rpc = body.decision === "sahkan" ? stage.approveRpc : stage.returnRpc;
 
+  /** Whether *this* request wrote a signature row — see the rollback below. */
+  let inserted = false;
+
   if (body.decision === "sahkan") {
-    const refusal = await verifyAndStore(gate, body.documentId, body.envelope, body.signature);
-    if (refusal) return refusal;
+    const verified = await verifyAndStore(gate, body.documentId, body.envelope, body.signature);
+    if (verified.refusal) return verified.refusal;
+    inserted = verified.inserted;
   }
 
   const { data, error } = await gate.db.rpc(rpc, {
@@ -90,7 +94,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // The signature row is now an orphan: a signature over a version that was
     // never approved. Harmless — nothing reads it, and a later attempt reuses
     // it if the version still matches — but tidier to take it back.
-    if (body.decision === "sahkan") await discardSignature(gate, body.documentId);
+    //
+    // Only the row *this request* wrote, and only when it wrote one. The
+    // earlier version deleted every signature this reviewer had for the
+    // document, so a second, failed attempt to approve an already-approved
+    // plan — which the status check refuses before anything is inserted —
+    // took the approval's own signature with it.
+    if (inserted) await discardSignature(gate, body.documentId);
     return NextResponse.json({ error: error.message }, { status: 422 });
   }
   return NextResponse.json(data);
@@ -99,16 +109,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 type Gate = Awaited<ReturnType<typeof requireReviewer>>;
 
 /**
- * Verify the signature, then append it. Returns a refusal to send back, or
- * `null` when the row is on file.
+ * Verify the signature, then append it.
+ *
+ * Returns the refusal to send back — or `null` — and whether a row was
+ * written, so the caller knows whether there is anything to roll back.
  */
 async function verifyAndStore(
   gate: Extract<Gate, { db: unknown }>,
   documentId: string,
   envelope: Record<string, unknown> | undefined,
   signature: string | undefined,
-): Promise<NextResponse | null> {
-  const refuse = (message: string) => NextResponse.json({ error: message }, { status: 422 });
+): Promise<{ refusal: NextResponse | null; inserted: boolean }> {
+  const refuse = (message: string) => ({
+    refusal: NextResponse.json({ error: message }, { status: 422 }),
+    inserted: false,
+  });
 
   if (!envelope || !signature) return refuse("Tandatangan diperlukan");
 
@@ -127,7 +142,10 @@ async function verifyAndStore(
 
   if (error) {
     console.error("[review] document read failed:", error.message);
-    return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+    return {
+      refusal: NextResponse.json({ error: "Ralat pelayan." }, { status: 500 }),
+      inserted: false,
+    };
   }
   const doc = data as {
     id: string;
@@ -191,7 +209,7 @@ async function verifyAndStore(
     .limit(1)
     .maybeSingle();
 
-  if (existing) return null;
+  if (existing) return { refusal: null, inserted: false };
 
   const { error: insertErr } = await gate.db.from("rph_signature").insert({
     document_id: documentId,
@@ -204,19 +222,27 @@ async function verifyAndStore(
   });
   if (insertErr) {
     console.error("[review] signature insert failed:", insertErr.message);
-    return NextResponse.json({ error: "Gagal menyimpan tandatangan." }, { status: 500 });
+    return {
+      refusal: NextResponse.json({ error: "Gagal menyimpan tandatangan." }, { status: 500 }),
+      inserted: false,
+    };
   }
 
-  return null;
+  return { refusal: null, inserted: true };
 }
 
 /**
- * Best-effort removal of a signature row whose approval did not happen.
+ * Best-effort removal of the signature row this request wrote, whose approval
+ * did not happen.
  *
  * "Best effort" on purpose: this runs on an error path, and a second failure
  * here must not replace the original message the reviewer is shown. The row
  * left behind is inert — `sahkan_rph` ignores signatures for a version it is
  * not approving, and a later attempt re-uses it while the version holds.
+ *
+ * Scoped to the document and the signer. The earlier version deleted every
+ * signature this reviewer had for the document, so a failed second attempt on
+ * an already-approved plan took the approval's own signature with it.
  */
 async function discardSignature(
   gate: Extract<Gate, { db: unknown }>,

@@ -31,9 +31,17 @@ import { adminDb } from "@/lib/server/db";
 export interface SchoolContext {
   session: string;
   school: SchoolBrand;
+  /**
+   * The school's uuid.
+   *
+   * For the records that have to say *which* school they belong to — the
+   * statutory export log, most of all. The brand above is what the paper
+   * prints; this is what the database joins on.
+   */
+  id: string;
 }
 
-const FALLBACK: SchoolContext = { session: SESSION, school: SCHOOL };
+const FALLBACK: SchoolContext = { session: SESSION, school: SCHOOL, id: "" };
 
 /**
  * What a *synced* deployment shows when it cannot read its own school row.
@@ -49,6 +57,7 @@ const FALLBACK: SchoolContext = { session: SESSION, school: SCHOOL };
 const UNKNOWN: SchoolContext = {
   session: SESSION,
   school: { name: "", place: "", motto: "", logo: SCHOOL.logo },
+  id: "",
 };
 
 export async function resolveSchool(): Promise<SchoolContext> {
@@ -92,6 +101,7 @@ export async function resolveSchool(): Promise<SchoolContext> {
 
     return {
       session: (setting as { current_session: string } | null)?.current_session ?? SESSION,
+      id: school.id,
       school: {
         // A field the administrator has left blank stays blank. Substituting
         // the bundled school's name for a row that *exists* is the same lie as

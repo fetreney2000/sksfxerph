@@ -128,7 +128,15 @@ begin
                  where school_id = p_school and user_id = p_user) then
     raise exception 'Akaun bukan ahli sekolah ini';
   end if;
-  update erph.school_member set role = p_role
+  -- Both rows, both halves of the change. `is_active` travels with the role
+  -- onto the membership as well as onto the account: every SQL policy reads
+  -- `school_member.is_active`, so deactivating an account that left
+  -- `school_member` active would keep a dismissed teacher in the monitoring
+  -- roster, still satisfy `has_role(..., 'guru_besar')` inside the review
+  -- RPCs, and still receive reminders. The route guard reads
+  -- `erph.user.is_active` and would have denied them, so the two models
+  -- would have disagreed about the same person.
+  update erph.school_member set role = p_role, is_active = p_active
    where school_id = p_school and user_id = p_user;
   -- The jawatan travels with the role: an office the new role cannot hold is
   -- cleared rather than left for the cover sheet to print under a name that

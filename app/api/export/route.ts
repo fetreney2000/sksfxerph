@@ -15,6 +15,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseConfigured } from "@/lib/config";
 import { formatMyt, hariName, weekdayIndex } from "@/lib/date";
+import { rateLimit } from "@/lib/http/rate-limit";
 import { rphPayloadSchema, temaLengkap } from "@/lib/schemas/rph";
 import { requireUser } from "@/lib/server/auth/guard";
 import { resolveSchool } from "@/lib/server/school";
@@ -38,20 +39,25 @@ import { DB_SCHEMA } from "@/lib/supabase/schema";
 const bodySchema = z.object({
   document_id: z.string().uuid().optional(),
   payload: rphPayloadSchema,
-  session: z.string(),
+  session: z.string().max(20),
   // No `teacherName`. The name printed on the paper is the person exporting
   // it, taken from the session below: that is the one source that cannot be a
   // stranger, and the route already refuses to export a document that is not
   // the caller's. It used to be accepted from the body *and* never sent, so
   // every exported DOCX printed a dash in the NAMA row and "Guru: undefined"
   // above it — a blank cell is honest, but this one was avoidable.
-  schoolName: z.string().optional(),
-  planDate: z.string().optional(),
-  className: z.string().optional(),
-  subjectName: z.string().optional(),
+  //
+  // Every free-text field is bounded. These are the teacher's own words, and
+  // some of them end up in a header and a database column: an unbounded one is
+  // a megabyte of text in a `content-disposition`, and a quote in it ends the
+  // header parameter early.
+  schoolName: z.string().max(120).optional(),
+  planDate: z.string().max(20).optional(),
+  className: z.string().max(80).optional(),
+  subjectName: z.string().max(120).optional(),
   /** Masa Mula / Masa Tamat — both are printed, so both are carried through. */
-  slotTime: z.string().optional(),
-  slotTimeEnd: z.string().optional(),
+  slotTime: z.string().max(10).optional(),
+  slotTimeEnd: z.string().max(10).optional(),
   /**
    * The seal, carried through to the printed document.
    *
@@ -60,7 +66,7 @@ const bodySchema = z.object({
    * export with no signature simply prints the blank reviewer line it always
    * did — an unapproved plan must not look sealed.
    */
-  signerName: z.string().optional(),
+  signerName: z.string().max(120).optional(),
   /**
    * The signer's office, printed under their name exactly as the weekly cover
    * sheet prints it. Optional for the same reason as the name: an export with
@@ -68,10 +74,26 @@ const bodySchema = z.object({
    * would be a claim about nobody.
    */
   signerTitle: z.string().max(80).optional(),
-  signedAt: z.string().optional(),
-  signatureAlg: z.string().optional(),
-  signatureKey: z.string().optional(),
+  signedAt: z.string().max(40).optional(),
+  signatureAlg: z.string().max(20).optional(),
+  signatureKey: z.string().max(200).optional(),
 });
+
+/**
+ * A filename that is safe in a `content-disposition` header.
+ *
+ * The class name is the teacher's own text and goes straight into the header,
+ * so a quote in it would end the parameter early and the rest of the name
+ * would be read as another header. Everything that is not a letter, a digit
+ * or a plain separator becomes a dash.
+ */
+const safeName = (value: string, fallback: string): string => {
+  const cleaned = value
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-")
+    .replace(/^[-.]+/, "")
+    .slice(0, 60);
+  return cleaned || fallback;
+};
 
 async function supabaseAdmin() {
   const { createClient } = await import("@supabase/supabase-js");
@@ -90,6 +112,15 @@ async function supabaseAdmin() {
  * dropped here rather than in two places.
  */
 const LABEL_FILL = "D9EAD3";
+
+/**
+ * The private bucket the exported copies are kept in.
+ *
+ * The same name as the bucket db/schema.sql creates, so the path recorded in
+ * `erph.export_file` names an object that exists in a bucket that exists —
+ * rather than a place where a file might be.
+ */
+const EXPORT_BUCKET = "rph-exports";
 
 function cell(text: string, opts: { bold?: boolean; width?: number; label?: boolean } = {}) {
   return new TableCell({
@@ -132,6 +163,12 @@ export async function POST(request: NextRequest) {
   const gate = await requireUser(request);
   if ("error" in gate) return gate.error;
 
+  // Generating a DOCX is not free, and every call also writes a row to the
+  // statutory export log. Keyed by the caller, so one teacher hammering the
+  // button cannot lock the others out.
+  const limited = rateLimit(`export:${gate.user.id}`);
+  if (limited) return limited;
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -173,7 +210,8 @@ export async function POST(request: NextRequest) {
   // edits, not from the build — otherwise the document and the screen it was
   // previewed on could name different schools. Resolved here rather than as a
   // zod default because a default has to be a constant.
-  const schoolName = parsed.data.schoolName ?? (await resolveSchool()).school.name;
+  const school = await resolveSchool();
+  const schoolName = parsed.data.schoolName ?? school.school.name;
 
   // `document_id` is a claim by the caller, and it is stamped into the
   // statutory export log below. The *payload* is whatever was sent — that is
@@ -394,28 +432,51 @@ export async function POST(request: NextRequest) {
   });
 
   const buffer = await Packer.toBuffer(doc);
-  const slug = `${(className ?? "rph").replace(/\s+/g, "-")}-${planDate ?? "draft"}`;
+  // The filename goes into a response header, so it is built from text that
+  // cannot end the header parameter early.
+  const slug = `${safeName(className ?? "", "rph")}-${safeName(planDate ?? "", "draft")}`;
   const filename = `RPH-${slug}.docx`;
 
-  // Backend §10: log the export. Fire-and-forget — a failed audit write must
-  // never block the download, but failures are logged so the gap stays visible.
+  // Backend §10: log the export.
+  //
+  // Awaited, and the copy is stored. Both halves matter for a statutory
+  // record: a fire-and-forget write can be lost when the function is frozen,
+  // so a trail that is *sometimes* there is not a trail; and a row pointing at
+  // a bucket path where no object was ever written says "document X was
+  // exported" while keeping nothing about what was exported. The copy is put
+  // in the school's private bucket, so `bucket` and `path` name something
+  // that exists.
   if (supabaseConfigured && "user" in gate) {
-    void (async () => {
-      try {
-        const admin = await supabaseAdmin();
-        const { error } = await admin.from("export_file").insert({
-          document_id: parsed.data.document_id ?? null,
-          created_by: gate.user.id,
-          bucket: "rph-exports",
-          path: `${parsed.data.document_id ?? "adhoc"}/${filename}`,
-          format: "docx",
-          bytes: buffer.byteLength,
+    try {
+      const admin = await supabaseAdmin();
+      const path = `${parsed.data.document_id ?? "adhoc"}/${filename}`;
+      const { error: upErr } = await admin.storage
+        .from(EXPORT_BUCKET)
+        .upload(path, new Uint8Array(buffer), {
+          contentType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          upsert: true,
         });
-        if (error) console.error("[export] audit write failed:", error.message);
-      } catch (err) {
-        console.error("[export] audit write failed:", err);
+      if (upErr) {
+        // The download below still works — the copy is streamed to the caller
+        // either way — so a storage failure must not fail the export. It is
+        // logged, because the row that follows will name a path with nothing
+        // at it, and that gap should be visible.
+        console.error("[export] could not store the copy:", upErr.message);
       }
-    })();
+      const { error } = await admin.from("export_file").insert({
+        document_id: parsed.data.document_id ?? null,
+        school_id: school.id || null,
+        created_by: gate.user.id,
+        bucket: EXPORT_BUCKET,
+        path,
+        format: "docx",
+        bytes: buffer.byteLength,
+      });
+      if (error) console.error("[export] audit write failed:", error.message);
+    } catch (err) {
+      console.error("[export] audit write failed:", err);
+    }
   }
 
   return new NextResponse(new Uint8Array(buffer), {

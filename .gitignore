@@ -16,6 +16,10 @@ test-results
 .vitest
 __pycache__/
 
+# The assistant's local preference store. Machine-local state, not project
+# documentation — the guidance that belongs in the repo is AGENTS.md.
+.commandcode/
+
 # OS
 .DS_Store
 Thumbs.db

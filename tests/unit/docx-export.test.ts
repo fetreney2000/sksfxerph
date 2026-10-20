@@ -108,3 +108,50 @@ describe("the exported DOCX", () => {
     expect(xml).not.toContain("2026-10-12T");
   });
 });
+
+/**
+ * The filename in the response header.
+ *
+ * The class name is the teacher's own text and it goes straight into a
+ * `content-disposition` parameter. A quote in it ends the parameter early and
+ * the rest of the name is read as another header — so the name is built from
+ * text that cannot do that.
+ */
+describe("the exported file's name", () => {
+  const filenameOf = async (body: unknown): Promise<string> => {
+    const res = await POST(post(body));
+    expect(res.status).toBe(200);
+    const disposition = res.headers.get("content-disposition") ?? "";
+    return disposition;
+  };
+
+  it("cannot be broken out of by a quote in the class name", async () => {
+    const disposition = await filenameOf({
+      ...BASE_BODY,
+      className: '5 A"\r\nX-Injected: yes',
+    });
+
+    // The parameter's own delimiters are the only quotes in the header; the
+    // value between them holds none.
+    const value = disposition.match(/filename="([^"]*)"/)?.[1] ?? "";
+    expect(value).not.toContain('"');
+    expect(value).not.toContain("\r");
+    expect(value).not.toContain("\n");
+    // …and no line break escaped into the header, so there is no second
+    // header for the browser to read.
+    expect(disposition).not.toContain("\r");
+    expect(disposition).not.toContain("\n");
+  });
+
+  it("keeps a plain class name readable", async () => {
+    const disposition = await filenameOf({ ...BASE_BODY, className: "5 Amanah" });
+
+    expect(disposition).toContain("RPH-5-Amanah-2026-10-12.docx");
+  });
+
+  it("refuses a field that is longer than it has any right to be", async () => {
+    const res = await POST(post({ ...BASE_BODY, className: "x".repeat(500) }));
+
+    expect(res.status).toBe(422);
+  });
+});

@@ -23,11 +23,13 @@ that `pgserver` starts for us (no Docker needed).
 """
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import re
 import sys
 import tempfile
+import uuid
 
 # A Windows console defaults to cp1252, which cannot encode the arrows this
 # script prints. The resulting UnicodeEncodeError is caught by the behaviour
@@ -340,6 +342,23 @@ def main() -> int:
     )[0]
     check("erph.user revoked from anon/authenticated", priv == 0, f"{priv} grants remain")
 
+    # The one column grant on erph.user: a signed-in teacher may correct their
+    # own name and address, and nothing else on their own row. `role` is the
+    # one that matters — the route guards read `erph.user.role`, so a teacher
+    # who could write it could make themselves an Administrator.
+    for column, expected in (("full_name", True), ("email", True), ("role", False)):
+        allowed = r.one(
+            "select has_column_privilege('authenticated', 'erph.user', %s, 'UPDATE')",
+            (column,),
+        )[0]
+        checks.append(
+            (
+                f"erph.user.{column} writable by authenticated: {expected}",
+                allowed is expected,
+                str(allowed),
+            )
+        )
+
     print("\nobject inventory:")
     for label, ok, detail in checks:
         print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" — {detail}" if not ok else ""))
@@ -359,8 +378,20 @@ def main() -> int:
             insert into erph.school_setting (school_id) select id from erph.school where kod_sekolah='SKTEST';
             insert into erph.class (school_id, nama, tahun, session)
             select id, '5 Ujian', 5, '2026/2027' from erph.school where kod_sekolah='SKTEST';
-            insert into erph.rph_document (school_id, owner_id, class_id, subject_code, session, week_no, plan_date)
-            select s.id, u.id, c.id, 'MAT', '2026/2027', 1, '2026-10-05'
+            insert into erph.rph_document (school_id, owner_id, class_id, subject_code, session, week_no, plan_date, payload)
+            select s.id, u.id, c.id, 'MAT', '2026/2027', 1, '2026-10-05',
+                   -- A *complete* payload: the review RPCs now refuse to
+                   -- approve a plan that is missing sections, so the fixture
+                   -- has to be one that could honestly be approved. The
+                   -- incomplete case is its own assertion below.
+                   jsonb_build_object(
+                     'payload_version', 2,
+                     'standard_kandungan', 'Standard Kandungan',
+                     'standard_pembelajaran', 'Standard Pembelajaran',
+                     'objektif', 'Objektif',
+                     'kriteria_kejayaan', 'Kriteria Kejayaan',
+                     'aktiviti', jsonb_build_array(jsonb_build_object('nama', 'Aktiviti Satu')),
+                     'refleksi', 'Refleksi')
             from erph.school s, erph.user u, erph.class c
             where s.kod_sekolah='SKTEST' and c.nama='5 Ujian';
             """
@@ -446,7 +477,11 @@ def main() -> int:
     # unrelated seed failures.
     fixture_school_id = r.one("select id from erph.school where kod_sekolah='SKTEST'")[0]
     SK = f"'{fixture_school_id}'"
-    DOC = f"(select id from erph.rph_document where school_id = {SK})"
+    # Pinned to the first week, not to "the only document": the fixture creates
+    # more than one (an incomplete plan, for the approval rule below), and a
+    # scalar subquery over two rows raises "more than one row returned" — an
+    # error that has nothing to do with the rule under test.
+    DOC = f"(select id from erph.rph_document where school_id = {SK} and week_no = 1)"
 
     def act_as(username: str) -> None:
         r.q(
@@ -731,6 +766,61 @@ def main() -> int:
         conn.commit()
         status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
         stage.append(("sahkan -> approved", status == "approved"))
+
+        # ── the grade is a factual claim ───────────────────────────────────
+        # Lampiran 7 grades a plan 1 = lengkap, 0 = tidak lengkap. Recording
+        # 1 for a plan that is missing sections puts a false statement into a
+        # statutory record, and the school's compliance figures are built from
+        # the grade — so a false grade is a false figure.
+        r.q(
+            f"""
+            insert into erph.rph_document (school_id, owner_id, class_id, subject_code,
+                                           session, week_no, plan_date, payload)
+            select s.id, u.id, c.id, 'MAT', '2026/2027', 4, '2026-10-26',
+                   jsonb_build_object('objektif', 'Hanya objektif')
+              from erph.school s, erph.user u, erph.class c
+             where s.kod_sekolah='SKTEST' and c.nama='5 Ujian' and u.username='uji';
+            """
+        )
+        conn.commit()
+        incomplete = r.one(
+            f"select id from erph.rph_document where school_id = {SK} and week_no = 4"
+        )[0]
+        act_as("uji")
+        r.q(f"select erph.submit_rph('{incomplete}', true)")
+        conn.commit()
+        act_as("gpk.uji")
+        # Signed and ready: the refusal has to come from the completeness, not
+        # from a missing signature.
+        r.q(
+            f"""
+            insert into erph.rph_signature (document_id, document_version, signer_id,
+                                            alg, public_key, signature, envelope)
+            select d.id, d.version, u.id, 'ES256', 'cHVibGlj', 'c2ln', jsonb_build_object('v', 1)
+              from erph.rph_document d, erph.user u
+             where d.id = '{incomplete}' and u.username = 'gpk.uji'
+            on conflict do nothing;
+            """
+        )
+        conn.commit()
+        msg = refused(f"select erph.sahkan_rph('{incomplete}')")
+        stage.append(
+            ("an incomplete plan cannot be approved as complete", "belum lengkap" in msg, msg)
+        )
+
+        # …and the school may turn the requirement off, which is its own
+        # decision: the administrator answers for the school, and a school that
+        # does not require completeness may approve one.
+        r.q(f"update erph.school_setting set require_complete = false where school_id = {SK}")
+        conn.commit()
+        r.q(f"select erph.sahkan_rph('{incomplete}', 'Disahkan juga')")
+        conn.commit()
+        status = r.one(f"select status::text from erph.rph_document where id = '{incomplete}'")[0]
+        stage.append(
+            ("…unless the school has turned the requirement off", status == "approved", status)
+        )
+        r.q(f"update erph.school_setting set require_complete = true where school_id = {SK}")
+        conn.commit()
 
         # One approved plan out of the five this school owes in week 1: 20%.
         # Not 100%, and not 20% *of a headcount* — the number only means
@@ -1020,6 +1110,133 @@ def main() -> int:
         # cleanup and any later assertion see a coherent fixture.
         r.q(f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})")
         conn.commit()
+
+        # ── deactivating an account deactivates the membership too ────────
+        # `admin_set_member` writes both rows that hold the role, and it has
+        # to write both halves of the change: every SQL policy reads
+        # `school_member.is_active`, so a dismissed teacher left active in the
+        # membership would still sit in a monitoring roster, still satisfy
+        # `has_role` inside the review RPCs, and still be reminded.
+        act_as("admin.uji")
+        uji_role = r.one("select role::text from erph.user where username='uji'")[0]
+        r.q(
+            f"select erph.admin_set_member({SK}, {uid('uji')}, "
+            f"'{uji_role}'::erph.member_role, false)"
+        )
+        conn.commit()
+        member_active = r.one(
+            f"select m.is_active from erph.school_member m "
+            f"where m.school_id = {SK} and m.user_id = {uid('uji')}"
+        )[0]
+        admin.append(
+            (
+                "deactivating an account deactivates its membership",
+                member_active is False,
+                f"membership still active={member_active}",
+            )
+        )
+        # Restore the fixture: the rest of the run expects an active teacher.
+        r.q(
+            f"select erph.admin_set_member({SK}, {uid('uji')}, "
+            f"'{uji_role}'::erph.member_role, true)"
+        )
+        conn.commit()
+
+        # ── a school's weekly history is not a public statistic ───────────
+        # `school_week_history` is SECURITY DEFINER, so the caller's own RLS is
+        # never consulted: the check inside it is the only thing between a
+        # stranger and a school's year. It was missing, and the blanket grant
+        # on the schema's routines let anyone holding the publishable key ask
+        # for any school.
+        act_as("uji")
+        own_history = r.one(
+            f"select count(*) from erph.school_week_history({SK}::uuid, "
+            f"'2026/2027'::text, 1::smallint, 2::smallint)"
+        )[0]
+        admin.append(
+            (
+                "a member can still read their own school's history",
+                own_history == 2,
+                f"got {own_history}",
+            )
+        )
+        msg = refused(
+            f"select * from erph.school_week_history("
+            f"'00000000-0000-4000-8000-0000000000ff'::uuid, '2026/2027'::text, "
+            f"1::smallint, 2::smallint)"
+        )
+        admin.append(("a school they do not belong to is refused", "dibenarkan" in msg, msg))
+
+        # ── a plan under review is not rewritten by its owner ─────────────
+        # The editor locks a plan once it has been submitted, and the server
+        # now says the same. A client that bypassed the editor used to be able
+        # to change the content of a plan sitting in a reviewer's queue — and
+        # the version moved under the signature that reviewer was about to make.
+        r.q(
+            """
+            insert into erph.rph_document (school_id, owner_id, class_id, subject_code,
+                                           session, week_no, plan_date, payload)
+            select s.id, u.id, c.id, 'MAT', '2026/2027', 2, '2026-10-12',
+                   '{"objektif":"asli"}'::jsonb
+              from erph.school s, erph.user u, erph.class c
+             where s.kod_sekolah='SKTEST' and c.nama='5 Ujian' and u.username='uji';
+            """
+        )
+        conn.commit()
+        doc2 = r.one(
+            f"select id from erph.rph_document where school_id = {SK} and week_no = 2"
+        )[0]
+        class_id = r.one("select id from erph.class where nama='5 Ujian'")[0]
+
+        act_as("uji")
+        # Submitted the legitimate way, so the plan is genuinely under review.
+        r.q(f"select erph.submit_rph('{doc2}', true)")
+        conn.commit()
+        before = r.one(
+            f"select payload::text, version, status::text "
+            f"from erph.rph_document where id = '{doc2}'"
+        )
+
+        op = json.dumps(
+            [
+                {
+                    "op_id": str(uuid.uuid4()),
+                    "id": str(doc2),
+                    "class_id": str(class_id),
+                    "subject_code": "MAT",
+                    "session": "2026/2027",
+                    "week_no": 2,
+                    "plan_date": "2026-10-12",
+                    "payload": {"objektif": "DIBAWAH"},
+                    # A status the server does not accept. It must be dropped,
+                    # not turned into a withdrawal from the reviewer's queue.
+                    "status": "draft",
+                }
+            ]
+        )
+        r.q(f"select erph.sync_rph('{op}'::jsonb)")
+        conn.commit()
+        after = r.one(
+            f"select payload::text, version, status::text "
+            f"from erph.rph_document where id = '{doc2}'"
+        )
+        admin.append(
+            (
+                "a plan under review keeps its content",
+                "DIBAWAH" not in after[0] and "asli" in after[0],
+                f"payload now {after[0][:70]}",
+            )
+        )
+        admin.append(
+            ("…and its version", after[1] == before[1], f"{before[1]} → {after[1]}")
+        )
+        admin.append(
+            (
+                "…and stays in the reviewer's queue",
+                after[2] == "submitted",
+                f"status now {after[2]}",
+            )
+        )
 
         # ── the Administrator is visible only to a pentadbir ──────────────
         # Two policies, both of which previously let a GPK read the
