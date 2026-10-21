@@ -1047,14 +1047,51 @@ export function RphEditor({
       ? "hidden xl:block"
       : "block";
 
+  /**
+   * The printed form's contents, as one object.
+   *
+   * There are two instances of the sheet: the one on screen in the dock (or
+   * behind the phone's preview tab), and the one that actually goes on paper.
+   * Sharing the props is what stops them disagreeing — the preview the teacher
+   * approved and the page the printer takes have to be the same document.
+   */
+  const sheetProps: React.ComponentProps<typeof RphPaper> = {
+    payload: deferredPayload,
+    session,
+    schoolName: school.name,
+    teacherName: me.fullName,
+    // Every field the printed form has. These were missing, so the sheet —
+    // and therefore the PDF, which is a browser print of this tree — showed a
+    // dash for Subjek, Nama Kelas, Hari and Tarikh on every plan.
+    //
+    // In template mode the plan-specific ones are withheld rather than passed
+    // through: a template has no class, no date and no week, so the sheet
+    // prints the form's own dashes for what it does not have — which is the
+    // truth, and better than borrowing this browser's date.
+    planClassName: asTemplate ? undefined : live.className,
+    subjectName: live.subjectName,
+    planDate: asTemplate ? undefined : live.planDate,
+    slotTime: live.slotTime,
+    slotTimeEnd: live.slotTimeEnd,
+    weekNo: asTemplate ? undefined : live.weekNo,
+    signature: signature.signature,
+    signatureState: signature.state,
+  };
+
   return (
     <>
       {/* ══ Sticky section nav ════════════════════════════════════════════
           Replaces the horizontal stepper: chips stay reachable from anywhere
           on the page, and `topInset` parks them flush under the (content-
-          driven) topbar instead of guessing its height. */}
+          driven) topbar instead of guessing its height.
+
+          `data-print="screen"` below is the print contract: everything the
+          teacher works *with* carries it, and the sheet below carries
+          `data-print="page"`. `window.print()` renders the whole page, so
+          anything untagged ends up on the paper. */}
       <nav
         aria-label={ms.editor.sectionNav}
+        data-print="screen"
         className="sticky z-20 mb-4 flex items-center gap-1.5 overflow-x-auto rounded-[14px] border border-border bg-surface/95 px-2 py-2 shadow-xs backdrop-blur-md"
         style={{ top: topInset }}
       >
@@ -1099,7 +1136,10 @@ export function RphEditor({
         </button>
       </nav>
 
-      <div className={cn("grid gap-6", dockOpen && "xl:grid-cols-[1fr_390px]")}>
+      <div
+        data-print="screen"
+        className={cn("grid gap-6", dockOpen && "xl:grid-cols-[1fr_390px]")}
+      >
         {/* `min-w-0` is load-bearing: grid items default to `min-width: auto`,
             so nowrap content would blow the track out and scroll the whole page
             sideways (it did, at 390/1280/1440). */}
@@ -1261,7 +1301,27 @@ export function RphEditor({
           ))}
         </div>
 
-        <div className={cn("min-w-0 self-start", previewCls)}>
+        {/* The section nav and the action bar are sticky but the preview was
+            not, so by Bahagian 3 the "live preview" had scrolled off the top
+            and the teacher was filling in a form with nothing to look at. It
+            now sticks under the nav for as long as the form column is beside
+            it, with its own scrollbar for a long plan — and only while it is
+            the docked column, since as a tab below `xl` it *is* the page. */}
+        <div
+          className={cn(
+            "min-w-0 self-start",
+            dockOpen && "xl:sticky xl:overflow-y-auto",
+            previewCls,
+          )}
+          style={
+            dockOpen
+              ? {
+                  top: topInset + 72,
+                  maxHeight: `calc(100vh - ${topInset + 96}px)`,
+                }
+              : undefined
+          }
+        >
           {/* The tab bar lives in the *form* column, so this is the only way
               back once the preview takes over on a phone. `xl:hidden` keeps it
               out of the docked layout. */}
@@ -1306,30 +1366,14 @@ export function RphEditor({
             )}
           </div>
 
-          <RphPaper
-            payload={deferredPayload}
-            session={session}
-            schoolName={school.name}
-            teacherName={me.fullName}
-            // Every field the printed form has. These were missing, so the
-            // preview — and therefore the PDF, which is a browser print of
-            // this exact tree — showed a dash for Subjek, Nama Kelas, Hari
-            // and Tarikh on every plan.
-            //
-            // In template mode the plan-specific ones are withheld rather than
-            // passed through: a template has no class, no date and no week, so
-            // the preview prints the form's own dashes for what it does not
-            // have — which is the truth, and better than borrowing this
-            // browser's date.
-            planClassName={asTemplate ? undefined : live.className}
-            subjectName={live.subjectName}
-            planDate={asTemplate ? undefined : live.planDate}
-            slotTime={live.slotTime}
-            slotTimeEnd={live.slotTimeEnd}
-            weekNo={asTemplate ? undefined : live.weekNo}
-            signature={signature.signature}
-            signatureState={signature.state}
-          />
+          {/* The preview is a narrow column — 390px docked at xl, and the full
+              width of a phone. At a fixed 20% the label cell came out at 48px
+              of text space, where "Standard" needs ~54, so every label broke
+              mid-word: "Standar d / Kandun gan", "NAM A". The compact variant
+              lets the table size its own columns — the same thing `/semakan`
+              does for its mobile dialog — and it is scoped to `@media screen`,
+              so paper keeps the fixed 20% of the school's form. */}
+          <RphPaper {...sheetProps} compact />
         </div>
       </div>
 
@@ -1337,7 +1381,10 @@ export function RphEditor({
           Save state lives here (not 300px up in the header) next to the one
           primary action. No Back/Next: the section nav is the navigation, and
           no "Simpan draf" — autosave is the save. */}
-      <div className="sticky bottom-14 z-10 flex flex-wrap items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 shadow-sm lg:bottom-0">
+      <div
+        data-print="screen"
+        className="sticky bottom-14 z-10 flex flex-wrap items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 shadow-sm lg:bottom-0"
+      >
         <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-3">
           <span
             className={cn(
@@ -1456,6 +1503,18 @@ export function RphEditor({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* The artefact. `hidden` on screen — it is not a preview, it is the
+          thing the printer takes — and `@media print` in globals.css makes it
+          the whole page. A second instance on purpose: the on-screen sheet
+          lives inside the `data-print="screen"` dock, so it is hidden when
+          printing, and the preview may not be mounted at all (dock closed, or
+          a phone on its form tab) while the teacher still expects the PDF
+          button to produce the form. Same props, therefore the same
+          document. */}
+      <div data-print="page" className="hidden">
+        <RphPaper {...sheetProps} />
+      </div>
     </>
   );
 }
@@ -1518,8 +1577,20 @@ function SectionCard({
             </span>
             <span className="block truncate text-[11.5px] text-ink-4">{sub}</span>
           </span>
-          <Badge variant={done ? "success" : "warning"} dot={false}>
-            {done ? ms.editor.sectionDone : ms.editor.notReady}
+          <Badge variant={done ? "success" : "warning"} dot={false} className="max-sm:px-1.5">
+            {/* On a phone the pill drops to a dot. "Belum lengkap" is 105px of
+                the 294px the card has, which squeezed the title to "Bahagian 2
+                · …" — and the section name is the only thing saying which card
+                this is. The circle already turns green with a tick when the
+                section is complete, so an amber dot is enough to say "not
+                yet". */}
+            <span className="max-sm:hidden">
+              {done ? ms.editor.sectionDone : ms.editor.notReady}
+            </span>
+            <span
+              className="hidden h-1.5 w-1.5 rounded-full bg-current max-sm:block"
+              aria-hidden
+            />
           </Badge>
           <ChevronDown
             className={cn(
@@ -1867,6 +1938,8 @@ function StepDskp({
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      {/* The two standards together — they are the pair KSSR codes, and they
+          read as one thing. */}
       <div>
         <Label required htmlFor="f-188949">
           {ms.editor.standardKandungan}
@@ -1879,34 +1952,38 @@ function StepDskp({
         {payload.standard_kandungan.trim() === "" && (
           <FieldError>Standard Kandungan diperlukan sebelum dihantar.</FieldError>
         )}
-      </div>
-
-      <div>
-        <Label required htmlFor="f-907255">
-          {ms.editor.standardPembelajaran}
-        </Label>
-        <Input
-          id="f-907255"
-          value={payload.standard_pembelajaran}
-          onChange={(e) => onPatch({ standard_pembelajaran: e.target.value })}
-        />
-        {payload.standard_pembelajaran.trim() === "" && (
-          <FieldError>Standard Pembelajaran diperlukan sebelum dihantar.</FieldError>
-        )}
 
         <div className="mt-3.5">
-          <Label required htmlFor="f-675227">
-            {ms.editor.objective}
+          <Label required htmlFor="f-907255">
+            {ms.editor.standardPembelajaran}
           </Label>
-          <Textarea
-            id="f-675227"
-            value={payload.objektif}
-            onChange={(e) => onPatch({ objektif: e.target.value })}
+          <Input
+            id="f-907255"
+            value={payload.standard_pembelajaran}
+            onChange={(e) => onPatch({ standard_pembelajaran: e.target.value })}
           />
-          {payload.objektif.trim() === "" && (
-            <FieldError>Objektif diperlukan sebelum dihantar.</FieldError>
+          {payload.standard_pembelajaran.trim() === "" && (
+            <FieldError>Standard Pembelajaran diperlukan sebelum dihantar.</FieldError>
           )}
         </div>
+      </div>
+
+      {/* Objektif and Kriteria Kejayaan are both derived from those standards,
+          so they belong together and opposite them. They used to sit one above
+          the other in the right-hand column while Standard Kandungan sat alone
+          on the left, which left a card-high hole beside it. */}
+      <div>
+        <Label required htmlFor="f-675227">
+          {ms.editor.objective}
+        </Label>
+        <Textarea
+          id="f-675227"
+          value={payload.objektif}
+          onChange={(e) => onPatch({ objektif: e.target.value })}
+        />
+        {payload.objektif.trim() === "" && (
+          <FieldError>Objektif diperlukan sebelum dihantar.</FieldError>
+        )}
 
         <div className="mt-3.5">
           <Label required htmlFor="f-kriteria">
