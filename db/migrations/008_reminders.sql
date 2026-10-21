@@ -78,7 +78,7 @@ begin
   ), inserted as (
     insert into erph.notification (school_id, user_id, type, title, body, link_view)
     select p_school, t.user_id, 'reminder'::erph.notification_type, v_title,
-           format('Sila lengkapkan dan hantar RPH untuk %s, minggu %s.',
+           format('Sila lengkapkan dan hantar RPH bagi sesi %s, minggu %s.',
                   p_session, p_week),
            'dashboard'
       from target t

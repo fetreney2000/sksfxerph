@@ -49,7 +49,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ results: empty });
   }
   if (ops.length > 25) {
-    return NextResponse.json({ error: "Batch terlalu besar (maksimum 25)" }, { status: 413 });
+    return NextResponse.json(
+      { error: "Kumpulan terlalu besar (maksimum 25)" },
+      { status: 413 },
+    );
   }
 
   try {

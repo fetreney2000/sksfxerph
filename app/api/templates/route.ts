@@ -57,6 +57,15 @@ const updateSchema = z.object({
   tahap: z.string().max(40).nullable().optional(),
   curriculum: z.enum(["KSSR", "KSSM", "PRASEKOLAH"]).nullable().optional(),
   visibility: z.enum(["private", "school", "system"]),
+  /**
+   * The plan inside the template, when it is being changed.
+   *
+   * It was absent, so "Sunting" could only ever rename — a template's whole
+   * value is the plan it starts from, and a way in that could not touch it
+   * meant a typo in one was permanent. Omitted, the payload is left exactly as
+   * it is, so a rename still costs nothing and cannot blank the plan.
+   */
+  payload: rphPayloadSchema.optional(),
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -196,6 +205,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     tahap: d.tahap ?? null,
     curriculum: d.curriculum ?? null,
     visibility: d.visibility,
+    // Only when it was sent: `payload` is nullable in spirit if not in
+    // schema, and a rename must not be able to blank the plan inside.
+    ...(d.payload === undefined ? {} : { payload: d.payload }),
   });
 
   if (error) {

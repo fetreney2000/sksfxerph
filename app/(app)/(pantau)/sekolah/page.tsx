@@ -244,7 +244,7 @@ export default function SekolahPage() {
    */
   const remind = async (targets?: string[]) => {
     if (!supabaseConfigured) {
-      toast("Peringatan hanya boleh dihantar dalam mod tersegerak.");
+      toast("Peringatan hanya boleh dihantar dalam mod disegerakkan.");
       return;
     }
     try {
@@ -319,7 +319,7 @@ export default function SekolahPage() {
           // over a number describing another.
           label={`RPH · ${scope}`}
           value={String(s.submitted)}
-          sub={` · ${s.approved} diluluskan`}
+          sub={` · ${s.approved} disahkan`}
           bar={s.submitted === 0 ? 0 : (s.approved / s.submitted) * 100}
         />
         <Stat
@@ -438,7 +438,7 @@ export default function SekolahPage() {
                 {lateCount > 0 ? (
                   <>
                     {lateCount} guru belum lengkap dalam tempoh ini. Peringatan sentiasa merujuk{" "}
-                    <b>minggu semasa</b> — itulah yang perlu dibereskan.
+                    <b>minggu semasa</b> — itulah yang perlu diselesaikan.
                   </>
                 ) : (
                   <>Semua guru di bawah seliaan anda lengkap untuk {scope.toLowerCase()}.</>
@@ -483,9 +483,9 @@ export default function SekolahPage() {
                   {/* A different measure from the school's rate, and sharing
                       its word was asking for the two to be read as one. */}
                   <HelpHint label="Pematuhan sesi">
-                    Peratus rancangan guru ini yang telah diluluskan, daripada semua rancangan
+                    Peratus rancangan guru ini yang telah disahkan, daripada semua rancangan
                     yang ditulis sepanjang sesi — termasuk yang masih draf. Bukan kadar
-                    pematuhan sekolah, yang membaca RPH diluluskan berbanding RPH wajib (guru ×
+                    pematuhan sekolah, yang membaca RPH disahkan berbanding RPH wajib (guru ×
                     RPH seminggu).
                   </HelpHint>
                 </TH>

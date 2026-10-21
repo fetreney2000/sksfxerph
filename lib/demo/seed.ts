@@ -30,7 +30,7 @@ export const SUBJECTS = [
 /** A complete plan — completeness = 100, ready to demonstrate the submit gate. */
 const completePayload = () => ({
   ...emptyPayload(),
-  fasa_tema: "Nombor & Operasi",
+  fasa_tema: "Nombor dan Operasi",
   bidang: "Nilai tempat",
   tajuk: "Nombor hingga 100,000",
   standard_kandungan:
@@ -44,7 +44,7 @@ const completePayload = () => ({
     { nama: "Mengenal pasti nombor besar dalam kehidupan seharian", sub: true },
     { nama: "Penerangan nilai tempat menggunakan carta digit interaktif" },
     { nama: "Saling mengajar dalam kumpulan; melengkapkan carta", sub: true },
-    { nama: "PdPc: agihan lembaran kerja & pemerhatian" },
+    { nama: "PdPc: agihan lembaran kerja dan pemerhatian" },
     { nama: "Menyelesaikan 5 soalan nombor hingga 100,000", sub: true },
     { nama: "Penutup: kuiz pantas \u201cberi contoh nombor 4 angka\u201d" },
   ],

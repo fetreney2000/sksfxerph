@@ -124,7 +124,7 @@ begin
      and coalesce(current_setting('app.rpc', true), '0') <> '1'
      and coalesce(current_setting('app.allow_review', true), '0') <> '1'
   then
-    raise exception 'Tukar status semakan melalui submit_rph()/sahkan_rph()/hantar_balik_rph() sahaja';
+    raise exception 'Status semakan hanya boleh ditukar melalui submit_rph(), sahkan_rph() atau hantar_balik_rph()';
   end if;
   return new;
 end $$;
@@ -710,11 +710,11 @@ begin
     raise exception 'Peranan pentadbir diperlukan';
   end if;
   if p_member = p_supervisor then
-    raise exception 'Ahli tidak boleh menyelia diri sendiri';
+    raise exception 'Anda tidak boleh menyelia diri sendiri';
   end if;
   if not exists (select 1 from erph.school_member
                   where school_id = p_school and user_id = p_member) then
-    raise exception 'Bukan ahli sekolah ini';
+    raise exception 'Guru ini bukan ahli sekolah ini';
   end if;
   if p_supervisor is not null then
     if not exists (select 1 from erph.school_member
@@ -865,7 +865,7 @@ begin
   ), inserted as (
     insert into erph.notification (school_id, user_id, type, title, body, link_view)
     select p_school, t.user_id, 'reminder'::erph.notification_type, v_title,
-           format('Sila lengkapkan dan hantar RPH untuk %s, minggu %s.',
+           format('Sila lengkapkan dan hantar RPH bagi sesi %s, minggu %s.',
                   p_session, p_week),
            'dashboard'
       from target t
@@ -907,16 +907,18 @@ returns table (week smallint, teachers int, expected int, submitted int,
                avg_minutes numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
 begin
-  -- The same permission shape as the single-week function beside it: any
-  -- member of the school may read these figures, and nobody else may.
+  -- The same permission shape as the single-week function beside it, which
+  -- is to say: a supervisor, or the school's own Administrator.
   --
-  -- This check was missing, and because the function is SECURITY DEFINER the
-  -- caller's own RLS is never consulted — so the blanket grant on the schema's
-  -- routines let anyone holding the publishable key ask for any school's
-  -- year: headcount, submissions, approvals, compliance and how long the
-  -- school takes to review. Plpgsql rather than SQL so the refusal can be
-  -- the same exception its sibling raises.
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Both checks were missing here and `is_member` elsewhere, so the school's
+  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- the dashboard hid the card while the endpoint served it. Being SECURITY
+  -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
+  -- the only thing standing between a stranger and a school's year: headcount,
+  -- submissions, approvals, compliance and how long the school takes to
+  -- review.
+  if not erph.is_staff(p_school)
+     and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Tidak dibenarkan';
   end if;
 
@@ -1042,7 +1044,7 @@ begin
   then raise exception 'Tidak dibenarkan'; end if;
   if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
   -- With the Guru Besar already: only the reviewer rung may move it from here.
-  if v_doc.status = 'forwarded' then raise exception 'Sedang dalam kelulusan Guru Besar'; end if;
+  if v_doc.status = 'forwarded' then raise exception 'Sedang menunggu kelulusan Guru Besar'; end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
 
@@ -1296,7 +1298,7 @@ begin
       then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'kelas bukan dalam sekolah/sesi anda'));
+                             'error', 'Kelas ini bukan milik sekolah atau sesi anda'));
         continue;
       end if;
       if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
@@ -1408,7 +1410,7 @@ begin
       if v_doc_id is null then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'tidak dapat menentukan dokumen'));
+                             'error', 'tidak dapat mengenal pasti rujukan dokumen'));
         continue;
       end if;
 
@@ -1460,10 +1462,20 @@ declare
   v_teachers int := 0;
   v_per_week int := 5;
 begin
-  -- Any member: this returns counts and a percentage and never a name, so a
-  -- Guru Biasa can see how the school is doing without seeing who is behind
-  -- it. The per-teacher view lives behind `pantau` and is not served here.
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Whole-school figures are a supervisor's question, not a teacher's.
+  --
+  -- The check was `is_member`, which made this the one thing a Guru Biasa
+  -- could still see the school through — the dashboard hid the card but the
+  -- route served it. Now it is the same rule as `/api/stats`: a teacher's
+  -- dashboard is about their own week, and the school's compliance percentage
+  -- beside it is an answer to a question they are not the one to answer.
+  --
+  -- The Administrator keeps it: they already answer for the school's figures
+  -- on `/utama` through `admin_list_overview`, and `v_school_compliance` is
+  -- `security_invoker` — a check that ignored them would make a table they
+  -- already hold error rather than quietly show less.
+  if not erph.is_staff(p_school)
+     and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Tidak dibenarkan';
   end if;
 
@@ -1621,7 +1633,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   if p_password_hash is null or length(p_password_hash) < 20 then
     raise exception 'Kata laluan tidak sah';
@@ -1645,7 +1657,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
 
   update erph.user set failed_logins = 0, locked_until = null where id = p_user;
@@ -1670,7 +1682,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   -- Both rows, both halves of the change. `is_active` travels with the role
   -- onto the membership as well as onto the account: every SQL policy reads
@@ -1713,7 +1725,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   select role into v_role from erph.user where id = p_user;
   if p_jawatan is not null and erph.jawatan_for(v_role, p_jawatan) is distinct from p_jawatan then
@@ -1904,7 +1916,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                   where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
@@ -1914,7 +1926,7 @@ begin
   -- the first time someone signs in with Google, so a malformed one would
   -- quietly deny them rather than fail anywhere they could see.
   if p_email is not null and p_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-    raise exception 'Emel tidak sah';
+    raise exception 'E-mel tidak sah';
   end if;
 
   update erph.user

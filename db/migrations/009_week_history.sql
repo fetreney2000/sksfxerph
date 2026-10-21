@@ -34,16 +34,18 @@ returns table (week smallint, teachers int, expected int, submitted int,
                avg_minutes numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
 begin
-  -- The same permission shape as the single-week function beside it: any
-  -- member of the school may read these figures, and nobody else may.
+  -- The same permission shape as the single-week function beside it, which
+  -- is to say: a supervisor, or the school's own Administrator.
   --
-  -- This check was missing, and because the function is SECURITY DEFINER the
-  -- caller's own RLS is never consulted — so the blanket grant on the schema's
-  -- routines let anyone holding the publishable key ask for any school's
-  -- year: headcount, submissions, approvals, compliance and how long the
-  -- school takes to review. Plpgsql rather than SQL so the refusal can be
-  -- the same exception its sibling raises.
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Both checks were missing here and `is_member` elsewhere, so the school's
+  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- the dashboard hid the card while the endpoint served it. Being SECURITY
+  -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
+  -- the only thing standing between a stranger and a school's year: headcount,
+  -- submissions, approvals, compliance and how long the school takes to
+  -- review.
+  if not erph.is_staff(p_school)
+     and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Tidak dibenarkan';
   end if;
 

@@ -164,7 +164,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   -- Both rows, both halves of the change. `is_active` travels with the role
   -- onto the membership as well as onto the account: every SQL policy reads
@@ -198,7 +198,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   select role into v_role from erph.user where id = p_user;
   if p_jawatan is not null and erph.jawatan_for(v_role, p_jawatan) is distinct from p_jawatan then

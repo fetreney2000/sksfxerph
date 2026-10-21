@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
   }
   if (!body.documentId) {
-    return NextResponse.json({ error: "documentId diperlukan" }, { status: 400 });
+    return NextResponse.json({ error: "ID dokumen diperlukan" }, { status: 400 });
   }
 
   const { data, error } = await gate.db.rpc("submit_rph", {

@@ -31,7 +31,7 @@ const EXPORTS = [
     id: "week",
     icon: FileText,
     title: "RPH minggu semasa (PDF)",
-    desc: "Cetak minggu menghasilkan kertas kulit mingguan dan satu halaman setiap RPH. Simpan sebagai PDF melalui dialog cetak.",
+    desc: "Cetak minggu menghasilkan halaman muka depan mingguan dan satu halaman setiap RPH. Simpan sebagai PDF melalui dialog cetak.",
     href: "/minggu",
     cta: "Buka Minggu Ini",
   },
@@ -51,7 +51,7 @@ export default function LaporanPage() {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Laporan &amp; Eksport</h2>
+        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Laporan dan Eksport</h2>
         <span className="h-px flex-1 bg-border" />
         <Badge variant="neutral">Dua jenis eksport</Badge>
       </div>

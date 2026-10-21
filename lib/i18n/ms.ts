@@ -16,7 +16,7 @@ export const ms = {
     guru_biasa: "Guru Biasa",
     gpk: "Guru Penolong Kanan",
     guru_besar: "Guru Besar",
-    pentadbir: "Administrator",
+    pentadbir: "Pentadbir",
     system: "Sistem",
   },
 
@@ -37,7 +37,7 @@ export const ms = {
     minggu: "Minggu Ini",
     editor: "Penyunting RPH",
     templat: "Perpustakaan Templat",
-    arkib: "Sejarah & Arkib",
+    arkib: "Sejarah dan Arkib",
     semakan: "Semakan RPH",
     sekolah: "Paparan Sekolah",
     guru: "Guru",
@@ -72,7 +72,7 @@ export const ms = {
     reuseLast: "Guna semula minggu lepas",
     shortcuts: "Pintasan",
     activity: "Aktiviti semakan terkini",
-    noPrint: "Tiada keperluan mencetak — dokumen hanya perlu diemaskan apabila diminta.",
+    noPrint: "Tiada keperluan mencetak — dokumen hanya perlu disediakan apabila diminta.",
   },
 
   status: {
@@ -93,7 +93,6 @@ export const ms = {
     scheduled: "Dijadualkan",
     complete: "Lengkap",
     incomplete: "Tidak lengkap",
-    notSubmitted: "belum hantar",
     offline: "Luar talian",
     queued: (n: number) => `${n} belum diselesaikan`,
     synced: "Disegerakkan",
@@ -104,8 +103,10 @@ export const ms = {
   editor: {
     step1: "Profil",
     step1sub: "Kelas · tarikh · masa · tema",
+    /** A template has no class, date or lesson time, so neither does this line. */
+    step1subTemplate: "Subjek · tema · bidang · tajuk",
     step2: "DSKP",
-    step2sub: "Standard & objektif",
+    step2sub: "Standard dan objektif",
     step3: "PdPc",
     step3sub: "Aktiviti · Kriteria Kejayaan",
     step4: "Refleksi",
@@ -163,7 +164,7 @@ export const ms = {
   },
 
   review: {
-    queue: "Baris gilir",
+    queue: "Giliran semakan",
     // One stage: a GPK or the Guru Besar either approves — signed — or returns.
     // `forward`, `forwardHint`, `gpkNote` and `gbNote` are gone with the hop
     // they described: there is nobody left to send it *to*.
@@ -172,11 +173,11 @@ export const ms = {
     approveHint: "sahkan",
     return: "Kembalikan · Tidak lengkap (0)",
     returnShort: "Kembalikan",
-    saveAndContinue: "Simpan & teruskan",
-    tapHint: "Ketik RPH untuk buka paparan penuh.",
-    comment: "Komen sulit",
-    commentHint: "wajib untuk kembalikan, hanya guru melihat",
-    returnReasonRequired: "Tulis sebab atau pilih checklist sebelum kembalikan.",
+    tapHint: "Ketik RPH untuk membuka paparan penuh.",
+    comment: "Maklum balas sulit",
+    commentHint: "wajib sebelum mengembalikan — hanya guru boleh melihat",
+    returnReasonRequired:
+      "Tulis sebab atau pilih daripada senarai semak sebelum mengembalikan.",
     approvedThisSession: "Disahkan sesi ini",
     returnedThisSession: "Dikembalikan sesi ini",
     autoCheck: "Semakan automatik",
@@ -185,7 +186,7 @@ export const ms = {
     keyboardHint: "navigasi",
     grade0: "kembalikan",
     signedNote:
-      "Mengesahkan menandatangani rancangan ini dengan kunci penyemak sendiri — nama, versi dan waktu keputusan tercatat bersamanya, dan guru boleh mengesahkannya sendiri.",
+      "Mengesahkan bermakna menandatangani rancangan ini dengan kunci penyemak sendiri — nama, versi dan masa keputusan tercatat bersamanya, dan guru boleh mengesahkannya sendiri.",
   },
 
   a11y: {

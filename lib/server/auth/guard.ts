@@ -36,7 +36,7 @@ export async function requireDbUser(
     // instead; routes that need writes report the mode honestly.
     return {
       error: NextResponse.json(
-        { error: "Mod setempat: tiada pangkalan data ditetapkan" },
+        { error: "Mod setempat: tiada pangkalan data yang ditetapkan" },
         { status: 503 },
       ),
     };
@@ -64,7 +64,7 @@ export async function requirePermission(
   if ("error" in gate) return gate;
   if (!can(gate.user.role, permission)) {
     return {
-      error: NextResponse.json({ error: "Peranan tidak mencukupi" }, { status: 403 }),
+      error: NextResponse.json({ error: "Peranan anda tidak mencukupi" }, { status: 403 }),
     };
   }
   return gate;

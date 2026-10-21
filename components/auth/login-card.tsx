@@ -137,7 +137,8 @@ export function LoginCard() {
       <CardFooter className="flex-col items-start gap-1.5 text-[11.5px] text-ink-4">
         <span className="flex items-center gap-1.5">
           <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-          Kata laluan disimpan dalam bentuk scrypt — ia tidak pernah disimpan secara teks.
+          Kata laluan disimpan dalam bentuk scrypt — ia tidak pernah disimpan dalam bentuk teks
+          biasa.
         </span>
         <span>
           Dengan menggunakan sistem ini, anda memahami dan bersetuju dengan penyataan data rasmi

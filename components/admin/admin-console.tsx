@@ -28,11 +28,11 @@ import { SubjectsTab } from "./subjects-tab";
 export type AdminTab = "akaun" | "kelas" | "subjek" | "sekolah" | "tetapan";
 
 export const ADMIN_TABS: { value: AdminTab; label: string }[] = [
-  { value: "akaun", label: "Akaun & peranan" },
+  { value: "akaun", label: "Akaun dan peranan" },
   { value: "kelas", label: "Kelas" },
   { value: "subjek", label: "Mata pelajaran" },
   { value: "sekolah", label: "Maklumat sekolah" },
-  { value: "tetapan", label: "Sesi & tarikh akhir" },
+  { value: "tetapan", label: "Sesi dan tarikh akhir" },
 ];
 
 export function AdminConsole({

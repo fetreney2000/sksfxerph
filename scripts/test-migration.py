@@ -86,6 +86,9 @@ def main() -> int:
     delta17 = (ROOT / "db" / "migrations" / "017_school_rules.sql").read_text(
         encoding="utf-8"
     )
+    delta18 = (ROOT / "db" / "migrations" / "018_school_figures_for_supervisors.sql").read_text(
+        encoding="utf-8"
+    )
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -199,8 +202,9 @@ def main() -> int:
             run(delta15, "015")
             run(delta16, "016")
             run(delta17, "017")
+            run(delta18, "018")
         print(
-            "  [OK ] migration applied (001a→017, old signature pre-installed)"
+            "  [OK ] migration applied (001a→018, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -1036,7 +1040,9 @@ def main() -> int:
             )
             own = cur.fetchone()[0]
             check(
-                "016 a member still reads their own school's history",
+                # The Administrator: 016 added the check that was missing
+                # entirely, and 018 then tightened who may pass it.
+                "016 the Administrator still reads their school's history",
                 own == 2,
                 f"got {own}",
             )
@@ -1319,6 +1325,72 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         conn.rollback()
         check("017 column grants", False, str(e).splitlines()[0][:140])
+
+    # ── 018: the school's figures are a supervisor's question ─────────────
+    # `school_week_stats` and `school_week_history` accepted any member, which
+    # is why a Guru Biasa could still see the school from a dashboard that hid
+    # the card. Both the endpoint and the database now say the same thing.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select id from erph.school limit 1")
+            school = cur.fetchone()[0]
+            cur.execute(
+                "select id from erph.user where role = 'guru_biasa' and is_active limit 1"
+            )
+            teacher = cur.fetchone()[0]
+
+            def claims(user_id) -> None:
+                cur.execute(
+                    "select set_config('request.jwt.claims', "
+                    "(select json_build_object('sub', id)::text from erph.user "
+                    " where id = %s), false)",
+                    (user_id,),
+                )
+                conn.commit()
+
+            # The Administrator still answers for the school — they hold the
+            # same figures on /utama through admin_list_overview.
+            cur.execute("select id from erph.user where username = 'pentadbir.sk'")
+            admin_id = cur.fetchone()[0]
+            claims(admin_id)
+            cur.execute(
+                "select count(*) from erph.school_week_history("
+                "%s, '2026/2027'::text, 1::smallint, 2::smallint)",
+                (school,),
+            )
+            check(
+                "018 the Administrator still reads the school's history",
+                cur.fetchone()[0] == 2,
+            )
+
+            # A Guru Biasa belongs to this school, and still may not.
+            claims(teacher)
+            try:
+                cur.execute(
+                    "select count(*) from erph.school_week_stats("
+                    "%s, '2026/2027'::text, 1::smallint)",
+                    (school,),
+                )
+                conn.rollback()
+                check(
+                    "018 a Guru Biasa may not read the school's figures",
+                    False,
+                    "no exception raised",
+                )
+            except Exception as e:  # noqa: BLE001
+                conn.rollback()
+                check(
+                    "018 a Guru Biasa may not read the school's figures",
+                    "dibenarkan" in str(e),
+                    str(e).splitlines()[0][:120],
+                )
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("018 school figures for supervisors", False, str(e).splitlines()[0][:140])
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("select set_config('request.jwt.claims', null, false)")
+            conn.commit()
 
     print()
     for label, ok, detail in checks:

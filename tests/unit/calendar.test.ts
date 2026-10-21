@@ -7,6 +7,7 @@ import {
   longDate,
   longDateOf,
   mytFields,
+  printedDayNumber,
   schoolDays,
   weekdayIndex,
   weekOptions,
@@ -105,6 +106,21 @@ describe("labels", () => {
   it("week range covers the school week", () => {
     expect(weekRangeLabel(30)).toBe("5–9 Okt 2026");
     expect(weekRangeLabel(1)).toBe("16–20 Mac 2026");
+  });
+
+  it("writes both months when the week crosses one", () => {
+    // Week 38 is 30 November — 4 December 2026. Printing only the ending
+    // month put "29–2 Nov" on the header of the statutory sheet: two numbers
+    // and one month.
+    expect(weekRangeLabel(38)).toBe("30 Nov–4 Dis 2026");
+  });
+
+  it("numbers the day as the school's form does — Ahad = 1", () => {
+    // 12 Januari 2026 is a Monday, and the school's own form writes "2. Isnin"
+    // against it. `weekdayIndex` counts from zero, so it is off by one here.
+    expect(printedDayNumber("2026-01-12")).toBe(2);
+    expect(printedDayNumber("2026-01-11")).toBe(1); // Ahad
+    expect(printedDayNumber("2026-01-16")).toBe(6); // Sabtu
   });
 
   it("longDate names the weekday correctly in Malay", () => {

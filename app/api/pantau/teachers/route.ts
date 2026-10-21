@@ -7,9 +7,10 @@ import { resolveSession } from "@/lib/server/session";
 /**
  * GET /api/pantau/teachers — who has and has not submitted, per teacher.
  *
- * The one place this app names an individual, so it is gated on `pantau` where
- * `/api/stats` is not: those counts cannot identify anyone and every member may
- * see them, whereas a row here says *this* teacher has not submitted.
+ * The one place this app names an individual, so it is gated on `pantau` — as
+ * `/api/stats` is now too. A row here says *this* teacher has not submitted,
+ * which the school's counts never did; the counts came to be gated for the
+ * opposite reason: a Guru Biasa has nothing to act on in them.
  *
  * A GPK sees only their supervised teachers and a Guru Besar the whole school,
  * and that is enforced by `erph.pantau_teachers` rather than here. This handler

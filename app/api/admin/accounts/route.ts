@@ -35,7 +35,7 @@ const postSchema = z.object({
   fullName: z.string().min(1, "Nama penuh diperlukan").max(120),
   role: z.enum(ASSIGNABLE, { message: "Peranan tidak sah" }),
   jawatan: z.enum(JAWATAN).nullable().optional(),
-  email: z.string().email("Emel tidak sah").max(200).nullable().optional(),
+  email: z.string().email("E-mel tidak sah").max(200).nullable().optional(),
   password: z.string().min(8, "Kata laluan: sekurang-kurangnya 8 aksara").max(128),
 });
 
@@ -66,7 +66,7 @@ const patchSchema = z
     /** The name printed on every RPH this person writes. */
     fullName: z.string().min(1, "Nama penuh diperlukan").max(120).optional(),
     /** null clears it; a value has to be an address Google can match. */
-    email: z.string().email("Emel tidak sah").max(200).nullable().optional(),
+    email: z.string().email("E-mel tidak sah").max(200).nullable().optional(),
   })
   .refine(
     (d) =>

@@ -44,7 +44,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   -- Both rows, both halves of the change. `is_active` travels with the role
   -- onto the membership as well as onto the account: every SQL policy reads
@@ -81,16 +81,18 @@ returns table (week smallint, teachers int, expected int, submitted int,
                avg_minutes numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
 begin
-  -- The same permission shape as the single-week function beside it: any
-  -- member of the school may read these figures, and nobody else may.
+  -- The same permission shape as the single-week function beside it, which
+  -- is to say: a supervisor, or the school's own Administrator.
   --
-  -- This check was missing, and because the function is SECURITY DEFINER the
-  -- caller's own RLS is never consulted — so the blanket grant on the schema's
-  -- routines let anyone holding the publishable key ask for any school's
-  -- year: headcount, submissions, approvals, compliance and how long the
-  -- school takes to review. Plpgsql rather than SQL so the refusal can be
-  -- the same exception its sibling raises.
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Both checks were missing here and `is_member` elsewhere, so the school's
+  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- the dashboard hid the card while the endpoint served it. Being SECURITY
+  -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
+  -- the only thing standing between a stranger and a school's year: headcount,
+  -- submissions, approvals, compliance and how long the school takes to
+  -- review.
+  if not erph.is_staff(p_school)
+     and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Tidak dibenarkan';
   end if;
 
@@ -195,7 +197,7 @@ begin
       then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'kelas bukan dalam sekolah/sesi anda'));
+                             'error', 'Kelas ini bukan milik sekolah atau sesi anda'));
         continue;
       end if;
       if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
@@ -307,7 +309,7 @@ begin
       if v_doc_id is null then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'tidak dapat menentukan dokumen'));
+                             'error', 'tidak dapat mengenal pasti rujukan dokumen'));
         continue;
       end if;
 

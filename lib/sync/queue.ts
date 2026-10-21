@@ -229,10 +229,10 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
     await db.notifications.add({
       id: newId(),
       type: "system",
-      title: "Versi lain dikemas kini",
+      title: "RPH digabungkan dengan versi pelayan",
       body:
         merges.length === 1
-          ? "RPH ini wujud dalam pelayan dan telah digabungkan. Semak dokumen untuk memastikan kandungan terkini."
+          ? "RPH ini terdapat dalam pelayan dan telah digabungkan. Semak dokumen untuk memastikan kandungan terkini."
           : `${merges.length} RPH digabungkan dengan versi pelayan. Semak dokumen terjejas.`,
       createdAt: Date.now(),
     });

@@ -69,7 +69,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Before anything else: a request without this header cannot have come from
   // our page, because a cross-origin caller would have to preflight it.
   if (request.headers.get("x-requested-with") !== "XMLHttpRequest") {
-    return NextResponse.json({ error: "Sahkan asal permintaan gagal" }, { status: 403 });
+    return NextResponse.json({ error: "Gagal mengesahkan asal permintaan" }, { status: 403 });
   }
 
   const limited = rateLimit(

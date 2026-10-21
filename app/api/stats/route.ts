@@ -1,30 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek } from "@/lib/config";
-import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
+import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
 import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
 
 /**
- * GET /api/stats — school compliance for the current week.
+ * GET /api/stats — whole-school compliance for the week, and the trend.
  *
- * Wraps the `erph.school_week_stats` SECURITY DEFINER RPC. The RPC re-checks
- * membership with `erph.actor()`, so a teacher cannot read another school's
- * figures even though this handler holds the secret key.
+ * Supervisors only. It returns counts and a percentage and never a name, so
+ * there is nothing here to identify a teacher — but that was never the
+ * question. A Guru Biasa's dashboard is about their own week, and a school's
+ * compliance percentage beside it is a school's answer to a school's problem;
+ * they are no better placed to act on it than they are to act on a colleague's
+ * roster, which is what `/api/pantau/teachers` has always refused.
+ *
+ * It used to be open to every member, which meant the dashboard could hide a
+ * card it could not stop anyone from asking for. The permission is `pantau`,
+ * the same one `/sekolah` and `/api/pantau/teachers` are behind, so the UI and
+ * the endpoint can no longer disagree about who may look.
  *
  * 503 in local mode — the caller falls back to the bundled demo figures.
  */
-/**
- * GET /api/stats — whole-school aggregates for the week.
- *
- * Any member may call this: `school_week_stats` returns counts and a
- * compliance percentage and never a name, so a Guru Biasa can see how the
- * school is doing without seeing who is behind it. The per-teacher table, the
- * reminders and the school exports live on `/sekolah`, which is gated on
- * `pantau` — and there is no endpoint that returns names to anyone but a
- * reviewer (`/api/queue` is the only one, and it is reviewer-only).
- */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const gate = await requireDbUser(request);
+  const gate = await requirePermission(request, "pantau");
   if ("error" in gate) return gate.error;
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);

@@ -66,7 +66,7 @@ begin
   then raise exception 'Tidak dibenarkan'; end if;
   if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
   -- With the Guru Besar already: only the reviewer rung may move it from here.
-  if v_doc.status = 'forwarded' then raise exception 'Sedang dalam kelulusan Guru Besar'; end if;
+  if v_doc.status = 'forwarded' then raise exception 'Sedang menunggu kelulusan Guru Besar'; end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
 
@@ -249,7 +249,7 @@ begin
       then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'kelas bukan dalam sekolah/sesi anda'));
+                             'error', 'Kelas ini bukan milik sekolah atau sesi anda'));
         continue;
       end if;
       if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
@@ -361,7 +361,7 @@ begin
       if v_doc_id is null then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'tidak dapat menentukan dokumen'));
+                             'error', 'tidak dapat mengenal pasti rujukan dokumen'));
         continue;
       end if;
 

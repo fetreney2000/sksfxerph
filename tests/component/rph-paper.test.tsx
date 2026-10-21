@@ -116,7 +116,8 @@ describe("RphPaper — the school's form", () => {
 
   it("derives the day from the date rather than trusting it", () => {
     render(<RphPaper payload={full} session={SESSION} planDate="2026-01-12" />);
-    // 12 January 2026 is a Monday.
-    expect(screen.getByText(/1\. Isnin/)).toBeTruthy();
+    // 12 January 2026 is a Monday, and the school's own form numbers the week
+    // Ahad = 1 — so Monday is "2. Isnin", not "1. Isnin".
+    expect(screen.getByText(/2\. Isnin/)).toBeTruthy();
   });
 });

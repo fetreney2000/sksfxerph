@@ -59,8 +59,16 @@ function serve(rows: SchoolWeekPoint[]) {
   );
 }
 
-function Probe({ first, last }: { first: number; last: number }) {
-  const s = useSchoolStats({ first, last });
+function Probe({
+  first,
+  last,
+  enabled = true,
+}: {
+  first: number;
+  last: number;
+  enabled?: boolean;
+}) {
+  const s = useSchoolStats({ first, last }, enabled);
   return (
     <dl>
       <dt>guru</dt>
@@ -136,5 +144,28 @@ describe("school compliance", () => {
     await mount("—");
 
     expect(screen.getByTestId("teachers").textContent).toBe("0");
+  });
+
+  it("does not ask for the school's figures when the caller may not have them", async () => {
+    // A Guru Biasa's dashboard hides the school's totals, and hiding the card
+    // is only half the job: a request that can only answer 403 is a request
+    // that should never have been made.
+    const fetch = vi.fn(async () => new Response("{}", { status: 403 }));
+    vi.stubGlobal("fetch", fetch);
+
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
+      >
+        <Probe first={WEEK} last={WEEK} enabled={false} />
+      </QueryClientProvider>,
+    );
+
+    // The zeroes and the dash of "nothing measured" — and nothing asked for.
+    expect(screen.getByTestId("teachers").textContent).toBe("0");
+    expect(screen.getByTestId("pct").textContent).toBe("—");
+    // Nor the bundled demo figures, which describe a different school.
+    expect(screen.getByTestId("expected").textContent).toBe("0");
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

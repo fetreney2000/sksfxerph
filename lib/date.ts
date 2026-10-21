@@ -115,6 +115,17 @@ export const hariName = (iso: string) => HARI[myt(parseIso(iso)).dow] ?? "";
 /** 0 = Sunday … 6 = Saturday, in school-local time. */
 export const weekdayIndex = (iso: string) => myt(parseIso(iso)).dow;
 
+/**
+ * The day's number as the school's own form writes it.
+ *
+ * The paper form numbers the week **Ahad = 1**, so a Monday is `2. Isnin` —
+ * 12 Januari 2026 is a Monday and the form says "2. Isnin" against it.
+ * `weekdayIndex` counts from zero, which is right for a day of the week and
+ * wrong for the number printed beside it: the sheets came out a day early
+ * against the physical form they are filed beside.
+ */
+export const printedDayNumber = (iso: string) => weekdayIndex(iso) + 1;
+
 /** '7 Okt 2026' */
 export function shortDate(iso: string): string {
   const p = myt(parseIso(iso));
@@ -178,9 +189,13 @@ export function weekRangeLabel(weekNo: number, mondayIso?: string): string {
   const a = myt(parseIso(first));
   const b = myt(parseIso(last));
 
-  const suffix = `${BULAN[b.month]?.slice(0, 3)} ${b.year}`;
-
-  return `${a.date}–${b.date} ${suffix}`;
+  // Both months when the week crosses one. It used to print only the ending
+  // month, so the week before a term break read "30–4 Dis 2026" — two numbers
+  // and one month, on the header of the statutory sheet.
+  if (a.month === b.month && a.year === b.year) {
+    return `${a.date}–${b.date} ${BULAN[b.month]?.slice(0, 3)} ${b.year}`;
+  }
+  return `${a.date} ${BULAN[a.month]?.slice(0, 3)}–${b.date} ${BULAN[b.month]?.slice(0, 3)} ${b.year}`;
 }
 
 /**

@@ -14,9 +14,9 @@ _Reviewed 4 October 2026 against the code at this commit._
 |---|---|---|
 | Types | `npm run typecheck` | clean (`strict` + `noUncheckedIndexedAccess`) |
 | Lint/format | `npm run lint` | **0 errors**, 2 warnings (documented below) |
-| Unit + component | `npm test` | **208 passed** (23 files, incl. password, session-token, rate-limit, lockout, heartbeat) |
-| Build | `npm run build` | 14 routes, Next.js 16.3.8 |
-| E2E | `npm run test:e2e` | **22 passed** (real Chromium, 0 console errors, incl. auth flows) |
+| Unit + component | `npm test` | **221 passed** (26 files, incl. password, session-token, rate-limit, lockout, heartbeat) |
+| Build | `npm run build` | 15 routes, Next.js 16.3.8 |
+| E2E | `npm run test:e2e` | **24 passed** (real Chromium, 0 console errors, incl. auth flows) |
 | SQL static | `npm run check:sql` | 157 statements parse, 39 bodies balanced, 18/18 RLS, 28 policies, no schema-identifier leaks |
 | SQL **executed** | `npm run check:sql:exec` | real PostgreSQL: objects, enum values, guard triggers, NULL-actor refusal |
 
@@ -163,7 +163,7 @@ npm run verify        # tsc → biome → vitest(36) → next build → playwrig
 python db/validate.py # 125 statements, plpgsql balanced, RLS + grants + erph-schema checks
 ```
 
-All green at time of review: **0 lint errors · 208 tests · 22 e2e · 14 routes**.
+All green at time of review: **0 lint errors · 221 tests · 24 e2e · 15 routes**.
 
 ### Finding: the schema failed on Supabase (follow-up)
 

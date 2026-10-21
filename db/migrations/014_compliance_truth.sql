@@ -39,10 +39,20 @@ declare
   v_teachers int := 0;
   v_per_week int := 5;
 begin
-  -- Any member: this returns counts and a percentage and never a name, so a
-  -- Guru Biasa can see how the school is doing without seeing who is behind
-  -- it. The per-teacher view lives behind `pantau` and is not served here.
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Whole-school figures are a supervisor's question, not a teacher's.
+  --
+  -- The check was `is_member`, which made this the one thing a Guru Biasa
+  -- could still see the school through — the dashboard hid the card but the
+  -- route served it. Now it is the same rule as `/api/stats`: a teacher's
+  -- dashboard is about their own week, and the school's compliance percentage
+  -- beside it is an answer to a question they are not the one to answer.
+  --
+  -- The Administrator keeps it: they already answer for the school's figures
+  -- on `/utama` through `admin_list_overview`, and `v_school_compliance` is
+  -- `security_invoker` — a check that ignored them would make a table they
+  -- already hold error rather than quietly show less.
+  if not erph.is_staff(p_school)
+     and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Tidak dibenarkan';
   end if;
 
@@ -86,16 +96,18 @@ returns table (week smallint, teachers int, expected int, submitted int,
                avg_minutes numeric)
 language plpgsql stable security definer set search_path = erph, public as $$
 begin
-  -- The same permission shape as the single-week function beside it: any
-  -- member of the school may read these figures, and nobody else may.
+  -- The same permission shape as the single-week function beside it, which
+  -- is to say: a supervisor, or the school's own Administrator.
   --
-  -- This check was missing, and because the function is SECURITY DEFINER the
-  -- caller's own RLS is never consulted — so the blanket grant on the schema's
-  -- routines let anyone holding the publishable key ask for any school's
-  -- year: headcount, submissions, approvals, compliance and how long the
-  -- school takes to review. Plpgsql rather than SQL so the refusal can be
-  -- the same exception its sibling raises.
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Both checks were missing here and `is_member` elsewhere, so the school's
+  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- the dashboard hid the card while the endpoint served it. Being SECURITY
+  -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
+  -- the only thing standing between a stranger and a school's year: headcount,
+  -- submissions, approvals, compliance and how long the school takes to
+  -- review.
+  if not erph.is_staff(p_school)
+     and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Tidak dibenarkan';
   end if;
 

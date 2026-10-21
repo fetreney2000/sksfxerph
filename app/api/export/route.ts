@@ -14,7 +14,7 @@ import {
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseConfigured } from "@/lib/config";
-import { formatMyt, hariName, weekdayIndex } from "@/lib/date";
+import { formatMyt, hariName, printedDayNumber } from "@/lib/date";
 import { rateLimit } from "@/lib/http/rate-limit";
 import { rphPayloadSchema, temaLengkap } from "@/lib/schemas/rph";
 import { requireUser } from "@/lib/server/auth/guard";
@@ -278,9 +278,12 @@ export async function POST(request: NextRequest) {
               new TableRow({
                 children: [
                   cell("Hari", { bold: true, width: 22, label: true }),
-                  cell(planDate ? `${weekdayIndex(planDate)}. ${hariName(planDate)}` : "—", {
-                    width: 28,
-                  }),
+                  cell(
+                    planDate ? `${printedDayNumber(planDate)}. ${hariName(planDate)}` : "—",
+                    {
+                      width: 28,
+                    },
+                  ),
                   cell("Tarikh", { bold: true, width: 22, label: true }),
                   cell(planDate || "—", { width: 28 }),
                 ],

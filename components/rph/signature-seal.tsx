@@ -99,8 +99,8 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
         <span>
           <b>Tandatangan tidak sah.</b>{" "}
           {variant === "print"
-            ? "Rancangan ini tidak boleh disahkan terhadap tandatangan yang tersimpan — kandungan mungkin telah berubah."
-            : "Rancangan ini tidak boleh disahkan terhadap tandatangan yang tersimpan. Kandungan mungkin telah berubah selepas ia ditandatangani, atau tandatangan itu sendiri telah disentuh. Jangan keluarkan dokumen ini tanpa semakan lanjut."}
+            ? "Rancangan ini tidak dapat disahkan berdasarkan tandatangan yang tersimpan — kandungan mungkin telah berubah."
+            : "Rancangan ini tidak dapat disahkan berdasarkan tandatangan yang tersimpan. Kandungan mungkin telah berubah selepas ia ditandatangani, atau tandatangan itu sendiri telah diubah suai. Jangan keluarkan dokumen ini tanpa semakan lanjut."}
         </span>
       </div>
     );

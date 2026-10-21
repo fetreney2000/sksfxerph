@@ -524,7 +524,7 @@ function CommentBox({
         {(
           [
             ["+ KBAT", "Aktiviti penutup boleh tambah soalan KBAT."],
-            ["+ Refleksi", "Sila lengkapkan bahagian Refleksi & Intervensi."],
+            ["+ Refleksi", "Sila lengkapkan bahagian Refleksi."],
             ["+ Masa", "Masa aktiviti melebihi 50 minit — sila laraskan."],
           ] as [string, string][]
         ).map(([label, text]) => (

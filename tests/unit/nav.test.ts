@@ -94,8 +94,16 @@ describe("routeMetaFor — nested editor routes keep their name", () => {
   });
 
   it("uses a page-specific crumb rather than only school/session/week", () => {
-    expect(routeMetaFor("/semakan").crumb).toBe("Baris gilir semakan");
+    expect(routeMetaFor("/semakan").crumb).toBe("Giliran semakan");
     expect(routeMetaFor("/minggu").crumb).toBe("Ruang kerja");
+  });
+
+  it("tells the template authoring screen apart from the library it lives under", () => {
+    // The penyunting is not a library screen, so it does not inherit the
+    // library's crumb — a teacher should be able to tell which of the two
+    // they are on from the title bar.
+    expect(routeMetaFor("/templat/baru").crumb).toBe("Templat baharu");
+    expect(routeMetaFor("/templat").crumb).toBe("Templat tersedia");
   });
 
   it("falls back for an unknown route", () => {

@@ -52,7 +52,7 @@ const PERMISSION_LABEL: Record<Permission, string> = {
   rph: "RPH sendiri",
   semak: "Semakan RPH",
   pantau: "Pantauan sekolah",
-  laporan: "Laporan & eksport",
+  laporan: "Laporan dan eksport",
   audit: "Log audit",
   templat: "Perpustakaan templat",
   pentadbir: "Tetapan aplikasi",
@@ -167,7 +167,7 @@ export default function UtamaPage() {
       icon: <CalendarCheck className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
     {
-      label: "Diluluskan",
+      label: "Disahkan",
       value: o?.week?.approved ?? "—",
       // Counts of a week that has not been read yet are not zeroes either.
       hint: o?.week ? `${o.week.returned_t} dikembalikan · ${o.week.drafts} draf` : "—",
@@ -217,7 +217,7 @@ export default function UtamaPage() {
     },
     {
       key: "tetapan",
-      label: "Sesi & tarikh akhir",
+      label: "Sesi dan tarikh akhir",
       detail: settingsError
         ? "Tidak dapat dibaca"
         : setting

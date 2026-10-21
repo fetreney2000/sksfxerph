@@ -144,7 +144,7 @@ export function SettingsTab() {
         <CardHeader>
           <School className="h-4 w-4 text-ink-4" strokeWidth={1.9} aria-hidden />
           <div>
-            <CardTitle>Sesi &amp; tarikh akhir</CardTitle>
+            <CardTitle>Sesi dan tarikh akhir</CardTitle>
             <CardDescription>Peraturan penghantaran untuk keseluruhan sekolah.</CardDescription>
           </div>
           {school && (
@@ -227,8 +227,9 @@ export function SettingsTab() {
             <span>
               Halang penghantaran sehingga kelengkapan 100%
               <span className="mt-0.5 block text-[11.5px] text-ink-4">
-                Guru hanya boleh menghantar apabila semua seksyen wajib telah diisi. Pentadbir
-                tidak boleh mengesahkan RPH yang belum lengkap — gred 1 bermaksud lengkap.
+                Guru hanya boleh menghantar apabila semua bahagian wajib telah diisi. GPK atau
+                Guru Besar tidak boleh mengesahkan RPH yang belum lengkap — gred 1 bermaksud
+                lengkap.
               </span>
             </span>
           </label>

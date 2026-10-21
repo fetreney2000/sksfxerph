@@ -2,7 +2,7 @@ import type * as React from "react";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import { SignatureSeal } from "@/components/rph/signature-seal";
 import { cn } from "@/lib/cn";
-import { hariName, weekdayIndex, weekRangeLabel } from "@/lib/date";
+import { hariName, printedDayNumber, weekRangeLabel } from "@/lib/date";
 import type { SignatureState } from "@/lib/hooks/use-signature";
 import type { RphPayload } from "@/lib/schemas/rph";
 import { temaLengkap } from "@/lib/schemas/rph";
@@ -117,9 +117,10 @@ export function RphPaper({
   signatureState = "none",
   compact = false,
 }: Props) {
-  // "2. Isnin" — the school's form numbers the day, and derives it from the
-  // date rather than asking, so a plan cannot claim a Monday that is a Tuesday.
-  const hari = planDate ? `${weekdayIndex(planDate)}. ${hariName(planDate)}` : "—";
+  // "2. Isnin" — the school's form numbers the day **Ahad = 1**, and derives
+  // it from the date rather than asking, so a plan cannot claim a Monday that
+  // is a Tuesday.
+  const hari = planDate ? `${printedDayNumber(planDate)}. ${hariName(planDate)}` : "—";
 
   return (
     <article

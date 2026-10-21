@@ -115,7 +115,7 @@ begin
   then raise exception 'Tidak dibenarkan'; end if;
   if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
   -- With the Guru Besar already: only the reviewer rung may move it from here.
-  if v_doc.status = 'forwarded' then raise exception 'Sedang dalam kelulusan Guru Besar'; end if;
+  if v_doc.status = 'forwarded' then raise exception 'Sedang menunggu kelulusan Guru Besar'; end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
 
@@ -171,10 +171,20 @@ declare
   v_teachers int := 0;
   v_per_week int := 5;
 begin
-  -- Any member: this returns counts and a percentage and never a name, so a
-  -- Guru Biasa can see how the school is doing without seeing who is behind
-  -- it. The per-teacher view lives behind `pantau` and is not served here.
-  if not erph.is_member(p_school) and not erph.is_staff(p_school) then
+  -- Whole-school figures are a supervisor's question, not a teacher's.
+  --
+  -- The check was `is_member`, which made this the one thing a Guru Biasa
+  -- could still see the school through — the dashboard hid the card but the
+  -- route served it. Now it is the same rule as `/api/stats`: a teacher's
+  -- dashboard is about their own week, and the school's compliance percentage
+  -- beside it is an answer to a question they are not the one to answer.
+  --
+  -- The Administrator keeps it: they already answer for the school's figures
+  -- on `/utama` through `admin_list_overview`, and `v_school_compliance` is
+  -- `security_invoker` — a check that ignored them would make a table they
+  -- already hold error rather than quietly show less.
+  if not erph.is_staff(p_school)
+     and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Tidak dibenarkan';
   end if;
 
@@ -224,7 +234,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                  where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   -- Both rows, both halves of the change. `is_active` travels with the role
   -- onto the membership as well as onto the account: every SQL policy reads

@@ -173,13 +173,14 @@ async function verifyAndStore(
   };
 
   if (wanted.v !== 1 || wanted.alg !== "ES256")
-    return refuse("Buku tandatangan tidak disokong");
+    return refuse("Sampul tandatangan tidak disokong");
   if (wanted.doc !== documentId) return refuse("Tandatangan untuk RPH lain");
   if (wanted.ver !== doc.version) return refuse("Tandatangan untuk versi RPH yang lain");
-  if (wanted.signer !== gate.user.id) return refuse("Tandatangan mesti oleh anda sendiri");
+  if (wanted.signer !== gate.user.id)
+    return refuse("Tandatangan mesti dilakukan oleh anda sendiri");
   if (wanted.decision !== "sahkan") return refuse("Tandatangan untuk keputusan lain");
   if (typeof wanted.kid !== "string" || typeof wanted.at !== "string") {
-    return refuse("Buku tandatangan tidak lengkap");
+    return refuse("Sampul tandatangan tidak lengkap");
   }
 
   // Recompute rather than trust: this is what makes the signature bind the

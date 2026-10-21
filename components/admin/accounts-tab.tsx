@@ -173,7 +173,7 @@ export function AccountsTab() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Users className="h-4 w-4 shrink-0 text-ink-4" strokeWidth={1.9} aria-hidden />
         <div className="min-w-0">
-          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Akaun &amp; peranan</h2>
+          <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Akaun dan peranan</h2>
           <p className="text-[12.5px] text-ink-3">
             Peranan menentukan apa yang boleh dilihat dan dilakukan; jawatan ialah gelaran yang
             tertera pada baris JAWATAN dalam cetakan mingguan. Kesemua lima peranan mempunyai
@@ -565,7 +565,7 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
                 ))}
               </Select>
               <p className="mt-1.5 text-[11.5px] text-ink-4">
-                Gelaran ini yang tertera pada baris JAWATAN ketika cetakan mingguan
+                Gelaran ini akan tertera pada baris JAWATAN ketika cetakan mingguan
                 ditandatangani.
               </p>
             </div>

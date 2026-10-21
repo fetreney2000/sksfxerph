@@ -17,7 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FieldError, Input, Label, Select } from "@/components/ui/field";
 import { can } from "@/lib/auth/permissions";
 import { supabaseConfigured } from "@/lib/config";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
@@ -30,6 +29,13 @@ import type { Curriculum } from "@/lib/types";
  * Until now the five cards were a hard-coded array, "Guna templat" merely
  * toasted, and the "create" tile actually opened a blank *eRPH*. Every one of
  * those has been replaced by something that works against `erph.rph_template`.
+ *
+ * **Cipta** and **Sunting** both go to `/templat/baru`, which is the RPH
+ * editor — the first without a template behind it, the second with one. A
+ * template's whole value is the plan inside it, so the screen that writes one
+ * is the screen that writes a plan, and there is one surface for a template's
+ * content rather than a dialog that could only ever rename it. Which of the
+ * two it is, the penyunting knows from `?edit=`.
  *
  * "Guna templat" navigates to `/editor?template=<id>` rather than writing a
  * document: the template's payload is loaded into the unsaved plan, so it can
@@ -77,7 +83,7 @@ const FIXTURES: Template[] = [
   {
     id: "t2",
     title: "Sains Tahun 4 · Proses Mendengar",
-    sub: "Sains & Teknologi · Standard 2.1",
+    sub: "Sains dan Teknologi · Standard 2.1",
     tag: "KSSR",
     tone: "g",
     uses: 11,
@@ -142,11 +148,6 @@ const TONE_BAR: Record<string, string> = {
 
 const TONES = ["", "g", "p", "a"];
 const FILTERS = ["Semua", "Saya", "Sekolah", "KPM"] as const;
-const CURRICULUMS: { value: Curriculum; label: string }[] = [
-  { value: "KSSR", label: "KSSR (Sekolah Rendah)" },
-  { value: "KSSM", label: "KSSM (Sekolah Menengah)" },
-  { value: "PRASEKOLAH", label: "Prasekolah" },
-];
 
 const VISIBILITY_LABEL = { system: "KPM", school: "Sekolah", private: "Saya" } as const;
 
@@ -168,9 +169,6 @@ export default function TemplatPage() {
   const { busy, save } = useAdminSave();
   const { items: subjects } = useSchoolSubjects();
   const [filter, setFilter] = React.useState<(typeof FILTERS)[number]>("Semua");
-  const [dialog, setDialog] = React.useState<
-    { mode: "add" } | { mode: "edit"; row: Template } | null
-  >(null);
   const [confirming, setConfirming] = React.useState<Template | null>(null);
 
   const query = useQuery<{ items: ApiTemplate[] }>({
@@ -239,7 +237,17 @@ export default function TemplatPage() {
               {f}
             </button>
           ))}
-          <Button size="sm" disabled={busy} onClick={() => setDialog({ mode: "add" })}>
+          {/* Create needs a database to write to, so offering it in local mode
+              only ever ended in a 503 — and now it costs a whole plan written
+              before that happens. */}
+          <Button
+            size="sm"
+            disabled={!supabaseConfigured}
+            title={
+              supabaseConfigured ? undefined : "Cipta templat memerlukan mod disegerakkan."
+            }
+            onClick={() => router.push("/templat/baru")}
+          >
             <Plus className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Cipta templat
           </Button>
         </div>
@@ -307,7 +315,7 @@ export default function TemplatPage() {
                         size="sm"
                         variant="secondary"
                         aria-label={`Sunting ${t.title}`}
-                        onClick={() => setDialog({ mode: "edit", row: t })}
+                        onClick={() => router.push(`/templat/baru?edit=${t.id}`)}
                       >
                         <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
                       </Button>
@@ -336,20 +344,14 @@ export default function TemplatPage() {
         )}
       </div>
 
-      <TemplateDialog
-        state={dialog}
-        subjects={subjects.map((s) => ({ code: s.code, nama: s.nama }))}
-        onOpenChange={(o) => !o && setDialog(null)}
-        busy={busy}
-        save={(fn, ok) => save(fn, ok, refresh)}
-      />
-
       <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Padam templat?</DialogTitle>
             <DialogDescription>
-              {confirming ? `“${confirming.title}” akan dipadam kekal.` : ""}
+              {confirming
+                ? `“${confirming.title}” akan dipadam dan tidak boleh dipulihkan.`
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
@@ -395,166 +397,5 @@ export default function TemplatPage() {
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-function TemplateDialog({
-  state,
-  subjects,
-  onOpenChange,
-  busy,
-  save,
-}: {
-  state: { mode: "add" } | { mode: "edit"; row: Template } | null;
-  subjects: { code: string; nama: string }[];
-  onOpenChange: (open: boolean) => void;
-  busy: boolean;
-  save: (fn: () => Promise<unknown>, ok: string) => void;
-}) {
-  const editing = state?.mode === "edit" ? state.row : null;
-  const [title, setTitle] = React.useState("");
-  const [subjectCode, setSubjectCode] = React.useState("");
-  const [tahap, setTahap] = React.useState("");
-  const [curriculum, setCurriculum] = React.useState<Curriculum>("KSSR");
-  const [visibility, setVisibility] = React.useState<"private" | "school">("school");
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!state) return;
-    setError(null);
-    setTitle(editing?.title ?? "");
-    setSubjectCode(editing?.subjectCode ?? "");
-    setTahap(editing?.tahap ?? "");
-    setCurriculum(editing?.curriculum ?? "KSSR");
-    setVisibility(editing?.visibility === "private" ? "private" : "school");
-  }, [state, editing]);
-
-  const submit = () => {
-    if (!title.trim()) {
-      setError("Tajuk templat diperlukan.");
-      return;
-    }
-    setError(null);
-    const body = {
-      title: title.trim(),
-      subjectCode: subjectCode || null,
-      tahap: tahap.trim() || null,
-      curriculum,
-      visibility,
-    };
-
-    const req = (path: string, method: string, payload: unknown) =>
-      fetch(path, {
-        method,
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      }).then(async (res) => {
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(data?.error ?? "Gagal menyimpan");
-        }
-        return res;
-      });
-
-    if (editing) {
-      save(
-        () => req("/api/templates", "PATCH", { id: editing.id, ...body }),
-        "Templat dikemas kini",
-      );
-    } else {
-      save(() => req("/api/templates", "POST", body), "Templat dicipta");
-    }
-    onOpenChange(false);
-  };
-
-  return (
-    <Dialog open={state !== null} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{editing ? "Sunting templat" : "Cipta templat"}</DialogTitle>
-          <DialogDescription>
-            {editing
-              ? "Kemas kini maklumat templat. Kandungannya tidak berubah."
-              : "Templat baharu bermula kosong — simpan RPH sedia ada sebagai templat untuk kandungan sebenar."}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="grid gap-3">
-          <div>
-            <Label htmlFor="tpl-title" required>
-              Tajuk
-            </Label>
-            <Input
-              id="tpl-title"
-              value={title}
-              maxLength={160}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Matematik Tahun 5 · SK 3.1"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="tpl-subject">Mata pelajaran</Label>
-              <Select
-                id="tpl-subject"
-                value={subjectCode}
-                onChange={(e) => setSubjectCode(e.target.value)}
-              >
-                <option value="">—</option>
-                {subjects.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.nama}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="tpl-tahap">Tahap</Label>
-              <Input
-                id="tpl-tahap"
-                value={tahap}
-                maxLength={40}
-                onChange={(e) => setTahap(e.target.value)}
-                placeholder="Tahun 5"
-              />
-            </div>
-            <div>
-              <Label htmlFor="tpl-curriculum">Kurikulum</Label>
-              <Select
-                id="tpl-curriculum"
-                value={curriculum}
-                onChange={(e) => setCurriculum(e.target.value as Curriculum)}
-              >
-                {CURRICULUMS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="tpl-visibility">Kongsi</Label>
-              <Select
-                id="tpl-visibility"
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value as "private" | "school")}
-              >
-                <option value="school">Seluruh sekolah</option>
-                <option value="private">Saya sahaja</option>
-              </Select>
-            </div>
-          </div>
-          {error && <FieldError>{error}</FieldError>}
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Batal
-          </Button>
-          <Button disabled={busy} onClick={submit}>
-            {editing ? "Simpan" : "Cipta"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

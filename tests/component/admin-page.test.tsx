@@ -260,7 +260,7 @@ describe("pentadbiran", () => {
     expect(screen.getByRole("heading", { name: "Papan Pemuka" })).toBeTruthy();
     expect(screen.getByText("Persediaan sekolah")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("16 guru berdaftar")).toBeTruthy());
-    expect(screen.getByRole("tab", { name: "Akaun & peranan" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Akaun dan peranan" })).toBeTruthy();
 
     // The checklist is not decoration: a row is the route into its tab.
     fireEvent.click(screen.getByRole("button", { name: /^Kelas/ }));
@@ -280,11 +280,11 @@ describe("pentadbiran", () => {
     await mount();
 
     for (const label of [
-      "Akaun & peranan",
+      "Akaun dan peranan",
       "Kelas",
       "Mata pelajaran",
       "Maklumat sekolah",
-      "Sesi & tarikh akhir",
+      "Sesi dan tarikh akhir",
     ]) {
       expect(screen.getByRole("tab", { name: label })).toBeTruthy();
     }
@@ -529,7 +529,7 @@ describe("pentadbiran", () => {
     vi.stubGlobal("fetch", fakeFetch);
     await mount();
 
-    clickTab("Sesi & tarikh akhir");
+    clickTab("Sesi dan tarikh akhir");
 
     // Regex: `required` renders a `*` inside the <label>, so its text content
     // is "Sesi semasa*" and an exact string match finds nothing.

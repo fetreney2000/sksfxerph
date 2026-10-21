@@ -30,9 +30,9 @@ import { resolveSession } from "@/lib/server/session";
  * nobody measured.
  */
 function waitingLabel(submittedAt: string | null): string {
-  if (!submittedAt) return "Hantar tidak direkodkan";
+  if (!submittedAt) return "Penghantaran tidak direkodkan";
   const since = Date.parse(submittedAt);
-  if (!Number.isFinite(since)) return "Hantar tidak direkodkan";
+  if (!Number.isFinite(since)) return "Penghantaran tidak direkodkan";
   if (Date.now() < since) return "Baru sahaja";
 
   // Whole school days, not elapsed hours. "Hari ini" is a claim about the
@@ -41,7 +41,7 @@ function waitingLabel(submittedAt: string | null): string {
   // MYT, so a reviewer abroad counts the same day as one at the school.
   const from = mytFields(since);
   const to = mytFields(Date.now());
-  if (!from || !to) return "Hantar tidak direkodkan";
+  if (!from || !to) return "Penghantaran tidak direkodkan";
   const days = Math.round(
     (Date.UTC(to.year, to.month, to.date) - Date.UTC(from.year, from.month, from.date)) /
       86_400_000,
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (scopeErr) {
       console.error("[queue] scope lookup failed:", scopeErr.message);
       return NextResponse.json(
-        { error: "Ralat pelayan semasa mengambil baris gilir." },
+        { error: "Ralat pelayan semasa mengambil senarai semakan." },
         { status: 500 },
       );
     }
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (error) {
     console.error("[queue] query failed:", error.message);
     return NextResponse.json(
-      { error: "Ralat pelayan semasa mengambil baris gilir." },
+      { error: "Ralat pelayan semasa mengambil senarai semakan." },
       { status: 500 },
     );
   }

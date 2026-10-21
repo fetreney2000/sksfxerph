@@ -129,7 +129,7 @@ begin
       then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'kelas bukan dalam sekolah/sesi anda'));
+                             'error', 'Kelas ini bukan milik sekolah atau sesi anda'));
         continue;
       end if;
       if not exists (select 1 from erph.subject where code = v_op->>'subject_code') then
@@ -241,7 +241,7 @@ begin
       if v_doc_id is null then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
-                             'error', 'tidak dapat menentukan dokumen'));
+                             'error', 'tidak dapat mengenal pasti rujukan dokumen'));
         continue;
       end if;
 

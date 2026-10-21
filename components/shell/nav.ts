@@ -79,7 +79,7 @@ export const NAV: NavGroup[] = [
       },
       {
         href: "/laporan",
-        label: "Laporan & Eksport",
+        label: "Laporan dan Eksport",
         short: "Laporan",
         icon: FileText,
         perm: "laporan",
@@ -188,11 +188,15 @@ export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/minggu": { title: ms.nav.minggu, crumb: "Ruang kerja" },
   "/editor": { title: ms.nav.editor, crumb: "Draf aktif" },
   "/templat": { title: ms.nav.templat, crumb: "Templat tersedia" },
+  // The wizard is not a library screen, so it does not inherit the library's
+  // crumb — a teacher authoring a plan should be able to tell from the title
+  // bar which of the two screens they are on.
+  "/templat/baru": { title: ms.nav.templat, crumb: "Templat baharu" },
   "/arkib": { title: ms.nav.arkib, crumb: "Rekod sesi" },
   "/utama": { title: ms.nav.utama, crumb: "Papan pemuka pentadbir" },
-  "/semakan": { title: ms.nav.semakan, crumb: "Baris gilir semakan" },
+  "/semakan": { title: ms.nav.semakan, crumb: "Giliran semakan" },
   "/sekolah": { title: ms.nav.sekolah, crumb: "Pemantauan sekolah" },
-  "/laporan": { title: "Laporan & Eksport", crumb: "Eksport rasmi" },
+  "/laporan": { title: "Laporan dan Eksport", crumb: "Eksport rasmi" },
   "/pentadbiran": { title: ms.nav.urus, crumb: "Pentadbiran" },
 };
 

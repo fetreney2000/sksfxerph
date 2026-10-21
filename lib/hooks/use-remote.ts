@@ -140,7 +140,19 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
  * them standing, which is the bug this replaced: byPanel, weeks and
  * avgMinutes survived every refresh and were then read as the school's own.
  */
-export function useSchoolStats(range?: { first: number; last: number }): SchoolStatsView {
+/**
+ * The school's figures — for a role that may have them.
+ *
+ * `enabled` is the caller's *permission*, not a loading flag. Whole-school
+ * figures are a supervisor's question: a Guru Biasa's dashboard is about their
+ * own week, and it says nothing about anyone else's. Passing `false` fetches
+ * nothing at all — least of all the bundled demo figures, which describe a
+ * different school and would be shown as this one's.
+ */
+export function useSchoolStats(
+  range?: { first: number; last: number },
+  enabled = true,
+): SchoolStatsView {
   const session = useSession();
   const first = range?.first ?? WEEK;
   const last = range?.last ?? WEEK;
@@ -160,11 +172,28 @@ export function useSchoolStats(range?: { first: number; last: number }): SchoolS
       if (!res.ok) return empty; // local mode (503), signed out (401), no school
       return (await res.json()) as { stats: WeekStatsRow | null; history: SchoolWeekPoint[] };
     },
-    // Same as the queue: local mode has no backend, so don't ask.
-    enabled: supabaseConfigured,
+    // Not asked for at all when the role may not see it — a request that can
+    // only answer 403 is a request that should never have been made.
+    enabled: supabaseConfigured && enabled,
     retry: false,
     staleTime: 60_000,
   });
+
+  /** The "nothing measured" answer: zeroes, and a rate nobody computed. */
+  const empty: SchoolStatsView = {
+    activeTeachers: 0,
+    expected: 0,
+    submitted: 0,
+    approved: 0,
+    returned: 0,
+    compliancePct: null,
+    avgMinutes: null,
+    prevAvgMinutes: null,
+    weeks: [],
+    loading: enabled && remote.isLoading,
+  };
+
+  if (!enabled) return empty;
 
   const base: SchoolStatsView = {
     activeTeachers: SCHOOL_STATS.activeTeachers,
@@ -188,20 +217,7 @@ export function useSchoolStats(range?: { first: number; last: number }): SchoolS
   // not be shown as this one's, which is the leak this hook's own docblock
   // promises cannot happen. Zeroes and a null rate read as "nothing measured
   // yet"; 42 teachers at 88.6% read as a term that already went well.
-  if (!remote.data?.stats) {
-    return {
-      activeTeachers: 0,
-      expected: 0,
-      submitted: 0,
-      approved: 0,
-      returned: 0,
-      compliancePct: null,
-      avgMinutes: null,
-      prevAvgMinutes: null,
-      weeks: [],
-      loading: remote.isLoading,
-    };
-  }
+  if (!remote.data?.stats) return empty;
 
   const all = remote.data.history;
   const weeks = all.filter((w) => w.week >= first && w.week <= last);

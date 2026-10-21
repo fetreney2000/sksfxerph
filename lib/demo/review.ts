@@ -40,16 +40,16 @@ const ramlan = base({
   standard_kandungan: "Nombor hingga 100,000 · SK 3.1",
   standard_pembelajaran: "3.1.2 Memecahkan nombor kepada nilai tempat",
   objektif: "Murid dapat memecahkan nombor hingga 100,000 kepada nilai tempat dengan betul.",
-  bidang: "Nombor & Operasi",
+  bidang: "Nombor dan Operasi",
   tajuk: "Nilai tempat",
   aktiviti: [
     { nama: "Set induksi kad nilai tempat" },
     { nama: "Menyusun kad", sub: true },
-    { nama: "Penerangan & tunjuk cara" },
+    { nama: "Penerangan dan tunjuk cara" },
     { nama: "Lembaran kerja berkumpulan", sub: true },
-    { nama: "PdM pemerhatian" },
+    { nama: "PdP: pemerhatian" },
     { nama: "Penyelesaian masalah", sub: true },
-    { nama: "Penutup & rumusan" },
+    { nama: "Penutup dan rumusan" },
   ],
   kriteria_kejayaan:
     "Murid menulis semula nombor hingga 100,000 dengan nilai tempat yang betul tanpa bimbingan.",
@@ -61,7 +61,7 @@ const suhaila = base({
   standard_kandungan: "Membaca dan memahami petikan prosedur",
   standard_pembelajaran: "2.2.1 Mengenal pasti maklumat penting dalam petikan",
   objektif: "Murid dapat mengenal pasti lima maklumat penting dalam petikan prosedur.",
-  bidang: "Membaca & Memahami",
+  bidang: "Membaca dan Memahami",
   tajuk: "Petikan prosedur — cara menjaga kesihatan",
   aktiviti: [
     { nama: "Bacaan suara berirama" },
@@ -75,7 +75,7 @@ const suhaila = base({
 
 const aizuddin = base({
   standard_kandungan: "Proses mendengar",
-  standard_pembelajaran: "Sains & Teknologi · Standard 2.1",
+  standard_pembelajaran: "Sains dan Teknologi · Standard 2.1",
   objektif: "Murid dapat menerangkan proses mendengar dalam situasi harian.",
   bidang: "Sifat Manusia",
   tajuk: "Proses mendengar",

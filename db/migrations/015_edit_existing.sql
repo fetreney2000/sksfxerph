@@ -33,7 +33,7 @@ begin
   end if;
   if not exists (select 1 from erph.school_member
                   where school_id = p_school and user_id = p_user) then
-    raise exception 'Akaun bukan ahli sekolah ini';
+    raise exception 'Pemilik akaun ini bukan ahli sekolah ini';
   end if;
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
@@ -43,7 +43,7 @@ begin
   -- the first time someone signs in with Google, so a malformed one would
   -- quietly deny them rather than fail anywhere they could see.
   if p_email is not null and p_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
-    raise exception 'Emel tidak sah';
+    raise exception 'E-mel tidak sah';
   end if;
 
   update erph.user

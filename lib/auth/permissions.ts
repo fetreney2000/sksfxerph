@@ -20,10 +20,15 @@ export type Permission =
   /** Grade plans — the review queue. */
   | "semak"
   /**
-   * Whole-school monitoring — the `/sekolah` page: per-teacher rows, reminders
-   * and exports. The aggregate counts behind it are deliberately *not* behind
-   * this (see `/api/stats`), so a Guru Biasa still sees how the school is doing
-   * without seeing who is behind it.
+   * Whole-school monitoring — the `/sekolah` page: per-teacher rows, reminders,
+   * exports, and the school's own compliance figures.
+   *
+   * Those figures used to be open to every member "because they name nobody".
+   * They do name nobody, and that was never the question: a Guru Biasa's
+   * dashboard is about their own week, and a school's percentage beside it is
+   * an answer they are no more able to act on than a colleague's roster. So it
+   * is behind this now, and `/api/stats` asks for it too — the card and the
+   * endpoint can no longer disagree about who may look.
    */
   | "pantau"
   /** School-wide reports and exports. */

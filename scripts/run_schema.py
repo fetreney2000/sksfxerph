@@ -1142,24 +1142,44 @@ def main() -> int:
         )
         conn.commit()
 
-        # ── a school's weekly history is not a public statistic ───────────
+        # ── the school's figures are a supervisor's question ──────────────
         # `school_week_history` is SECURITY DEFINER, so the caller's own RLS is
         # never consulted: the check inside it is the only thing between a
-        # stranger and a school's year. It was missing, and the blanket grant
-        # on the schema's routines let anyone holding the publishable key ask
-        # for any school.
-        act_as("uji")
+        # stranger and a school's year. It had none, and its single-week
+        # sibling accepted any member — so a Guru Biasa was the one role that
+        # could still see the school from a dashboard which hid the card.
+        act_as("gpk.uji")
         own_history = r.one(
             f"select count(*) from erph.school_week_history({SK}::uuid, "
             f"'2026/2027'::text, 1::smallint, 2::smallint)"
         )[0]
         admin.append(
             (
-                "a member can still read their own school's history",
+                "a supervisor still reads their school's history",
                 own_history == 2,
                 f"got {own_history}",
             )
         )
+        # Belongs to this school, and still may not: the totals are a
+        # supervisor's question, not a teacher's.
+        act_as("uji")
+        msg = refused(
+            f"select count(*) from erph.school_week_history({SK}::uuid, "
+            f"'2026/2027'::text, 1::smallint, 2::smallint)"
+        )
+        admin.append(
+            ("a Guru Biasa may not read the school's figures", "dibenarkan" in msg, msg)
+        )
+        msg = refused(
+            f"select compliance from erph.school_week_stats({SK}::uuid, "
+            f"'2026/2027'::text, 1::smallint)"
+        )
+        admin.append(
+            ("…nor the week's compliance", "dibenarkan" in msg, msg)
+        )
+        # A school they do not belong to is refused for the same reason a
+        # supervisor is allowed the first: the check is the same one.
+        act_as("gpk.uji")
         msg = refused(
             f"select * from erph.school_week_history("
             f"'00000000-0000-4000-8000-0000000000ff'::uuid, '2026/2027'::text, "

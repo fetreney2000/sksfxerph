@@ -59,7 +59,11 @@ export default function MingguPage() {
   const router = useRouter();
   const me = useUser();
   const week = useWeek();
-  const stats = useSchoolStats();
+  // Whole-school figures are a supervisor's question. A Guru Biasa's
+  // dashboard is about their own week — four cards below and nothing about
+  // anyone else's — so they are neither fetched nor shown.
+  const seesSchool = can(me.role, "pantau");
+  const stats = useSchoolStats(undefined, seesSchool);
   // Reviewers also teach. Rather than taking their own week away by landing
   // them on Semakan, the queue is the first thing above it.
   const stage = reviewStageFor(me.role);
@@ -311,56 +315,59 @@ export default function MingguPage() {
         </div>
 
         {/* ── School totals ─────────────────────────────────────────────────
-          Aggregates only — `school_week_stats` returns counts, never names.
-          Every role may see this; the per-teacher table, the reminders and
-          the exports live behind `/sekolah`, which needs `pantau`. */}
-        <Card className="mb-4">
-          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 py-3.5">
-            <div className="min-w-[176px]">
-              <p className="text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase">
-                Sekolah · Minggu {WEEK}
-              </p>
-              <p className="mt-0.5 text-[13.5px] text-ink-2">
-                {noFigures ? (
-                  <span className="text-ink-4">Tiada angka untuk minggu ini lagi.</span>
-                ) : (
-                  <>
-                    {/* The denominator is the school's own rule — teachers ×
+          Aggregates only — `school_week_stats` returns counts, never names —
+          and only for a role that supervises. The per-teacher table, the
+          reminders and the exports are behind `/sekolah`, which needs the same
+          permission; this is the part a Guru Biasa used to see, and a teacher
+          has no use for the school's compliance percentage beside their own
+          week. */}
+        {seesSchool && (
+          <Card className="mb-4">
+            <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 py-3.5">
+              <div className="min-w-[176px]">
+                <p className="text-[11.5px] font-bold tracking-[0.7px] text-ink-4 uppercase">
+                  Sekolah · Minggu {WEEK}
+                </p>
+                <p className="mt-0.5 text-[13.5px] text-ink-2">
+                  {noFigures ? (
+                    <span className="text-ink-4">Belum ada angka untuk minggu ini.</span>
+                  ) : (
+                    <>
+                      {/* The denominator is the school's own rule — teachers ×
                         the RPH each owes a week, five for a Monday-to-Friday
                         school — stated beside the percentage so it can be
                         checked by hand. It is deliberately not teachers ×
                         classes: that would need teaching_assignment, which has
                         no writer, and a made-up denominator is worse than
                         none. */}
-                    <b className="num text-ink">{stats.approved}</b>
-                    <span className="text-ink-4">
-                      {" "}
-                      daripada {stats.expected} RPH · {stats.submitted} dihantar
-                    </span>
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="min-w-[180px] flex-1">
-              <p className="mb-1.5 text-[12.5px] text-ink-3">
-                {/* "—" when there is no rate to show — no denominator, or the
+                      <b className="num text-ink">{stats.approved}</b>
+                      <span className="text-ink-4">
+                        {" "}
+                        daripada {stats.expected} RPH · {stats.submitted} dihantar
+                      </span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="min-w-[180px] flex-1">
+                <p className="mb-1.5 text-[12.5px] text-ink-3">
+                  {/* "—" when there is no rate to show — no denominator, or the
                     figures have not been measured. A percentage nobody has
                     computed is not zero. */}
-                <b className="num text-ink">
-                  {stats.compliancePct === null ? "—" : stats.compliancePct}%
-                </b>{" "}
-                pematuhan sekolah
-              </p>
-              <Progress value={stats.compliancePct ?? 0} tone="success" />
-            </div>
-            {can(me.role, "pantau") && (
+                  <b className="num text-ink">
+                    {stats.compliancePct === null ? "—" : stats.compliancePct}%
+                  </b>{" "}
+                  pematuhan sekolah
+                </p>
+                <Progress value={stats.compliancePct ?? 0} tone="success" />
+              </div>
               <Button variant="secondary" size="sm" onClick={() => router.push("/sekolah")}>
                 Paparan Sekolah
                 <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden />
               </Button>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Weekly schedule ──────────────────────────────────────────────── */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -382,7 +389,7 @@ export default function MingguPage() {
             <p className="px-4 py-8 text-center text-ink-4">Memuatkan…</p>
           ) : week.documents.length === 0 ? (
             <div className="px-4 py-10 text-center">
-              <p className="mb-3 text-ink-3">Tiada RPH lagi untuk Minggu {WEEK}.</p>
+              <p className="mb-3 text-ink-3">Belum ada RPH untuk Minggu {WEEK}.</p>
               <Button size="sm" onClick={() => void onNew()}>
                 <Plus className="h-4 w-4" aria-hidden /> {ms.dashboard.newRph}
               </Button>
@@ -420,7 +427,7 @@ export default function MingguPage() {
                 {!week.loading && week.documents.length === 0 && (
                   <tr>
                     <TD colSpan={6} className="py-10 text-center">
-                      <p className="mb-3 text-ink-3">Tiada RPH lagi untuk Minggu {WEEK}.</p>
+                      <p className="mb-3 text-ink-3">Belum ada RPH untuk Minggu {WEEK}.</p>
                       <Button size="sm" onClick={() => void onNew()}>
                         <Plus className="h-4 w-4" aria-hidden /> {ms.dashboard.newRph}
                       </Button>
@@ -547,7 +554,7 @@ export default function MingguPage() {
               {can(me.role, "laporan") && (
                 <Shortcut
                   icon={<FileText className="h-4 w-4" />}
-                  label="Laporan & Eksport"
+                  label="Laporan dan Eksport"
                   onClick={() => router.push("/laporan")}
                 />
               )}
@@ -625,7 +632,7 @@ function PlanRow({ doc }: { doc: RphDocument }) {
             submitted plan has already passed the gate that requires all four. */}
         {actionable && (
           <span className="num mt-1 block text-[11px] text-ink-4">
-            {completeness(doc.payload) / 25}/4 seksyen
+            {completeness(doc.payload) / 25}/4 bahagian
           </span>
         )}
       </TD>
@@ -706,7 +713,7 @@ function PlanCard({ doc }: { doc: RphDocument }) {
 
           {actionable && (
             <p className="num mt-1 text-[11px] text-ink-4">
-              {completeness(doc.payload) / 25}/4 seksyen
+              {completeness(doc.payload) / 25}/4 bahagian
             </p>
           )}
         </div>

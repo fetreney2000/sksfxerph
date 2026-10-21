@@ -65,11 +65,11 @@ begin
     raise exception 'Peranan pentadbir diperlukan';
   end if;
   if p_member = p_supervisor then
-    raise exception 'Ahli tidak boleh menyelia diri sendiri';
+    raise exception 'Anda tidak boleh menyelia diri sendiri';
   end if;
   if not exists (select 1 from erph.school_member
                   where school_id = p_school and user_id = p_member) then
-    raise exception 'Bukan ahli sekolah ini';
+    raise exception 'Guru ini bukan ahli sekolah ini';
   end if;
   if p_supervisor is not null then
     if not exists (select 1 from erph.school_member

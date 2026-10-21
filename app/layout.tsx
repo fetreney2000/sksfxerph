@@ -17,7 +17,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "eRPH · Rancangan Pengajaran Harian",
   description:
-    "Sistem Rancangan Pengajaran Harian Secara Dalam Talian bagi guru di sekolah bawah Kementerian Pendidikan Malaysia.",
+    "Sistem Rancangan Pengajaran Harian Secara Dalam Talian bagi guru di sekolah di bawah Kementerian Pendidikan Malaysia.",
   applicationName: "eRPH",
   manifest: "/manifest.webmanifest",
   // The school crest, not the "eR" mark — a teacher should recognise the tab

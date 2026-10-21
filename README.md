@@ -21,9 +21,9 @@ npm run verify       # typecheck → lint → SQL static → SQL execution → A
 | SQL — static | `npm run check:sql` | 157 statements parse, 39 function bodies balanced, RLS/grants/schema-leak checks |
 | **SQL — executed** | `npm run check:sql:exec` | runs against a real PostgreSQL: 18 tables, 28 policies, enum values, inserts, guard triggers, NULL-actor refusal |
 | API contract | `npm run check:api` | every column/embed/RPC param the routes use exists; every route guarded |
-| Unit + component | `npm test` | 208 passing (incl. password, session-token, rate-limit, lockout, heartbeat) |
-| Production build | `npm run build` | 14 routes |
-| E2E | `npm run test:e2e` | 22 passing (incl. login, logout, session gate) |
+| Unit + component | `npm test` | 221 passing (incl. password, session-token, rate-limit, lockout, heartbeat) |
+| Production build | `npm run build` | 15 routes |
+| E2E | `npm run test:e2e` | 24 passing (incl. login, logout, session gate) |
 
 > **Why two SQL gates.** Static parsing proved the schema *parses*; a schema
 > Supabase rejected at runtime (`type "member_role" does not exist`) proved
@@ -97,7 +97,7 @@ tested against the pre-rename schema by `scripts/test-migration.py`.
 |---|---|
 | `db/migrations/001a_alter_types.sql` | **Six lines, one at a time** — select a line, press Run, repeat |
 | `db/migrations/001b_schema_delta.sql` | Paste the whole file |
-| `db/migrations/002…017_*.sql` | Paste each whole file, in order — every one is idempotent |
+| `db/migrations/002…018_*.sql` | Paste each whole file, in order — every one is idempotent |
 
 001a is separate for two hard Postgres reasons: `rename value` refuses to run
 inside a transaction block, and a value added inside one cannot be used until
@@ -150,7 +150,7 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 |---|---|---|
 | Minggu Ini | `/minggu` | Deadline countdown, weekly PdP table, stats, activity feed |
 | Editor RPH | `/editor/[id]` | 4-step wizard, DSKP picker, live A4 preview, completeness meter |
-| Perpustakaan Templat | `/templat` | Reusable plans by level/subject |
+| Perpustakaan Templat | `/templat` | Reusable plans by level/subject. **Cipta** and **Sunting** both write the plan in the editor and save it as a template |
 | Sejarah & Arkib | `/arkib` | Weekly archive, statutory record note |
 | Semakan RPH | `/semakan` | Review queue, keyboard grading (`J/K`, `1`, `0`) |
 | Paparan Sekolah | `/sekolah` | School compliance, per-panel progress, teacher table |
