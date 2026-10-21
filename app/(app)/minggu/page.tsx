@@ -272,7 +272,14 @@ export default function MingguPage() {
         </div>
 
         {/* ── Stats ────────────────────────────────────────────────────────── */}
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <div
+          className={cn(
+            "mb-4 grid grid-cols-2 gap-3 sm:gap-4",
+            // Three cards for a Guru Biasa: four columns would leave a cell
+            // empty on a supervisor's row and a half-width card on theirs.
+            seesSchool ? "xl:grid-cols-4" : "xl:grid-cols-3",
+          )}
+        >
           <StatCard
             label={`${ms.dashboard.approved} · Minggu ${WEEK}`}
             value={`${week.approved}`}
@@ -303,15 +310,22 @@ export default function MingguPage() {
               ) : undefined
             }
           />
-          <StatCard
-            label={ms.dashboard.onTime}
-            value={week.onTimePct === null ? "—" : String(week.onTimePct)}
-            sub={
-              week.onTimePct === null ? "" : `% · ${week.onTimeCount}/${week.handedIn} dihantar`
-            }
-            icon={<Target className="h-4 w-4" strokeWidth={2} />}
-            tone={week.onTimePct === null || week.onTimePct >= 80 ? "ok" : "bad"}
-          />
+          {/* Punctuality is a supervisor's question, and the one figure on this
+              row a Guru Biasa has no use for: the deadline banner already tells
+              them whether their own week is late. */}
+          {seesSchool && (
+            <StatCard
+              label={ms.dashboard.onTime}
+              value={week.onTimePct === null ? "—" : String(week.onTimePct)}
+              sub={
+                week.onTimePct === null
+                  ? ""
+                  : `% · ${week.onTimeCount}/${week.handedIn} dihantar`
+              }
+              icon={<Target className="h-4 w-4" strokeWidth={2} />}
+              tone={week.onTimePct === null || week.onTimePct >= 80 ? "ok" : "bad"}
+            />
+          )}
         </div>
 
         {/* ── School totals ─────────────────────────────────────────────────

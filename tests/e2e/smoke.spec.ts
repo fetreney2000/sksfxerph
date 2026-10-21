@@ -116,6 +116,8 @@ test.describe("authentication", () => {
     await expect(page.getByText(/^Disahkan · Minggu \d+$/)).toBeVisible();
     await expect(page.getByText("Menunggu semakan", { exact: true })).toBeVisible();
     await expect(page.getByText("Perlu tindakan", { exact: true })).toBeVisible();
+    // …and not the punctuality card, which is a supervisor's question.
+    await expect(page.getByText("Ketepatan masa", { exact: true })).toHaveCount(0);
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -323,6 +325,17 @@ test.describe("eRPH smoke", () => {
       .first()
       .click();
     await expect(page.getByText(/Bahagian 4/).first()).toBeVisible();
+
+    // Bahagian 2 is Objektif + Kriteria Kejayaan — the printed form's
+    // grouping, and what `completeness()` scores. The penyunting used to
+    // contradict it by rendering the criterion in Bahagian 3.
+    await page.getByRole("button", { name: /Bahagian 2 · DSKP/ }).click();
+    await expect(page.getByText("Kriteria Kejayaan", { exact: true }).first()).toBeVisible();
+
+    // Bahagian 3 is the activity list, in one box rather than a row per name.
+    await page.getByRole("button", { name: /Bahagian 3 · PdPc/ }).click();
+    await expect(page.getByLabel("Aktiviti PdPC")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Tambah aktiviti/ })).toHaveCount(0);
 
     // An incomplete plan cannot be submitted without acknowledging that it is
     // going to the GPK now, not saved as a draft.

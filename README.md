@@ -21,7 +21,7 @@ npm run verify       # typecheck → lint → SQL static → SQL execution → A
 | SQL — static | `npm run check:sql` | 157 statements parse, 39 function bodies balanced, RLS/grants/schema-leak checks |
 | **SQL — executed** | `npm run check:sql:exec` | runs against a real PostgreSQL: 18 tables, 28 policies, enum values, inserts, guard triggers, NULL-actor refusal |
 | API contract | `npm run check:api` | every column/embed/RPC param the routes use exists; every route guarded |
-| Unit + component | `npm test` | 221 passing (incl. password, session-token, rate-limit, lockout, heartbeat) |
+| Unit + component | `npm test` | 227 passing (incl. password, session-token, rate-limit, lockout, heartbeat) |
 | Production build | `npm run build` | 15 routes |
 | E2E | `npm run test:e2e` | 24 passing (incl. login, logout, session gate) |
 

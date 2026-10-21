@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  aktivitiFromText,
+  aktivitiToText,
   completeness,
   emptyPayload,
   isComplete,
@@ -137,7 +139,10 @@ describe("stepStatus — drives the stepper and the reviewer checklist", () => {
     expect(s.refleksi).toBe(false);
   });
 
-  it("needs Kriteria Kejayaan as well as activities for PdPc", () => {
+  it("counts Kriteria Kejayaan as bahagian 2, with the objective", () => {
+    // The printed form groups Objektif + Kriteria Kejayaan into one 25-point
+    // part, and `completeness()` scores them together — so the badge for
+    // bahagian 2 says so, and PdPc is satisfied by an activity alone.
     const s = stepStatus(
       payload({
         ...DSKP,
@@ -146,6 +151,62 @@ describe("stepStatus — drives the stepper and the reviewer checklist", () => {
         kriteria_kejayaan: "   ",
       }),
     );
-    expect(s.pdpc).toBe(false);
+    expect(s.dskp).toBe(false);
+    expect(s.pdpc).toBe(true);
+
+    const done = stepStatus(
+      payload({
+        ...DSKP,
+        ...OBJEKTIF,
+        aktiviti: [{ nama: "Senamrobik" }],
+        kriteria_kejayaan: "Murid menyertai aktiviti dengan penuh semangat.",
+      }),
+    );
+    expect(done.dskp).toBe(true);
+    expect(done.pdpc).toBe(true);
+  });
+});
+
+describe("aktivitiToText / aktivitiFromText — one box, one line per activity", () => {
+  it("renders a sub-item behind a hyphen, as the printed form does", () => {
+    expect(
+      aktivitiToText([
+        { nama: "Permainan Dalaman" },
+        { nama: "Catur", sub: true },
+        { nama: "Congkak", sub: true },
+      ]),
+    ).toBe("Permainan Dalaman\n- Catur\n- Congkak");
+  });
+
+  it("reads the hyphen back as a sub-item", () => {
+    expect(aktivitiFromText("Permainan Dalaman\n- Catur\n- Congkak")).toEqual([
+      { nama: "Permainan Dalaman", sub: false },
+      { nama: "Catur", sub: true },
+      { nama: "Congkak", sub: true },
+    ]);
+  });
+
+  it("round-trips, which is what makes it safe to bind to a text box", () => {
+    const rows = [
+      { nama: "Set induksi", sub: false },
+      { nama: "Menyusun kad", sub: true },
+      { nama: "Catur", sub: false },
+    ];
+    expect(aktivitiFromText(aktivitiToText(rows))).toEqual(rows);
+  });
+
+  it("keeps a trailing space — the caret is there", () => {
+    // Stripping on every keystroke would eat what was just typed, so only the
+    // leading marker is consumed.
+    expect(aktivitiFromText("Senamrobik ")).toEqual([{ nama: "Senamrobik ", sub: false }]);
+    expect(aktivitiToText(aktivitiFromText("Senamrobik "))).toBe("Senamrobik ");
+  });
+
+  it("treats an en dash as a name, not a marker", () => {
+    expect(aktivitiFromText("— Catur")).toEqual([{ nama: "— Catur", sub: false }]);
+  });
+
+  it("splits an empty box into one empty line", () => {
+    expect(aktivitiFromText("")).toEqual([{ nama: "", sub: false }]);
   });
 });

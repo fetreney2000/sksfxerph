@@ -128,7 +128,14 @@ export function completeness(payload: RphPayload): 0 | 25 | 50 | 75 | 100 {
   return score as 0 | 25 | 50 | 75 | 100;
 }
 
-/** Step-level completion flags — drives the stepper and the checklist. */
+/**
+ * Step-level completion flags — drives the stepper and the checklist.
+ *
+ * The grouping is the printed form's, not the editor's: bahagian 2 is Objektif
+ * **+ Kriteria Kejayaan**, which is what `completeness()` scores and what the
+ * sheet prints. The field used to be rendered in PdPc, so bahagian 3 read as
+ * unfinished when the form was already satisfied by it.
+ */
 export function stepStatus(payload: RphPayload) {
   const ne = (s: string) => s.trim() !== "";
   return {
@@ -136,14 +143,38 @@ export function stepStatus(payload: RphPayload) {
     dskp:
       ne(payload.standard_kandungan) &&
       ne(payload.standard_pembelajaran) &&
-      ne(payload.objektif),
-    pdpc: payload.aktiviti.some((a) => ne(a.nama)) && ne(payload.kriteria_kejayaan),
+      ne(payload.objektif) &&
+      ne(payload.kriteria_kejayaan),
+    pdpc: payload.aktiviti.some((a) => ne(a.nama)),
     refleksi: ne(payload.refleksi),
   } as const;
 }
 
 /** The printed form needs all four sections before a clean submit. */
 export const isComplete = (p: RphPayload) => completeness(p) === 100;
+
+/* ── The activity list as text ──────────────────────────────────────────── */
+
+/**
+ * The two shapes of the same list.
+ *
+ * The penyunting shows one box and the printed form shows a list of names, so
+ * these two sit between them. A leading "- " is a sub-item: the school writes a
+ * heading with its contents beneath it ("Permainan Dalaman" → "- Catur"), and
+ * the paper indents those behind a hyphen.
+ *
+ * The text is deliberately **not trimmed**. A trailing space is where the caret
+ * is, and stripping it on every keystroke would eat what was just typed. Only
+ * the marker itself is consumed, so `A ` round-trips as `A `.
+ */
+export const aktivitiToText = (rows: readonly { nama: string; sub?: boolean }[]): string =>
+  rows.map((a) => (a.sub ? `- ${a.nama}` : a.nama)).join("\n");
+
+export const aktivitiFromText = (text: string): { nama: string; sub: boolean }[] =>
+  text.split("\n").map((line) => {
+    const sub = /^\s*-\s?(.*)$/.exec(line);
+    return sub ? { nama: sub[1] ?? "", sub: true } : { nama: line, sub: false };
+  });
 
 /* ── Reading old documents ──────────────────────────────────────────────── */
 

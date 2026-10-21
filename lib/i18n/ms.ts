@@ -106,9 +106,9 @@ export const ms = {
     /** A template has no class, date or lesson time, so neither does this line. */
     step1subTemplate: "Subjek · tema · bidang · tajuk",
     step2: "DSKP",
-    step2sub: "Standard dan objektif",
+    step2sub: "Standard, objektif dan kriteria",
     step3: "PdPc",
-    step3sub: "Aktiviti · Kriteria Kejayaan",
+    step3sub: "Aktiviti PdPC",
     step4: "Refleksi",
     step4sub: "Perkara susulan",
     subject: "Mata pelajaran",

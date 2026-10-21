@@ -8,10 +8,8 @@ import {
   ChevronDown,
   Download,
   FileDown,
-  Plus,
   Save,
   Send,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -61,7 +59,8 @@ import { takeImport } from "@/lib/import/pending";
 import { ownerId } from "@/lib/owner";
 import { RpcError, submitRph } from "@/lib/rpc";
 import {
-  type Aktiviti,
+  aktivitiFromText,
+  aktivitiToText,
   completeness,
   emptyPayload,
   normalisePayload,
@@ -194,8 +193,9 @@ function notes(payload: RphPayload): Note[] {
   // list — asking for "at least one" is not the same as asking for "the first".
   if (!payload.aktiviti.some((a) => has(a.nama)))
     add({ section: 2, text: ms.editor.missing.noAktiviti, blocking: true });
+  // Bahagian 2 with objektif, matching the printed form — not bahagian 3.
   if (!has(payload.kriteria_kejayaan))
-    add({ section: 2, field: "f-kriteria", text: ms.editor.missing.kriteria, blocking: true });
+    add({ section: 1, field: "f-kriteria", text: ms.editor.missing.kriteria, blocking: true });
   if (!has(payload.refleksi))
     add({ section: 3, field: "f-270580", text: ms.editor.missing.refleksi, blocking: true });
 
@@ -675,7 +675,14 @@ export function RphEditor({
         tahap: meta.tahap.trim() || null,
         curriculum: meta.curriculum,
         visibility: meta.visibility,
-        payload: payloadRef.current,
+        // Blank rows are where the caret was. `normalisePayload` drops them on
+        // read anyway, and `rphPayloadSchema` requires a non-empty name — so
+        // a half-typed last line would 422 this save the same way an abandoned
+        // "Tambah aktiviti" row used to.
+        payload: {
+          ...payloadRef.current,
+          aktiviti: payloadRef.current.aktiviti.filter((a) => a.nama.trim() !== ""),
+        },
       };
       const res = await fetch("/api/templates", {
         method: editingTemplate ? "PATCH" : "POST",
@@ -1900,6 +1907,20 @@ function StepDskp({
             <FieldError>Objektif diperlukan sebelum dihantar.</FieldError>
           )}
         </div>
+
+        <div className="mt-3.5">
+          <Label required htmlFor="f-kriteria">
+            {ms.editor.successCriteria}
+          </Label>
+          <Textarea
+            id="f-kriteria"
+            value={payload.kriteria_kejayaan}
+            onChange={(e) => onPatch({ kriteria_kejayaan: e.target.value })}
+          />
+          {payload.kriteria_kejayaan.trim() === "" && (
+            <FieldError>Kriteria Kejayaan diperlukan sebelum dihantar.</FieldError>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1914,97 +1935,37 @@ function StepPdPc({
   payload: RphPayload;
   onPatch: (p: Partial<RphPayload>) => void;
 }) {
-  const setAktiviti = (i: number, patch: Partial<Aktiviti>) => {
-    onPatch({
-      aktiviti: payload.aktiviti.map((a, idx) => (idx === i ? { ...a, ...patch } : a)),
-    });
-  };
+  /**
+   * One box, one line per activity — which is all the printed form has: a list
+   * of names, not a row per activity with controls beside it. The shape
+   * between the two lives in `aktivitiToText` / `aktivitiFromText`, where the
+   * round-trip is pinned by a test.
+   */
+  const text = aktivitiToText(payload.aktiviti);
+
+  const setText = (value: string) => onPatch({ aktiviti: aktivitiFromText(value) });
+
+  const empty = payload.aktiviti.every((a) => a.nama.trim() === "");
 
   return (
     <div>
-      <Label className="mb-0" required>
+      <Label className="mb-0" required htmlFor="f-aktiviti">
         {ms.editor.activities}
       </Label>
-      {/* The printed form is a list of names, not a timed table of teacher and
-          student actions — so the form asks for names. A sub-item is printed
-          indented behind a hyphen, which is how the school writes a heading
-          with its contents beneath it ("Permainan Dalaman" → "- Catur"). */}
       <p className="mb-2.5 mt-1 text-[12.5px] leading-[1.55] text-ink-4">
-        Nama aktiviti mengikut urutan yang dicetak. Tandakan sebagai sub-aktiviti untuk
-        dipaparkan berindeks dengan tanda hubung.
+        Satu baris bagi setiap aktiviti. Mulakan dengan tanda hubung untuk menjadikannya
+        sub-aktiviti.
       </p>
-
-      <div className="grid gap-2">
-        {payload.aktiviti.map((a, i) => (
-          <div
-            /* biome-ignore lint/suspicious/noArrayIndexKey: append/delete only —
-               never reordered, and each row is a controlled input with no
-               per-item state. The rule guards against state following an item
-               across a reorder; a delete unmounts the button that caused it, so
-               there is no state to misplace. */
-            key={i}
-            className="flex items-center gap-2"
-          >
-            <Input
-              id={`f-aktiviti-${i}-nama`}
-              value={a.nama}
-              onChange={(e) => setAktiviti(i, { nama: e.target.value })}
-              aria-label={`Aktiviti PdPC ${i + 1}`}
-              className={a.sub ? "pl-7" : undefined}
-            />
-            <button
-              type="button"
-              aria-pressed={a.sub}
-              onClick={() => setAktiviti(i, { sub: !a.sub })}
-              className={
-                "shrink-0 rounded-[7px] border px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors " +
-                (a.sub
-                  ? "border-primary-soft-2 bg-primary-soft text-primary-ink"
-                  : "border-border-strong bg-surface text-ink-3 hover:border-primary")
-              }
-              title={a.sub ? "Tanggalkan sub-aktiviti" : "Jadikan sub-aktiviti"}
-            >
-              Sub
-            </button>
-            <button
-              type="button"
-              className="shrink-0 rounded-[7px] p-1.5 text-ink-4 transition-colors hover:bg-danger-soft hover:text-danger-ink"
-              onClick={() => onPatch({ aktiviti: payload.aktiviti.filter((_, x) => x !== i) })}
-              aria-label={`Buang aktiviti ${i + 1}`}
-            >
-              <X className="h-3.5 w-3.5" strokeWidth={2.2} />
-            </button>
-          </div>
-        ))}
-        {payload.aktiviti.length === 0 && (
-          <p className="rounded-[10px] border border-dashed border-border-strong px-3 py-6 text-center text-[12.5px] text-ink-4">
-            Tiada aktiviti lagi.
-          </p>
-        )}
-      </div>
-
-      <Button
-        variant="secondary"
-        size="sm"
-        className="mt-2.5 self-start"
-        onClick={() => onPatch({ aktiviti: [...payload.aktiviti, { nama: "", sub: false }] })}
-      >
-        <Plus className="h-4 w-4" strokeWidth={2.1} aria-hidden /> Tambah aktiviti
-      </Button>
-
-      <div className="mt-5">
-        <Label required htmlFor="f-kriteria">
-          {ms.editor.successCriteria}
-        </Label>
-        <Textarea
-          id="f-kriteria"
-          value={payload.kriteria_kejayaan}
-          onChange={(e) => onPatch({ kriteria_kejayaan: e.target.value })}
-        />
-        {payload.kriteria_kejayaan.trim() === "" && (
-          <FieldError>Kriteria Kejayaan diperlukan sebelum dihantar.</FieldError>
-        )}
-      </div>
+      <Textarea
+        id="f-aktiviti"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={Math.max(6, payload.aktiviti.length + 1)}
+        placeholder={"Set induksi\nMenyusun kad\n- Catur"}
+      />
+      {empty && (
+        <FieldError>Sekurang-kurangnya satu aktiviti diperlukan sebelum dihantar.</FieldError>
+      )}
     </div>
   );
 }
