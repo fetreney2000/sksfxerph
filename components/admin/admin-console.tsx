@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountsTab } from "./accounts-tab";
+import { CalendarTab } from "./calendar-tab";
 import { ClassesTab } from "./classes-tab";
 import { SchoolTab } from "./school-tab";
 import { SettingsTab } from "./settings-tab";
@@ -23,9 +24,15 @@ import { SubjectsTab } from "./subjects-tab";
  * — and classes are not a nicety. They are what `rph_document.class_id` points
  * at, so a school that cannot manage them cannot plan against a class nobody
  * created.
+ *
+ * Kalendar minggu is the newest, and the smallest job: the app counts weeks from
+ * a fixed term start, and a school whose calendar says otherwise needs one place
+ * to say which date range is week 34. It sits beside the session for the same
+ * reason session does — both are the calendar the whole school's numbers come
+ * from.
  */
 
-export type AdminTab = "akaun" | "kelas" | "subjek" | "sekolah" | "tetapan";
+export type AdminTab = "akaun" | "kelas" | "subjek" | "sekolah" | "tetapan" | "kalendar";
 
 export const ADMIN_TABS: { value: AdminTab; label: string }[] = [
   { value: "akaun", label: "Akaun dan peranan" },
@@ -33,6 +40,7 @@ export const ADMIN_TABS: { value: AdminTab; label: string }[] = [
   { value: "subjek", label: "Mata pelajaran" },
   { value: "sekolah", label: "Maklumat sekolah" },
   { value: "tetapan", label: "Sesi dan tarikh akhir" },
+  { value: "kalendar", label: "Kalendar minggu" },
 ];
 
 export function AdminConsole({
@@ -76,6 +84,9 @@ export function AdminConsole({
         </TabsContent>
         <TabsContent value="tetapan">
           <SettingsTab />
+        </TabsContent>
+        <TabsContent value="kalendar">
+          <CalendarTab />
         </TabsContent>
       </section>
     </Tabs>

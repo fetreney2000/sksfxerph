@@ -97,7 +97,7 @@ tested against the pre-rename schema by `scripts/test-migration.py`.
 |---|---|
 | `db/migrations/001a_alter_types.sql` | **Six lines, one at a time** — select a line, press Run, repeat |
 | `db/migrations/001b_schema_delta.sql` | Paste the whole file |
-| `db/migrations/002…018_*.sql` | Paste each whole file, in order — every one is idempotent |
+| `db/migrations/002…019_*.sql` | Paste each whole file, in order — every one is idempotent |
 
 001a is separate for two hard Postgres reasons: `rename value` refuses to run
 inside a transaction block, and a value added inside one cannot be used until

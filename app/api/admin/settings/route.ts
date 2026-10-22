@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
+import { invalidateCalendarCache } from "@/lib/server/calendar";
 
 /**
  * GET / PATCH /api/admin/settings — the school's term and submission rule.
@@ -88,5 +89,10 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     console.error("[admin] set setting failed:", error.message);
     return NextResponse.json({ error: error.message }, { status: 422 });
   }
+  // Rolling the year over changes *which* calendar the numbers come from: the
+  // cached rows were read for the session that was current when they were
+  // fetched, so leaving them would let `/api/stats` count the new year against
+  // last year's declarations for the length of the TTL.
+  invalidateCalendarCache(schoolId);
   return NextResponse.json({ ok: true });
 }

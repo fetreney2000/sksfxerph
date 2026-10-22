@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server";
-import { currentWeek } from "@/lib/config";
 
 /**
  * The week window a request asks about.
@@ -8,6 +7,13 @@ import { currentWeek } from "@/lib/config";
  * single week, because the page's filter widens it — and the roster has to
  * cover the same weeks as the cards above it, or a supervisor reads a total
  * beside a table that disagrees with it.
+ *
+ * `now` is passed in rather than computed here. This runs on the server, where
+ * the client's calendar store is empty and `currentWeek()` would answer from the
+ * term-start grid whatever the school has declared — and the whole point of the
+ * declaration is that the cards, the roster and the chart agree on which week
+ * they are describing. Each caller already loads the school's weeks for its own
+ * reasons, so it hands the answer in.
  *
  * Defaults to the current week, so a caller that says nothing gets the figure
  * it always did.
@@ -22,9 +28,9 @@ import { currentWeek } from "@/lib/config";
  */
 export function parseRange(
   request: NextRequest,
+  now: number,
   fallback?: { first: number; last: number },
 ): { first: number; last: number } {
-  const now = currentWeek();
   const num = (key: string): number | undefined => {
     const raw = request.nextUrl.searchParams.get(key);
     const n = raw === null ? Number.NaN : Number.parseInt(raw, 10);

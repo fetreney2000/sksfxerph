@@ -2029,6 +2029,129 @@ begin
   end if;
 end $$;
 
+-- ── Calendar ─────────────────────────────────────────────────────────────────
+
+-- The administrator's answer to "which week is this date?".
+--
+-- These are writers only: the week number itself is computed in TypeScript
+-- (lib/config.ts) and SQL never derives one from a date — it filters on the
+-- `week_no` the client sends. So the job here is purely to keep the table
+-- honest, which is more than a plain INSERT policy can do, because a declared
+-- week **cascades**: setting 19–23 Oct to week 34 makes 26 Oct 35 and 2 Nov
+-- 36. Two rows can therefore contradict each other even when each one is
+-- individually valid, and the monotonicity checks below are what refuse the
+-- pair that would make numbering run backwards.
+--
+-- `p_from_week_no` is how an *edit* arrives: the row that currently holds this
+-- Monday has to go before the new one lands, or the upsert would leave the old
+-- declaration standing under its own week number and two anchors would claim
+-- the same date. Deleting first keeps the whole edit in one transaction.
+create or replace function erph.admin_set_calendar_week(p_school uuid, p_session text,
+                                                        p_week_no smallint,
+                                                        p_start_date date,
+                                                        p_end_date date,
+                                                        p_label text default null,
+                                                        p_from_week_no smallint default null)
+returns void language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_prev_week  smallint;
+  v_prev_start date;
+  v_next_week  smallint;
+  v_next_start date;
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if p_week_no is null or p_week_no not between 1 and 52 then
+    raise exception 'Minggu mesti antara 1 dan 52';
+  end if;
+  if p_session is null or p_session !~ '^[0-9]{4}/[0-9]{4}$' then
+    raise exception 'Sesi mesti dalam bentuk TTTT/TTTT';
+  end if;
+  if p_start_date is null or p_end_date is null then
+    raise exception 'Tarikh mula dan akhir diperlukan';
+  end if;
+  -- A Monday, or the 7-day cascade from this row lands mid-week and every week
+  -- after it is off by a day. `isodow`: Monday = 1 … Sunday = 7.
+  if extract(isodow from p_start_date) <> 1 then
+    raise exception 'Tarikh mula mesti hari Isnin';
+  end if;
+  -- schoolDays() always renders the five days from that Monday, so a Friday
+  -- that is not start + 4 would be a week whose own end date disagrees with
+  -- the days it prints.
+  if p_end_date <> p_start_date + 4 then
+    raise exception 'Tarikh akhir mesti Jumaat minggu yang sama';
+  end if;
+
+  if p_from_week_no is not null then
+    if not exists (select 1 from erph.academic_calendar
+                    where school_id = p_school and session = p_session
+                      and week_no = p_from_week_no) then
+      raise exception 'Tetapan minggu lama tidak dijumpai';
+    end if;
+    delete from erph.academic_calendar
+     where school_id = p_school and session = p_session and week_no = p_from_week_no;
+  end if;
+
+  -- The new number must be free: it may update the row already sitting on this
+  -- Monday (a relabel, or the number itself), but it may not take a number that
+  -- belongs to a different Monday.
+  if exists (select 1 from erph.academic_calendar
+              where school_id = p_school and session = p_session
+                and week_no = p_week_no and start_date <> p_start_date) then
+    raise exception 'Minggu % sudah ditetapkan pada tarikh lain', p_week_no;
+  end if;
+  -- And one date may only ever be one week.
+  if exists (select 1 from erph.academic_calendar
+              where school_id = p_school and session = p_session
+                and start_date = p_start_date and week_no <> p_week_no) then
+    raise exception 'Tarikh itu sudah ditetapkan kepada minggu lain';
+  end if;
+
+  select week_no, start_date into v_prev_week, v_prev_start
+    from erph.academic_calendar
+   where school_id = p_school and session = p_session and start_date < p_start_date
+   order by start_date desc limit 1;
+
+  if v_prev_week is not null and v_prev_week + ((p_start_date - v_prev_start) / 7) > p_week_no then
+    raise exception 'Minggu mesti sekurang-kurangnya minggu sebelumnya tambah jarak antara tarikh';
+  end if;
+
+  select week_no, start_date into v_next_week, v_next_start
+    from erph.academic_calendar
+   where school_id = p_school and session = p_session and start_date > p_start_date
+   order by start_date asc limit 1;
+
+  if v_next_week is not null and p_week_no + ((v_next_start - p_start_date) / 7) > v_next_week then
+    raise exception 'Tetapan ini akan menurunkan nombor minggu selepasnya';
+  end if;
+
+  insert into erph.academic_calendar (school_id, session, week_no, start_date, end_date, label)
+  values (p_school, p_session, p_week_no, p_start_date, p_end_date, nullif(trim(p_label), ''))
+  on conflict (school_id, session, week_no)
+  do update set start_date = excluded.start_date,
+                end_date   = excluded.end_date,
+                label      = excluded.label;
+end $$;
+
+-- Hand a week back to the automatic assignment. Deleting the row is the whole
+-- of it: nothing else in the app holds a copy of the override, so the next load
+-- of the calendar is back on the grid with no residue to clean up.
+create or replace function erph.admin_clear_calendar_week(p_school uuid, p_session text,
+                                                          p_week_no smallint)
+returns void language plpgsql security definer set search_path = erph, public as $$
+begin
+  if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
+    raise exception 'Peranan pentadbir diperlukan';
+  end if;
+  if p_week_no is null or p_week_no not between 1 and 52 then
+    raise exception 'Minggu mesti antara 1 dan 52';
+  end if;
+
+  delete from erph.academic_calendar
+   where school_id = p_school and session = p_session and week_no = p_week_no;
+end $$;
+
 -- ── 11 · TRIGGERS ────────────────────────────────────────────────────────────
 create trigger tr_school_updated   before update on erph.school
   for each row execute function erph.set_updated_at();

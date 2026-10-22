@@ -273,8 +273,9 @@ def main() -> int:
     )[0]
     # Bump when adding a function — this count is a guard against one being
     # lost, not a formality. 012 added `jawatan_for` and `admin_set_jawatan`;
-    # 015 added `admin_set_profile` and `admin_edit_subject`.
-    check("39 functions in erph", n_funcs == 39, f"found {n_funcs}")
+    # 015 added `admin_set_profile` and `admin_edit_subject`; 019 added
+    # `admin_set_calendar_week` and `admin_clear_calendar_week`.
+    check("41 functions in erph", n_funcs == 41, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -987,6 +988,108 @@ def main() -> int:
         # Put it back so later assertions see the fixture's own value.
         r.q(f"select erph.admin_set_setting({SK}, 5::smallint, '16:00', true, '2026/2027')")
         conn.commit()
+
+        # ── the school's own week numbering ──────────────────────────────
+        # A declared week cascades forward, so what these write paths are
+        # really guarding is two rows that individually look fine but
+        # contradict each other — the pair that makes numbering run backwards.
+        act_as("uji")
+        msg = refused(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 34::smallint, "
+            f"'2026-10-19'::date, '2026-10-23'::date, null, null)"
+        )
+        admin.append(("Guru Biasa cannot set the calendar", "pentadbir" in msg, msg))
+
+        act_as("admin.uji")
+        msg = refused(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 34::smallint, "
+            f"'2026-10-20'::date, '2026-10-24'::date, null, null)"
+        )
+        admin.append(("a week may only start on a Monday", "Isnin" in msg))
+
+        msg = refused(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 34::smallint, "
+            f"'2026-10-19'::date, '2026-10-22'::date, null, null)"
+        )
+        admin.append(("…and must end on that week's Friday", "Jumaat" in msg))
+
+        r.q(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 34::smallint, "
+            f"'2026-10-19'::date, '2026-10-23'::date, 'Minggu PTS', null)"
+        )
+        conn.commit()
+        row = r.one(
+            "select week_no, start_date, end_date, label from erph.academic_calendar "
+            "where start_date = '2026-10-19'"
+        )
+        admin.append(
+            (
+                "a declared week is stored with its name",
+                row is not None
+                and row[0] == 34
+                and str(row[1]) == "2026-10-19"
+                and str(row[2]) == "2026-10-23"
+                and row[3] == "Minggu PTS",
+                f"{row}",
+            )
+        )
+
+        # The cascade itself: the very next Monday agrees with it, so 34 → 35
+        # and nothing between them needs a row of its own.
+        r.q(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 35::smallint, "
+            f"'2026-10-26'::date, '2026-10-30'::date, null, null)"
+        )
+        conn.commit()
+
+        # Too low a number on a later date — 36 is what 2 Nov owes 26 Oct, so
+        # declaring 33 would make numbering run backwards across the pair.
+        msg = refused(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 33::smallint, "
+            f"'2026-11-02'::date, '2026-11-06'::date, null, null)"
+        )
+        admin.append(("a later week may not number below its neighbour", "sekurang-kurangnya" in msg, msg))
+
+        # The mirror of it: too high a number on an earlier date pushes
+        # everything after it past the rows that are already standing.
+        msg = refused(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 40::smallint, "
+            f"'2026-10-12'::date, '2026-10-16'::date, null, null)"
+        )
+        admin.append(("an earlier week may not push its successor down", "menurunkan" in msg, msg))
+
+        # And one number may only ever belong to one Monday.
+        msg = refused(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 35::smallint, "
+            f"'2026-11-02'::date, '2026-11-06'::date, null, null)"
+        )
+        admin.append(("one number belongs to one date", "tarikh lain" in msg, msg))
+
+        # An edit arrives with the week it is replacing, so the old row goes in
+        # the same transaction rather than being left standing beside the new.
+        r.q(
+            f"select erph.admin_set_calendar_week({SK}, '2026/2027', 36::smallint, "
+            f"'2026-10-26'::date, '2026-10-30'::date, null, 35::smallint)"
+        )
+        conn.commit()
+        after_edit = r.q(
+            "select week_no from erph.academic_calendar where start_date = '2026-10-26'"
+        )
+        admin.append(
+            (
+                "an edit replaces rather than duplicates",
+                len(after_edit) == 1 and after_edit[0][0] == 36,
+                f"{after_edit}",
+            )
+        )
+
+        # Handing a week back to the grid is a delete and nothing else — no
+        # copy of the override lives anywhere else in the system.
+        r.q(f"select erph.admin_clear_calendar_week({SK}, '2026/2027', 34::smallint)")
+        r.q(f"select erph.admin_clear_calendar_week({SK}, '2026/2027', 36::smallint)")
+        conn.commit()
+        left = r.one("select count(*) from erph.academic_calendar")[0]
+        admin.append(("clearing hands the week back to the grid", left == 0, f"{left} left"))
 
         # ── school identity ───────────────────────────────────────────────
         act_as("uji")

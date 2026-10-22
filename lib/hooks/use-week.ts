@@ -1,16 +1,15 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { currentWeek, schoolCode, weekDeadline } from "@/lib/config";
+import { schoolCode, weekDeadline } from "@/lib/config";
 import { schoolDays } from "@/lib/date";
 import { db, documentsForWeek } from "@/lib/db";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSession } from "@/lib/hooks/use-session";
 import { ownerId } from "@/lib/owner";
 import { normalisePayload } from "@/lib/schemas/rph";
 import type { RphDocument } from "@/lib/types";
 import { summariseWeek, type WeekCounts } from "@/lib/week-summary";
-
-export const WEEK = currentWeek();
 
 export interface WeekSummary extends WeekCounts {
   weekNo: number;
@@ -46,22 +45,27 @@ export function useWeek(): WeekSummary {
   // Whose plans, too. IndexedDB is shared by every account on this browser,
   // so asking for "the" plans would be asking for the last one who signed in.
   const owner = ownerId();
+  // Inside the hook rather than the module constant `WEEK` used to be: that was
+  // evaluated when the bundle loaded, before the school's calendar had been
+  // fetched, so it could only ever hold the term-start grid's answer — and a
+  // Dexie query keyed on an unchanging value could not re-run once it had.
+  const weekNo = useCurrentWeek();
 
   const summary = useLiveQuery(async () => {
-    const documents = await documentsForWeek(owner, session, WEEK);
+    const documents = await documentsForWeek(owner, session, weekNo);
     return {
       documents,
-      ...summariseWeek(documents, weekDeadline(WEEK).getTime()),
+      ...summariseWeek(documents, weekDeadline(weekNo).getTime()),
     };
-  }, [owner, session]);
+  }, [owner, session, weekNo]);
 
   // `summariseWeek` owns the definitions — approved, waiting, action and the
   // punctuality denominator all come from the same pass over the same rows.
   const counts = summary ?? EMPTY_WEEK_COUNTS;
 
   return {
-    weekNo: WEEK,
-    days: schoolDays(WEEK),
+    weekNo,
+    days: schoolDays(weekNo),
     documents: summary?.documents ?? [],
     ...counts,
     loading: summary === undefined,

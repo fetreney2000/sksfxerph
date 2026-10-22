@@ -40,8 +40,9 @@ import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui
 import { reuseLastWeek } from "@/lib/actions/plans";
 import { can, reviewStageFor } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
-import { currentWeek, weekDeadline } from "@/lib/config";
+import { weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel, greetingPart, longDateOf } from "@/lib/date";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSignature } from "@/lib/hooks/use-signature";
@@ -53,11 +54,13 @@ import { completeness } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
 
-const WEEK = currentWeek();
-
 export default function MingguPage() {
   const router = useRouter();
   const me = useUser();
+  // Inside the component and subscribed to the calendar: a module constant is
+  // fixed when the bundle loads, which is before the school's declared week has
+  // been fetched, and every label below is printed from it.
+  const WEEK = useCurrentWeek();
   const week = useWeek();
   // Whole-school figures are a supervisor's question. A Guru Biasa's
   // dashboard is about their own week — four cards below and nothing about

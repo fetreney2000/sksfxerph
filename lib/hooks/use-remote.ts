@@ -2,8 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { handleExpiredSession } from "@/lib/client/auth-session";
-import { currentWeek, schoolCode, supabaseConfigured } from "@/lib/config";
+import { schoolCode, supabaseConfigured } from "@/lib/config";
 import { QUEUE, type QueueItem, SCHOOL_STATS } from "@/lib/demo/review";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSession } from "@/lib/hooks/use-session";
 
 /**
@@ -19,8 +20,6 @@ import { useSession } from "@/lib/hooks/use-session";
  * handler that authenticates the session cookie and scopes the query to that
  * user's school — the browser never touches the database.
  */
-
-const WEEK = currentWeek();
 
 /** One point on the weekly trend. Every figure is counted, never modelled. */
 export interface SchoolWeekPoint {
@@ -154,8 +153,15 @@ export function useSchoolStats(
   enabled = true,
 ): SchoolStatsView {
   const session = useSession();
-  const first = range?.first ?? WEEK;
-  const last = range?.last ?? WEEK;
+  // Inside the hook, and subscribed. This used to be a module constant
+  // evaluated when the bundle loaded — which is before the school's declared
+  // weeks have been fetched — so a caller asking for "the current week" got the
+  // term-start grid's answer while the dashboard beside it labelled the
+  // declared one. `/minggu` and `/semakan` both call this with no range, so
+  // their window defaults to whatever the week actually is now.
+  const current = useCurrentWeek();
+  const first = range?.first ?? current;
+  const last = range?.last ?? current;
 
   const remote = useQuery<{ stats: WeekStatsRow | null; history: SchoolWeekPoint[] }>({
     queryKey: ["school-stats", schoolCode, session, first, last],

@@ -8,8 +8,8 @@ import { navFor } from "@/components/shell/nav";
 import { homeFor, reviewStageFor } from "@/lib/auth/permissions";
 import { signOut } from "@/lib/client/sign-out";
 import { cn } from "@/lib/cn";
-import { currentWeek } from "@/lib/config";
 import { db } from "@/lib/db";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useReviewQueueData } from "@/lib/hooks/use-remote";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
@@ -17,14 +17,16 @@ import { ms } from "@/lib/i18n/ms";
 import { ownerId } from "@/lib/owner";
 import type { MemberRole } from "@/lib/types";
 
-const WEEK = currentWeek();
-
 export function Sidebar({
   user,
 }: {
   user: { id: string; fullName: string; role: MemberRole };
 }) {
   const pathname = usePathname();
+  // Inside the component, so a calendar fetched after load can change it. It is
+  // also a dependency of the badge query below — a module constant could not
+  // have been one, because it never changed.
+  const WEEK = useCurrentWeek();
   const initials =
     user.fullName
       .split(/\s+/)
@@ -46,7 +48,7 @@ export function Sidebar({
         .filter((d) => d.weekNo === WEEK && d.status === "draft")
         .count(),
     }),
-    [owner, session],
+    [owner, session, WEEK],
     { drafts: 0 },
   );
 

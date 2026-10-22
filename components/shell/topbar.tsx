@@ -8,19 +8,22 @@ import { NotificationBell } from "@/components/shell/notifications";
 import { useTheme } from "@/components/shell/theme";
 import { initialsOf, useUser } from "@/components/shell/user-context";
 import { signOut } from "@/lib/client/sign-out";
-import { currentWeek } from "@/lib/config";
 import { weekRangeLabel } from "@/lib/date";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
-
-const WEEK = currentWeek();
 
 export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
   const session = useSession();
   const school = useSchool();
+  // Inside the component, and through the store rather than a bare call: the
+  // school's declared week arrives from the server long after this bundle has
+  // evaluated, so a module constant could only ever report the automatic
+  // numbering — and a changed declaration would never reach this breadcrumb.
+  const WEEK = useCurrentWeek();
   const meta = routeMetaFor(pathname);
 
   return (

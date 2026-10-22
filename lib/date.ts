@@ -27,7 +27,7 @@ export const LOCALE = "ms-MY";
 
 // config.ts imports nothing from this module, so there is no cycle. Having one
 // calendar definition is what keeps `currentWeek()` and `schoolDays()` in sync.
-import { currentWeek, weekMondayIso } from "@/lib/config";
+import { currentWeek, getCalendarLabel, weekExists, weekMondayIso } from "@/lib/config";
 
 const HARI = ["Ahad", "Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu"] as const;
 const BULAN = [
@@ -211,6 +211,13 @@ export function weekRangeLabel(weekNo: number, mondayIso?: string): string {
  * The future is not offered. An RPH is a plan for a lesson that has a date and
  * a class, and a week the school has not reached has neither; offering it
  * would let a plan be counted towards a week that has not happened.
+ *
+ * A week also only appears if it **round-trips**: `weekOfIso(weekMondayIso(w))`
+ * has to give `w` back. When an administrator declares a week by hand the grid
+ * and the declaration disagree in between — automatic numbering calls 19 Oct
+ * week 33 while the declaration says 34 — and the number in the gap has no
+ * dates belonging to it. Offering it would let a plan be filed for a week that
+ * resolves to somebody else's dates.
  */
 export function weekOptions(): {
   week: number;
@@ -219,15 +226,18 @@ export function weekOptions(): {
   label: string;
 }[] {
   const now = currentWeek();
-  return Array.from({ length: now }, (_, i) => now - i).map((week) => {
-    const days = schoolDays(week);
-    return {
-      week,
-      monday: days[0] ?? weekMondayIso(week),
-      friday: days[4] ?? days[0] ?? weekMondayIso(week),
-      label: `M${week} · ${weekRangeLabel(week)}`,
-    };
-  });
+  return Array.from({ length: now }, (_, i) => now - i)
+    .filter((week) => weekExists(week))
+    .map((week) => {
+      const days = schoolDays(week);
+      const named = getCalendarLabel(week);
+      return {
+        week,
+        monday: days[0] ?? weekMondayIso(week),
+        friday: days[4] ?? days[0] ?? weekMondayIso(week),
+        label: `M${week} · ${weekRangeLabel(week)}${named ? ` · ${named}` : ""}`,
+      };
+    });
 }
 
 /**

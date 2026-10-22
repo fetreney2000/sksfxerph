@@ -45,11 +45,13 @@ import {
   mytIso,
   schoolCode,
   supabaseConfigured,
+  weekExists,
   weekMondayIso,
   weekOfIso,
 } from "@/lib/config";
 import { longDate, schoolDays, weekOptions } from "@/lib/date";
 import { db } from "@/lib/db";
+import { useCalendarReady } from "@/lib/hooks/use-calendar";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import { useSession } from "@/lib/hooks/use-session";
@@ -375,6 +377,18 @@ export function RphEditor({
    */
   const [pending, setPending] = React.useState<RphDocument | null>(null);
   const [seeded, setSeeded] = React.useState(false);
+  /**
+   * Whether the calendar has been answered for.
+   *
+   * It does two jobs, and both need the same subscription. `weekOptions()`
+   * below is built from the store, so a declaration landing after mount has to
+   * re-render this component to reach the picker. And the seeding effect waits
+   * for it, because that effect *chooses* the week a new plan files under
+   * rather than merely displaying it — stamping one before the school's
+   * declarations arrived would file it on the term-start grid whatever the
+   * school had said, and nothing later corrects that.
+   */
+  const calendarReady = useCalendarReady();
   /** The row being changed, when `?edit=` named one. `null` means "a new template". */
   const [editingTemplate, setEditingTemplate] = React.useState<TemplateRow | null>(null);
 
@@ -390,7 +404,12 @@ export function RphEditor({
     // A template needs no class, so in template mode the subject list alone
     // is enough — a school that has not created a class yet can still curate
     // its library.
-    if (id || seeded || !subject || (!asTemplate && !cls)) return;
+    //
+    // And the calendar: seeding *decides* which week this plan files under, so
+    // it waits for the school's answer rather than guessing at the term-start
+    // grid and stamping a number nothing can later correct. The wait is a
+    // skipped pass, not a spinner — nothing renders from `pending` yet.
+    if (id || seeded || !subject || (!asTemplate && !cls) || !calendarReady) return;
 
     let cancelled = false;
     void (async () => {
@@ -429,8 +448,16 @@ export function RphEditor({
       // The date follows the week, so the two can never disagree: this week
       // opens on today, an earlier one on its Monday.
       const asked = Number(params.get("week"));
+      const thisWeek = currentWeek();
+      // `weekExists` as well as `<= thisWeek`: a week number the school has
+      // renumbered away has no dates of its own, and stamping it anyway would
+      // give this plan a `week_no` its own `plan_date` disagrees with — the
+      // archive offers only weeks that exist, and a hand-typed URL should not
+      // be able to undo that.
       const week =
-        Number.isInteger(asked) && asked >= 1 && asked <= currentWeek() ? asked : currentWeek();
+        Number.isInteger(asked) && asked >= 1 && asked <= thisWeek && weekExists(asked)
+          ? asked
+          : thisWeek;
 
       const now = Date.now();
       setPending({
@@ -466,7 +493,7 @@ export function RphEditor({
     return () => {
       cancelled = true;
     };
-  }, [id, seeded, classes, subjects, asTemplate, router]);
+  }, [id, seeded, classes, subjects, asTemplate, router, calendarReady]);
 
   /** What is on screen: a stored plan, or one that has not been saved yet. */
   const live = persisted ?? pending;

@@ -1,4 +1,5 @@
 import { handleExpiredSession } from "@/lib/client/auth-session";
+import type { CalendarAnchor } from "@/lib/config";
 import type { Curriculum, Jawatan, MemberRole } from "@/lib/types";
 
 /**
@@ -247,3 +248,64 @@ export const setSettings = (body: {
   currentSession?: string;
   rphPerWeek: number;
 }) => request<{ ok: boolean }>("/api/admin/settings", patch(body));
+
+/* ── Calendar ─────────────────────────────────────────────────────────────── */
+
+/** One `academic_calendar` row — a week number, the Monday it belongs to. */
+export interface CalendarRow {
+  session: string;
+  week_no: number;
+  start_date: string;
+  end_date: string;
+  label: string | null;
+}
+
+/**
+ * `CalendarRow`s as the calendar store wants them.
+ *
+ * The row is the table's shape and the anchor is `lib/config`'s, and the
+ * difference matters in exactly three places — the boot fetch, this tab's own
+ * refresh, and the cascade preview. Doing it in one place means no caller can
+ * forget which field is called what.
+ */
+export const toAnchors = (rows: readonly CalendarRow[]): CalendarAnchor[] =>
+  rows.map((row) => ({
+    weekNo: row.week_no,
+    startDate: row.start_date,
+    label: row.label,
+  }));
+
+/**
+ * The declared weeks, for whoever is signed in.
+ *
+ * Every screen needs these once a calendar override exists, so this is the one
+ * calendar call that is not under `/api/admin` — the tab that *edits* them
+ * uses `getAdminCalendar` below.
+ */
+export const getCalendar = async (): Promise<CalendarAnchor[]> => {
+  const body = await request<{ anchors: CalendarRow[] }>("/api/calendar");
+  return toAnchors(body.anchors);
+};
+
+/** What the tab renders: the rows, and the session they were written for. */
+export const getAdminCalendar = () =>
+  request<{ anchors: CalendarRow[]; session: string | null }>("/api/admin/calendar");
+
+/**
+ * Declare (or redeclare) the week a Monday belongs to.
+ *
+ * `fromWeekNo` is what makes it an edit rather than an addition: the server
+ * passes it to the RPC, which removes that row in the same transaction so two
+ * anchors cannot end up claiming one date.
+ */
+export const setCalendarWeek = (body: {
+  weekNo: number;
+  startDate: string;
+  endDate: string;
+  label?: string | null;
+  fromWeekNo?: number | null;
+}) => request<{ ok: boolean }>("/api/admin/calendar", patch(body));
+
+/** Hand a week back to the automatic assignment. */
+export const clearCalendarWeek = (weekNo: number) =>
+  request<{ ok: boolean }>(`/api/admin/calendar?weekNo=${weekNo}`, { method: "DELETE" });

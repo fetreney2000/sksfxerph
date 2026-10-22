@@ -89,6 +89,7 @@ def main() -> int:
     delta18 = (ROOT / "db" / "migrations" / "018_school_figures_for_supervisors.sql").read_text(
         encoding="utf-8"
     )
+    delta19 = (ROOT / "db" / "migrations" / "019_week_numbering.sql").read_text(encoding="utf-8")
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -203,8 +204,9 @@ def main() -> int:
             run(delta16, "016")
             run(delta17, "017")
             run(delta18, "018")
+            run(delta19, "019")
         print(
-            "  [OK ] migration applied (001a→018, old signature pre-installed)"
+            "  [OK ] migration applied (001a→019, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -1387,6 +1389,102 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         conn.rollback()
         check("018 school figures for supervisors", False, str(e).splitlines()[0][:140])
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("select set_config('request.jwt.claims', null, false)")
+            conn.commit()
+
+    # ── 019: the administrator decides which week a date range is ────────────
+    # `academic_calendar` has been in the schema since the baseline and read
+    # by nothing. What is new is the writer — and the writer's real job is
+    # refusing two rows that are each fine on their own and together make
+    # numbering run backwards.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select id from erph.school limit 1")
+            school = cur.fetchone()[0]
+            cur.execute("select id from erph.user where username = 'pentadbir.sk'")
+            admin_id = cur.fetchone()[0]
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user "
+                " where id = %s), false)",
+                (admin_id,),
+            )
+            conn.commit()
+
+            def refuse_019(sql: str, params: tuple = ()) -> str:
+                try:
+                    cur.execute(sql, params)
+                    conn.commit()
+                    return ""
+                except Exception as e:  # noqa: BLE001
+                    conn.rollback()
+                    return str(e).splitlines()[0]
+
+            cur.execute(
+                "select count(*) from pg_proc p "
+                "join pg_namespace n on n.oid = p.pronamespace "
+                "where n.nspname = 'erph' and p.proname in "
+                "('admin_set_calendar_week', 'admin_clear_calendar_week')"
+            )
+            check("019 both calendar functions exist", cur.fetchone()[0] == 2)
+
+            msg = refuse_019(
+                "select erph.admin_set_calendar_week(%s, '2026/2027', 34::smallint, "
+                "'2026-10-20'::date, '2026-10-24'::date, null, null)",
+                (school,),
+            )
+            check("019 a week may only start on a Monday", "Isnin" in msg, msg[:100])
+
+            cur.execute(
+                "select erph.admin_set_calendar_week(%s, '2026/2027', 34::smallint, "
+                "'2026-10-19'::date, '2026-10-23'::date, null, null)",
+                (school,),
+            )
+            conn.commit()
+            cur.execute(
+                "select week_no from erph.academic_calendar where start_date = '2026-10-19'"
+            )
+            stored = cur.fetchall()
+            check("019 a declared week is stored", stored == [(34,)], str(stored))
+
+            # 26 Oct follows 19 Oct, so 35 is owed to it — declaring 33 there
+            # would put a later date behind an earlier one.
+            msg = refuse_019(
+                "select erph.admin_set_calendar_week(%s, '2026/2027', 33::smallint, "
+                "'2026-10-26'::date, '2026-10-30'::date, null, null)",
+                (school,),
+            )
+            check(
+                "019 a later week may not number below its neighbour",
+                "sekurang-kurangnya" in msg,
+                msg[:100],
+            )
+
+            # The mirror: a number too high on an earlier date pushes the row
+            # that is already standing past where it belongs.
+            msg = refuse_019(
+                "select erph.admin_set_calendar_week(%s, '2026/2027', 40::smallint, "
+                "'2026-10-12'::date, '2026-10-16'::date, null, null)",
+                (school,),
+            )
+            check(
+                "019 an earlier week may not push its successor down",
+                "menurunkan" in msg,
+                msg[:100],
+            )
+
+            cur.execute(
+                "select erph.admin_clear_calendar_week(%s, '2026/2027', 34::smallint)",
+                (school,),
+            )
+            conn.commit()
+            cur.execute("select count(*) from erph.academic_calendar")
+            check("019 clearing hands the week back to the grid", cur.fetchone()[0] == 0)
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("019 week numbering", False, str(e).splitlines()[0][:140])
     finally:
         with conn.cursor() as cur:
             cur.execute("select set_config('request.jwt.claims', null, false)")

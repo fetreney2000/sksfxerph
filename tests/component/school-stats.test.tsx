@@ -2,6 +2,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { currentWeek, setCalendarAnchors } from "@/lib/config";
+import { schoolDays } from "@/lib/date";
 import { type SchoolWeekPoint, useSchoolStats } from "@/lib/hooks/use-remote";
 
 /**
@@ -83,6 +85,12 @@ function Probe({
   );
 }
 
+/** What `/minggu` and `/semakan` do: no window at all, so the hook picks one. */
+function DefaultWindowProbe() {
+  const s = useSchoolStats();
+  return <dd data-testid="pct">{s.compliancePct === null ? "—" : s.compliancePct}</dd>;
+}
+
 async function mount(
   pct: string,
   window: { first: number; last: number } = { first: WEEK, last: WEEK },
@@ -103,6 +111,9 @@ async function mount(
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // Module state shared by every test in this file, and the assertions above
+  // would all silently change meaning if the next one started with a calendar.
+  setCalendarAnchors([]);
 });
 
 describe("school compliance", () => {
@@ -167,5 +178,51 @@ describe("school compliance", () => {
     // Nor the bundled demo figures, which describe a different school.
     expect(screen.getByTestId("expected").textContent).toBe("0");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("asks for the declared week when the caller gives it no window", async () => {
+    // `/minggu` and `/semakan` call `useSchoolStats()` with no range at all, so
+    // the hook picks the week itself. That default was a module constant
+    // evaluated when the bundle loaded — before the school's calendar had been
+    // fetched — so under a declaration the cards requested one week while the
+    // dashboard beside them labelled another. Anchoring *this Monday* to 9 makes
+    // the declared week and the grid's week differ whatever day it is.
+    const monday = schoolDays(currentWeek())[0] ?? "";
+    setCalendarAnchors([{ weekNo: 9, startDate: monday }]);
+    const declared = currentWeek();
+    expect(declared).toBe(9);
+
+    const fetch = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            stats: {
+              teachers: 2,
+              expected: 10,
+              submitted: 10,
+              approved: 10,
+              returned_t: 0,
+              drafts: 0,
+              compliance: 100,
+            },
+            history: [point(declared, {})],
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal("fetch", fetch);
+
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
+      >
+        <DefaultWindowProbe />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("pct").textContent).toBe("100"));
+    // Not the term-start week, and not a fixed number either: whatever the
+    // school has declared this Monday to be.
+    expect(fetch.mock.calls[0]?.[0]).toBe(`/api/stats?first=${declared - 1}&last=${declared}`);
   });
 });

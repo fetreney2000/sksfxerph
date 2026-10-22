@@ -19,8 +19,9 @@ import {
 import { Input } from "@/components/ui/field";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { removePlan } from "@/lib/actions/plans";
-import { currentWeek } from "@/lib/config";
+import { weekExists } from "@/lib/config";
 import { longDateOf, schoolDays, weekRangeLabel } from "@/lib/date";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useArchive } from "@/lib/hooks/use-week";
 import type { RphDocument } from "@/lib/types";
 
@@ -85,8 +86,15 @@ export default function ArkibPage() {
    * While searching, only the weeks that match: a list of empty rows beside a
    * result is noise.
    */
-  const now = currentWeek();
-  const past = Array.from({ length: Math.max(0, now - 1) }, (_, i) => now - 1 - i);
+  // Subscribed rather than read once: the archive lists the weeks that have
+  // *started*, and a declared week changes which one that is.
+  const now = useCurrentWeek();
+  const past = Array.from({ length: Math.max(0, now - 1) }, (_, i) => now - 1 - i)
+    // Only weeks whose numbers have dates belonging to them. `byWeek` below is
+    // deliberately *not* filtered: a plan filed under week 32 before the school
+    // renumbered still happened, and the archive is where that history lives.
+    // What is filtered is the offer to file something new there.
+    .filter((w) => weekExists(w));
   const weeks = needle
     ? [...byWeek.keys()].sort((a, b) => b - a)
     : [...new Set([...byWeek.keys(), ...past])].sort((a, b) => b - a);

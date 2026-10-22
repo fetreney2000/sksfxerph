@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek } from "@/lib/config";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
+import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { resolveSession } from "@/lib/server/session";
 
 /**
@@ -40,6 +41,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!schoolId) return NextResponse.json({ overview: null });
 
   const session = await resolveSession(gate.user.id);
+  // Resolved once, outside the Promise.all below: the school's declared weeks
+  // decide what "this week" means, and the overview card has to agree with the
+  // dashboard it is a summary of.
+  const anchors = await loadCalendarAnchors(schoolId);
 
   const [members, classes, subjects, templates, stats] = await Promise.all([
     gate.db.rpc("admin_list_members", { p_school: schoolId }),
@@ -59,7 +64,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     gate.db.rpc("school_week_stats", {
       p_school: schoolId,
       p_session: session,
-      p_week: currentWeek(),
+      p_week: currentWeek(new Date(), anchors),
     }),
   ]);
 

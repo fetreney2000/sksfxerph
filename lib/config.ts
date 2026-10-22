@@ -90,16 +90,28 @@ export const DEMO_OWNER_ID = "00000000-0000-4000-8000-000000000001";
  * Term 1 of the 2026/2027 session starts **Monday 16 March 2026**; weeks run
  * Monday→Friday.
  *
- * In production these three functions are replaced by reads of the
- * `academic_calendar` table (db/schema.sql) — school-configurable dates, never
- * hard-coded. They are hard-coded here only so the local/demo build has a real
- * calendar to render, and they are written as exact inverses of each other:
+ * `TERM_START` is the *fallback* — what the app says when the school has not
+ * told it otherwise, which is every case in local mode and the default on a
+ * fresh deployment. An administrator may declare the truth instead by writing
+ * `academic_calendar` rows (db/schema.sql:381) from the Kalendar minggu tab,
+ * and the functions below read them from `setCalendarAnchors()`.
+ *
+ * An anchor **cascades forward**: declaring 19–23 Oct to be week 34 makes
+ * 26 Oct week 35 and 2 Nov week 36, so numbering stays non-decreasing with
+ * date across a break and only the first week that moved has to be corrected.
+ * Dates before the first anchor keep the automatic assignment.
+ *
+ * They are still written as exact inverses of each other:
  *
  *     currentWeek(d) ── schoolDays() ──▶ the Monday of that same week
  *
  * The earlier version deducted mid-term-break weeks in `currentWeek()` while
  * `schoolDays()` did not, which silently shifted every deadline a month into
  * the past. One offset, applied once, in one place — or none at all.
+ *
+ * With an empty anchor list every one of these functions returns exactly what
+ * it always has, which is what keeps local mode and the calendar unit tests
+ * byte-identical.
  */
 const DAY_MS = 86_400_000;
 const MYT_OFFSET = 8 * 3_600_000; // Asia/Kuala_Lumpur is UTC+8 with no DST
@@ -117,16 +129,157 @@ const MYT_OFFSET = 8 * 3_600_000; // Asia/Kuala_Lumpur is UTC+8 with no DST
  * day before). The 16-hour difference made `currentWeek()` and `schoolDays()`
  * disagree by one day, which compounded into every deadline landing in the
  * wrong month. One epoch, no exceptions.
- *
- * In production these come from the `academic_calendar` table (db/schema.sql)
- * — school-configurable, never hard-coded. They are hard-coded here only so
- * the local/demo build has a real term calendar to render.
  */
 const TERM_START = Date.UTC(2026, 2, 16); // Monday 16 March 2026 (token)
 
-/** Token for the Monday of a school week. */
+/** Token for the Monday of a school week, by the automatic assignment. */
 function mondayToken(weekNo: number): number {
   return TERM_START + (weekNo - 1) * 7 * DAY_MS;
+}
+
+/**
+ * A week the administrator has declared by hand.
+ *
+ * Mirrors one `academic_calendar` row so the client can hold the same thing
+ * the table holds without knowing anything about Postgres.
+ */
+export interface CalendarAnchor {
+  /** The week number this Monday belongs to. */
+  weekNo: number;
+  /** `yyyy-mm-dd`, and always a Monday — `admin_set_calendar_week` refuses otherwise. */
+  startDate: string;
+  /** Optional printed name, e.g. `Minggu PTS`. */
+  label?: string | null;
+}
+
+interface ResolvedAnchor {
+  weekNo: number;
+  startToken: number;
+  label: string | null;
+}
+
+const EMPTY_ANCHORS: readonly CalendarAnchor[] = [];
+
+/** `yyyy-mm-dd` → token, or NaN when it is not a date. */
+function tokenOfIso(iso: string): number {
+  const n = Date.parse(`${iso}T00:00:00Z`);
+  return Number.isFinite(n) ? n : Number.NaN;
+}
+
+/** Parsed view of an anchor list, memoised by array identity. */
+const parsedCache = new WeakMap<readonly CalendarAnchor[], ResolvedAnchor[]>();
+
+function parseAnchors(rows: readonly CalendarAnchor[]): ResolvedAnchor[] {
+  const hit = parsedCache.get(rows);
+  if (hit) return hit;
+  const parsed = rows
+    .map((r) => ({
+      weekNo: r.weekNo,
+      startToken: tokenOfIso(r.startDate),
+      label: r.label ?? null,
+    }))
+    .filter(
+      (r) =>
+        Number.isFinite(r.startToken) &&
+        // A Monday, or the whole 7-day step is measured from the wrong day and
+        // `weekExists` reports the declared week as having no dates at all —
+        // it disappears from every picker while `currentWeek` can still return
+        // it. `admin_set_calendar_week` refuses a Tuesday at the door; this is
+        // for a row that arrived some other way.
+        tokenDow(r.startToken) === 1 &&
+        r.weekNo >= 1 &&
+        r.weekNo <= 52,
+    )
+    .sort((a, b) => a.startToken - b.startToken);
+  parsedCache.set(rows, parsed);
+  return parsed;
+}
+
+/** The anchor with the latest Monday on or before `monday`, if any. */
+function anchorForToken(
+  rows: readonly ResolvedAnchor[],
+  monday: number,
+): ResolvedAnchor | undefined {
+  let best: ResolvedAnchor | undefined;
+  for (const a of rows)
+    if (a.startToken <= monday && (!best || a.startToken > best.startToken)) best = a;
+  return best;
+}
+
+/** The anchor with the largest week number at or below `weekNo`, if any. */
+function anchorForWeek(
+  rows: readonly ResolvedAnchor[],
+  weekNo: number,
+): ResolvedAnchor | undefined {
+  let best: ResolvedAnchor | undefined;
+  for (const a of rows) if (a.weekNo <= weekNo && (!best || a.weekNo > best.weekNo)) best = a;
+  return best;
+}
+
+const listeners = new Set<() => void>();
+let SNAPSHOT: readonly CalendarAnchor[] = EMPTY_ANCHORS;
+
+/**
+ * Whether the calendar has been fetched at all — deliberately separate from
+ * "the list is empty".
+ *
+ * Both a school that has declared nothing and a browser that has not asked yet
+ * have zero anchors, and the penyunting needs to tell them apart: it stamps the
+ * week a new plan files under, and doing that before the answer arrived would
+ * file it on the term-start grid whatever the school had declared.
+ */
+let loaded = false;
+
+function notify(): void {
+  for (const listener of [...listeners]) listener();
+}
+
+/**
+ * Replace the school's declared weeks — and mark the calendar as fetched.
+ *
+ * One call, so no caller can remember half of it. `[]` is a complete and normal
+ * answer: local mode, a fresh deployment, and every unit test that does not opt
+ * in.
+ */
+export function setCalendarAnchors(rows: readonly CalendarAnchor[]): void {
+  SNAPSHOT = Object.freeze(
+    rows
+      .slice()
+      .sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0)),
+  );
+  loaded = true;
+  notify();
+}
+
+/** False until the first `setCalendarAnchors` — i.e. until someone has asked. */
+export function isCalendarLoaded(): boolean {
+  return loaded;
+}
+
+/** The current anchors — the `getSnapshot` for `subscribeCalendarAnchors`. */
+export function getCalendarAnchors(): readonly CalendarAnchor[] {
+  return SNAPSHOT;
+}
+
+/** Subscribe to anchor changes (`useSyncExternalStore`). Returns its unsubscribe. */
+export function subscribeCalendarAnchors(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/**
+ * The administrator's name for a week — `Minggu PTS` — or null.
+ *
+ * Null for a week nobody declared *and* for one declared without a name, so a
+ * reader never prints an empty separator.
+ */
+export function getCalendarLabel(
+  weekNo: number,
+  anchors: readonly CalendarAnchor[] = SNAPSHOT,
+): string | null {
+  const rows = parseAnchors(anchors);
+  const hit = anchorForWeek(rows, weekNo);
+  return hit && hit.weekNo === weekNo ? hit.label : null;
 }
 
 /** Token for the MYT calendar day containing a real instant. */
@@ -149,8 +302,22 @@ function tokenToIso(token: number): string {
 /** `yyyy-mm-dd` for the MYT calendar day containing `ms`. */
 export const mytIso = (ms: number = Date.now()): string => tokenToIso(tokenFromInstant(ms));
 
+/** Token for the Monday of a school week, honouring any declared weeks. */
+function weekMondayToken(weekNo: number, anchors: readonly CalendarAnchor[]): number {
+  const hit = anchorForWeek(parseAnchors(anchors), weekNo);
+  // Cascade backwards: the nearest declared week at or below this one owns it,
+  // stepped forward by whole weeks. Before the first declaration, the grid.
+  if (hit) return hit.startToken + (weekNo - hit.weekNo) * 7 * DAY_MS;
+  return mondayToken(weekNo);
+}
+
 /** Monday of the given school week, as `yyyy-mm-dd`. */
-export const weekMondayIso = (weekNo: number): string => tokenToIso(mondayToken(weekNo));
+export function weekMondayIso(
+  weekNo: number,
+  anchors: readonly CalendarAnchor[] = SNAPSHOT,
+): string {
+  return tokenToIso(weekMondayToken(weekNo, anchors));
+}
 
 /**
  * The school week containing a `yyyy-mm-dd` day — the other half of the pair.
@@ -160,9 +327,31 @@ export const weekMondayIso = (weekNo: number): string => tokenToIso(mondayToken(
  * page and the week its numbers land in disagree. Same rule as `currentWeek`,
  * so a Sunday belongs to the week that starts the following Monday.
  */
-export function weekOfIso(iso: string): number {
-  const token = Date.parse(`${iso}T00:00:00Z`);
-  return Number.isFinite(token) ? currentWeek(new Date(token)) : currentWeek();
+export function weekOfIso(iso: string, anchors: readonly CalendarAnchor[] = SNAPSHOT): number {
+  const token = tokenOfIso(iso);
+  return Number.isFinite(token)
+    ? currentWeek(new Date(token), anchors)
+    : currentWeek(undefined, anchors);
+}
+
+/**
+ * Whether this week number has dates that belong to it.
+ *
+ * A declaration leaves numbers behind that nobody owns. The grid calls 19
+ * October week 32 and the school's declaration calls it week 34, so weeks 32
+ * and 33 describe dates that resolve to a *different* week — offering one would
+ * file a plan whose `week_no` and `plan_date` disagree, which is exactly the
+ * thing `weekOfIso` and `currentWeek` exist to keep apart.
+ *
+ * One predicate, used by the week picker and the archive: two lists built from
+ * two opinions about which weeks exist would drift the moment they were edited
+ * apart.
+ */
+export function weekExists(
+  weekNo: number,
+  anchors: readonly CalendarAnchor[] = SNAPSHOT,
+): boolean {
+  return weekOfIso(weekMondayIso(weekNo, anchors), anchors) === weekNo;
 }
 
 /**
@@ -171,12 +360,29 @@ export function weekOfIso(iso: string): number {
  * Saturday and Sunday belong to the school week that starts the *following*
  * Monday — on a Sunday evening a teacher is planning the week ahead, so the
  * dashboard must show next week's deadline, not last week's.
+ *
+ * The second argument defaults to the loaded calendar, which is why the ~18
+ * call sites that just ask "what week is it" need no change; the server passes
+ * it explicitly instead of sharing this module's state between requests.
  */
-export function currentWeek(anchor: Date = new Date()): number {
-  const dow = tokenDow(tokenFromInstant(anchor.getTime()));
+export function currentWeek(
+  anchor: Date = new Date(),
+  anchors: readonly CalendarAnchor[] = SNAPSHOT,
+): number {
+  const instant = tokenFromInstant(anchor.getTime());
+  const dow = tokenDow(instant);
   // Sun (0) → +1 day, Sat (6) → +2 days, weekdays unchanged. Lands on Monday.
   const toMonday = dow === 0 ? 1 : dow === 6 ? 2 : 0;
-  const monday = tokenFromInstant(anchor.getTime()) + toMonday * DAY_MS;
+  const monday = instant + toMonday * DAY_MS;
+
+  const hit = anchorForToken(parseAnchors(anchors), monday);
+  if (hit) {
+    // Both endpoints are Mondays, so the difference is whole weeks — this is
+    // the forward cascade, the same arithmetic `weekMondayToken` runs backwards.
+    const weeks = Math.floor((monday - hit.startToken) / (7 * DAY_MS));
+    return Math.max(1, hit.weekNo + weeks);
+  }
+
   const elapsed = Math.round((monday - TERM_START) / DAY_MS);
   return Math.max(1, Math.floor(elapsed / 7) + 1);
 }
@@ -187,8 +393,16 @@ export function currentWeek(anchor: Date = new Date()): number {
  * The only place a token becomes a real instant: a token `D` denotes the MYT
  * calendar day `D`, and 16:00 MYT on that day is `D − 8h + 16h` = `D + 8h`
  * as a UTC instant.
+ *
+ * Deliberately derived from `weekMondayToken`, not the raw grid — a deadline
+ * that used the automatic Monday while the dashboard showed the declared one
+ * would put every due date a fortnight away, which is the bug this calendar
+ * has had once already.
  */
-export function weekDeadline(weekNo: number): Date {
-  const friday = mondayToken(weekNo) + 4 * DAY_MS;
+export function weekDeadline(
+  weekNo: number,
+  anchors: readonly CalendarAnchor[] = SNAPSHOT,
+): Date {
+  const friday = weekMondayToken(weekNo, anchors) + 4 * DAY_MS;
   return new Date(friday + MYT_OFFSET);
 }

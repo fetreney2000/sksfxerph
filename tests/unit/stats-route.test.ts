@@ -33,6 +33,7 @@ vi.mock("@/lib/server/db", () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
+        order: () => chain,
         limit: () => chain,
         maybeSingle: async () => {
           if (table === "user") {

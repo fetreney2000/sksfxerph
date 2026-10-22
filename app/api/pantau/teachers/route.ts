@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { currentWeek } from "@/lib/config";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { adminDb } from "@/lib/server/db";
 import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
@@ -49,7 +51,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!schoolId) return NextResponse.json({ items: [] as TeacherRow[] });
 
   const session = await resolveSession(gate.user.id);
-  const range = parseRange(request);
+  // The same current week the cards above this table use. `parseRange` no
+  // longer computes it: on the server the client's calendar store is empty, so
+  // a bare `currentWeek()` would be the term-start grid's answer and the roster
+  // would describe a week the dashboard has stopped calling the current one.
+  const anchors = await loadCalendarAnchors(schoolId);
+  const range = parseRange(request, currentWeek(new Date(), anchors));
 
   const { data, error } = await adminDb(gate.user.id).rpc("pantau_teachers", {
     p_school: schoolId,

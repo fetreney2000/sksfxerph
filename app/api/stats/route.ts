@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek } from "@/lib/config";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
 
@@ -31,10 +32,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const session = await resolveSession(gate.user.id);
-  const week = currentWeek();
+  // The school's own numbering, not the term-start grid: the card this feeds
+  // sits on a dashboard already showing the declared week.
+  const week = currentWeek(new Date(), await loadCalendarAnchors(schoolId));
   // The range the page's filter chose. Defaults to the last six weeks, which
   // is what the chart drew before the filter existed.
-  const range = parseRange(request, { first: week - 5, last: week });
+  const range = parseRange(request, week, { first: week - 5, last: week });
 
   const { data, error } = await gate.db.rpc("school_week_stats", {
     p_school: schoolId,

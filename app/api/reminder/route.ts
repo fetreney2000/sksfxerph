@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek } from "@/lib/config";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { adminDb } from "@/lib/server/db";
 import { resolveSession } from "@/lib/server/session";
 
@@ -52,10 +53,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Sasaran peringatan tidak sah." }, { status: 400 });
   }
 
+  // Who counts as late is a question about a *week*, so it is the school's own
+  // numbering — a nudge that used the term-start grid while the teacher's
+  // dashboard showed a declared one would chase the wrong Friday.
+  const anchors = await loadCalendarAnchors(schoolId);
   const { data, error } = await adminDb(gate.user.id).rpc("remind_teachers", {
     p_school: schoolId,
     p_session: await resolveSession(gate.user.id),
-    p_week: currentWeek(),
+    p_week: currentWeek(new Date(), anchors),
     p_targets: targets,
   });
 

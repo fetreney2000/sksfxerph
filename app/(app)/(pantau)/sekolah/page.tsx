@@ -18,15 +18,14 @@ import {
 import { HelpHint } from "@/components/ui/help-hint";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { currentWeek, supabaseConfigured } from "@/lib/config";
+import { supabaseConfigured } from "@/lib/config";
 import { formatMyt } from "@/lib/date";
 import { TEACHER_ROWS } from "@/lib/demo/review";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSchoolStats } from "@/lib/hooks/use-remote";
 import { ms } from "@/lib/i18n/ms";
 import { currentSession } from "@/lib/session";
 import type { MemberRole } from "@/lib/types";
-
-const WEEK = currentWeek();
 
 /**
  * The windows the filter offers.
@@ -35,20 +34,27 @@ const WEEK = currentWeek();
  * stay true when the school rolls its calendar over. Clamped at 1: during
  * week 1 the previous-week pill is the same window as the first, and saying
  * so beats offering a week that does not exist.
+ *
+ * A function of the week rather than a constant, because the week is now the
+ * school's own number — declared by an administrator, fetched after this module
+ * has already loaded — and a list built here at module scope would offer pills
+ * for the term-start grid whatever the school had said. `RangeKey` is still
+ * derived from the return type, so the keys cannot drift from the pills.
  */
-const RANGES = [
-  { key: "now", label: `Minggu ${WEEK}`, first: WEEK, last: WEEK },
-  {
-    key: "prev",
-    label: `Minggu ${Math.max(1, WEEK - 1)}`,
-    first: Math.max(1, WEEK - 1),
-    last: Math.max(1, WEEK - 1),
-  },
-  { key: "four", label: "4 minggu", first: Math.max(1, WEEK - 3), last: WEEK },
-  { key: "session", label: "Sepanjang sesi", first: 1, last: WEEK },
-] as const;
+const rangesFor = (week: number) =>
+  [
+    { key: "now", label: `Minggu ${week}`, first: week, last: week },
+    {
+      key: "prev",
+      label: `Minggu ${Math.max(1, week - 1)}`,
+      first: Math.max(1, week - 1),
+      last: Math.max(1, week - 1),
+    },
+    { key: "four", label: "4 minggu", first: Math.max(1, week - 3), last: week },
+    { key: "session", label: "Sepanjang sesi", first: 1, last: week },
+  ] as const;
 
-type RangeKey = (typeof RANGES)[number]["key"];
+type RangeKey = ReturnType<typeof rangesFor>[number]["key"];
 
 /** What the table renders, whichever source produced it. */
 interface Row {
@@ -143,6 +149,8 @@ function fromApi(r: TeacherRow): Row {
 export default function SekolahPage() {
   // The filter. Keyed rather than by label so the pills can be reworded
   // without the state silently pointing at the wrong window.
+  const WEEK = useCurrentWeek();
+  const RANGES = rangesFor(WEEK);
   const [rangeKey, setRangeKey] = useState<RangeKey>("now");
   const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0];
   const scope =
