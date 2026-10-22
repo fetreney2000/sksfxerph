@@ -1471,7 +1471,7 @@ def main() -> int:
             )
             check(
                 "019 an earlier week may not push its successor down",
-                "menurunkan" in msg,
+                "tidak melebihi" in msg,
                 msg[:100],
             )
 

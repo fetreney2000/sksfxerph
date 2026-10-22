@@ -1056,7 +1056,7 @@ def main() -> int:
             f"select erph.admin_set_calendar_week({SK}, '2026/2027', 40::smallint, "
             f"'2026-10-12'::date, '2026-10-16'::date, null, null)"
         )
-        admin.append(("an earlier week may not push its successor down", "menurunkan" in msg, msg))
+        admin.append(("an earlier week may not push its successor down", "tidak melebihi" in msg, msg))
 
         # And one number may only ever belong to one Monday.
         msg = refused(

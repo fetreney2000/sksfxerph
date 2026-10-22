@@ -27,7 +27,7 @@ import {
   weekMondayIso,
   weekOfIso,
 } from "@/lib/config";
-import { weekRangeLabel } from "@/lib/date";
+import { longDate, weekRangeLabel } from "@/lib/date";
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 
@@ -154,6 +154,15 @@ export function CalendarTab() {
    */
   const gridWeek = previewable ? weekOfIso(startDate, []) : null;
   const belowGrid = gridWeek !== null && proposedWeek < gridWeek;
+  /**
+   * The Friday this week runs to, shown the moment the Monday is chosen.
+   *
+   * There is no field for it — `end_date` is always the start plus four days,
+   * because a school week here is Monday to Friday — but a person who has just
+   * asked "how do I set the end date?" should have the answer on screen rather
+   * than in a tooltip they never open.
+   */
+  const derivedEnd = isMonday(startDate) ? plusDays(startDate, 4) : null;
 
   /**
    * What the change would do, shown before it happens.
@@ -215,7 +224,7 @@ export function CalendarTab() {
           label: label.trim() || null,
           fromWeekNo: editingWeek,
         }),
-      `Minggu ${proposedWeek} ditetapkan bagi ${startDate}`,
+      `Minggu ${proposedWeek} ditetapkan bagi ${weekRangeLabel(proposedWeek, startDate)}`,
       () => {
         // Whatever this row is called now. A second save replaces what the
         // first one wrote rather than asking the server for a declaration it
@@ -287,7 +296,7 @@ export function CalendarTab() {
             </CardDescription>
           </div>
           <Badge className="ml-auto" variant="neutral">
-            {rows.length} ditetapkan
+            {rows.length} minggu ditetapkan
           </Badge>
         </CardHeader>
 
@@ -332,10 +341,14 @@ export function CalendarTab() {
                             variant="ghost"
                             size="sm"
                             disabled={busy}
+                            // A button says what pressing it does. "Automatik" named the
+                            // state it moves to, not the action — and the accessible name
+                            // carries the whole sentence the visible label has to keep short.
+                            aria-label={`Kembalikan Minggu ${w.week} kepada pengiraan automatik`}
                             onClick={() => clear(w.week)}
                           >
                             <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                            Automatik
+                            Kembalikan
                           </Button>
                         )}
                       </div>
@@ -354,7 +367,9 @@ export function CalendarTab() {
           <div>
             <CardTitle>Tetapkan minggu</CardTitle>
             <CardDescription>
-              Nyatakan minggu pertama yang berubah. Minggu selepasnya dikira secara automatik.
+              Pilih minggu pertama yang berubah: hanya tarikh mula diperlukan, dan ia mesti hari
+              Isnin. Minggu berakhir pada Jumaat yang sama, dan semua minggu selepasnya dikira
+              automatik.
             </CardDescription>
           </div>
         </CardHeader>
@@ -374,7 +389,9 @@ export function CalendarTab() {
                 aria-describedby="isnin-hint"
               />
               <p id="isnin-hint" className="mt-1.5 text-[11.5px] text-ink-4">
-                Mesti hari Isnin; berakhir Jumaat.
+                {derivedEnd
+                  ? `Berakhir pada ${longDate(derivedEnd)}.`
+                  : "Pilih hari Isnin; berakhir pada Jumaat yang sama."}
               </p>
             </div>
             <div>

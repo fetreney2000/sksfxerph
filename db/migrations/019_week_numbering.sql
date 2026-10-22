@@ -46,6 +46,8 @@ declare
   v_prev_start date;
   v_next_week  smallint;
   v_next_start date;
+  v_min_week   smallint;
+  v_max_week   smallint;
 begin
   if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Peranan pentadbir diperlukan';
@@ -68,7 +70,7 @@ begin
   -- that is not start + 4 would be a week whose own end date disagrees with
   -- the days it prints.
   if p_end_date <> p_start_date + 4 then
-    raise exception 'Tarikh akhir mesti Jumaat minggu yang sama';
+    raise exception 'Tarikh akhir mesti hari Jumaat minggu yang sama';
   end if;
 
   if p_from_week_no is not null then
@@ -101,8 +103,15 @@ begin
    where school_id = p_school and session = p_session and start_date < p_start_date
    order by start_date desc limit 1;
 
-  if v_prev_week is not null and v_prev_week + ((p_start_date - v_prev_start) / 7) > p_week_no then
-    raise exception 'Minggu mesti sekurang-kurangnya minggu sebelumnya tambah jarak antara tarikh';
+  -- Both bounds are *stated*, not described. "The previous week plus the
+  -- distance between the dates" is a correct account of a constraint and a
+  -- useless answer to someone who has to pick a number — the message is the
+  -- one thing the person at the form can act on.
+  if v_prev_week is not null then
+    v_min_week := v_prev_week + ((p_start_date - v_prev_start) / 7);
+    if p_week_no < v_min_week then
+      raise exception 'Minggu mesti sekurang-kurangnya %', v_min_week;
+    end if;
   end if;
 
   select week_no, start_date into v_next_week, v_next_start
@@ -110,8 +119,11 @@ begin
    where school_id = p_school and session = p_session and start_date > p_start_date
    order by start_date asc limit 1;
 
-  if v_next_week is not null and p_week_no + ((v_next_start - p_start_date) / 7) > v_next_week then
-    raise exception 'Tetapan ini akan menurunkan nombor minggu selepasnya';
+  if v_next_week is not null then
+    v_max_week := v_next_week - ((v_next_start - p_start_date) / 7);
+    if p_week_no > v_max_week then
+      raise exception 'Minggu mesti tidak melebihi %', v_max_week;
+    end if;
   end if;
 
   insert into erph.academic_calendar (school_id, session, week_no, start_date, end_date, label)

@@ -146,7 +146,9 @@ describe("kalendar minggu", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Tetapkan minggu/ }));
 
-    expect(await screen.findByText(/mesti hari Isnin/)).toBeTruthy();
+    // The *error*, not the instruction above the field, which says the same
+    // thing while explaining what the field takes.
+    expect(await screen.findByText("Tarikh mula mesti hari Isnin.")).toBeTruthy();
     expect(patchCalls()).toEqual([]);
   });
 
@@ -154,7 +156,7 @@ describe("kalendar minggu", () => {
     vi.stubGlobal("fetch", fakeFetch);
     await mount();
 
-    fireEvent.click(screen.getByRole("button", { name: /Automatik/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Kembalikan/ }));
 
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
     const call = calls.find((c) => c.method === "DELETE") as Call;
