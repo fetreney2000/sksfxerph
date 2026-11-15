@@ -55,7 +55,6 @@ export function TemplateMetaFields({
           value={meta.title}
           maxLength={TITLE_MAX}
           onChange={(e) => onChange({ title: e.target.value })}
-          placeholder="Matematik Tahun 5 · SK 3.1"
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -66,7 +65,6 @@ export function TemplateMetaFields({
             value={meta.tahap}
             maxLength={TAHAP_MAX}
             onChange={(e) => onChange({ tahap: e.target.value })}
-            placeholder="Tahun 5"
           />
         </div>
         <div>

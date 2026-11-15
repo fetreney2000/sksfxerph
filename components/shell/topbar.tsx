@@ -1,6 +1,6 @@
 "use client";
 
-import { Command, LogOut, Moon, Search, Sun } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 import { routeMetaFor } from "@/components/shell/nav";
@@ -14,7 +14,7 @@ import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 
-export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
+export function Topbar() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
   const session = useSession();
@@ -51,28 +51,6 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-2.5">
-        {/* Search is a button, not an input: it opens the ⌘K palette. */}
-        <button
-          type="button"
-          onClick={onOpenPalette}
-          className="hidden items-center gap-2 rounded-[9px] border border-border bg-surface px-2.5 py-[7px] text-left text-[13px] text-ink-4 shadow-xs transition-colors hover:border-border-strong md:flex md:w-60"
-        >
-          <Search className="h-3.75 w-3.75" strokeWidth={2} aria-hidden />
-          <span className="truncate">Cari kelas, guru, Standard Kandungan…</span>
-          <kbd className="ml-auto rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono text-[10.5px] font-semibold text-ink-3">
-            ⌘K
-          </kbd>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenPalette}
-          className="grid h-9.5 w-9.5 place-items-center rounded-[9px] border border-border bg-surface shadow-xs transition-colors hover:bg-surface-3 md:hidden"
-          aria-label="Cari"
-        >
-          <Search className="h-4.25 w-4.25 text-ink-2" strokeWidth={1.8} aria-hidden />
-        </button>
-
         <button
           type="button"
           onClick={toggle}
@@ -91,9 +69,6 @@ export function Topbar({ onOpenPalette }: { onOpenPalette: () => void }) {
 
         <UserMenu />
       </div>
-
-      {/* Exposed for the palette's ⌘K hint on mobile */}
-      <Command className="hidden" aria-hidden />
     </header>
   );
 }

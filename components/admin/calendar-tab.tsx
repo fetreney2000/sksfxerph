@@ -414,7 +414,6 @@ export function CalendarTab() {
                 id="f-nama"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="Minggu PTS"
                 maxLength={80}
               />
             </div>

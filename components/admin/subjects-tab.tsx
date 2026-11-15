@@ -213,7 +213,6 @@ function SubjectDialog({
                 id="subj-code"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="BI"
                 className="num"
               />
             </div>
@@ -236,12 +235,7 @@ function SubjectDialog({
             <Label htmlFor="subj-nama" required>
               Nama mata pelajaran
             </Label>
-            <Input
-              id="subj-nama"
-              value={nama}
-              onChange={(e) => setNama(e.target.value)}
-              placeholder="Bahasa Inggeris"
-            />
+            <Input id="subj-nama" value={nama} onChange={(e) => setNama(e.target.value)} />
           </div>
           {error && <FieldError>{error}</FieldError>}
         </DialogBody>

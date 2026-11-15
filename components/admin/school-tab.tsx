@@ -20,7 +20,7 @@ import { setSchool as adoptSchool, placeFrom } from "@/lib/school";
 /**
  * Tab 5 — the school's own identity: code, name, district/state, motto, crest.
  *
- * Everything on this form is what the login screen, sidebar, breadcrumb, ⌘K,
+ * Everything on this form is what the login screen, sidebar, breadcrumb,
  * the live preview and the printed RPH all read — so the preview on the right
  * is not decoration. Changing a school's name is the one edit with no undo
  * button in the user's mind: seeing it in place, in the same lockup the app
@@ -214,7 +214,6 @@ export function SchoolTab() {
                 id="sch-ppd"
                 value={active.ppd}
                 maxLength={120}
-                placeholder="PPD Keningau"
                 onChange={(e) => setForm({ ...active, ppd: e.target.value })}
               />
             </div>
@@ -224,7 +223,6 @@ export function SchoolTab() {
                 id="sch-jpn"
                 value={active.jpn}
                 maxLength={120}
-                placeholder="JPN Sabah"
                 onChange={(e) => setForm({ ...active, jpn: e.target.value })}
               />
             </div>
@@ -234,7 +232,6 @@ export function SchoolTab() {
                 id="sch-motto"
                 value={active.motto}
                 maxLength={200}
-                placeholder="Bersatu Kita Teguh"
                 onChange={(e) => setForm({ ...active, motto: e.target.value })}
               />
               <p className="mt-1.5 text-[11.5px] text-ink-4">

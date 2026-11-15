@@ -1,8 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import * as React from "react";
-import { CommandPalette } from "@/components/shell/command-palette";
+import type * as React from "react";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { routeMetaFor } from "@/components/shell/nav";
 import { Sidebar } from "@/components/shell/sidebar";
@@ -21,27 +20,14 @@ function titleFor(pathname: string): string {
 }
 
 /**
- * Client chrome: holds the command-palette open state so ⌘K works anywhere and
- * the topbar's search button has something to talk to.
+ * Client chrome: the sidebar, the topbar and the bottom nav around the page.
  */
 export function AppShell({ children, user }: { children: React.ReactNode; user: ShellUser }) {
-  const [paletteOpen, setPaletteOpen] = React.useState(false);
   const pathname = usePathname();
 
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((o) => !o);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   return (
-    // One provider around the *whole* shell: MobileNav and the command palette
-    // sit outside <main>, and both need the role to filter their entries.
+    // One provider around the *whole* shell: MobileNav sits outside <main>,
+    // and it needs the role to filter its entries.
     <UserProvider user={user}>
       <div className="flex min-h-dvh">
         {/* Skip link — WCAG 2.4.1 */}
@@ -55,7 +41,7 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
         <Sidebar user={user} />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar onOpenPalette={() => setPaletteOpen(true)} />
+          <Topbar />
           {/* pb-28 clears the mobile bottom nav; lg:pb-14 because it disappears */}
           <main
             id="main"
@@ -74,7 +60,6 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
         </div>
 
         <MobileNav />
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       </div>
     </UserProvider>
   );

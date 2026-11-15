@@ -144,7 +144,6 @@ export default function RptPage() {
                     value={title}
                     autoComplete="off"
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="RPT Matematik Tahun 5"
                     required
                   />
                 </div>
@@ -160,7 +159,6 @@ export default function RptPage() {
                     autoComplete="off"
                     spellCheck={false}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://drive.google.com/…"
                     required
                   />
                 </div>

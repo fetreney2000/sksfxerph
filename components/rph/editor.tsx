@@ -2176,16 +2176,11 @@ function StepPdPc({
       <Label className="mb-0" required htmlFor="f-aktiviti">
         {ms.editor.activities}
       </Label>
-      <p className="mb-2.5 mt-1 text-[12.5px] leading-[1.55] text-ink-4">
-        Satu baris bagi setiap aktiviti. Mulakan dengan tanda hubung untuk menjadikannya
-        sub-aktiviti.
-      </p>
       <Textarea
         id="f-aktiviti"
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={Math.max(6, payload.aktiviti.length + 1)}
-        placeholder={"Set induksi\nMenyusun kad\n- Catur"}
       />
       {empty && (
         <FieldError>Sekurang-kurangnya satu aktiviti diperlukan sebelum dihantar.</FieldError>

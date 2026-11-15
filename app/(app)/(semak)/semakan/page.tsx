@@ -683,12 +683,7 @@ function CommentBox({
         {ms.review.comment}{" "}
         <span className="font-normal text-ink-4">({ms.review.commentHint})</span>
       </Label>
-      <Textarea
-        id={id}
-        value={comment}
-        onChange={(e) => onComment(e.target.value)}
-        placeholder="Tulis maklum balas untuk guru…"
-      />
+      <Textarea id={id} value={comment} onChange={(e) => onComment(e.target.value)} />
       <div className="mt-2 flex flex-wrap gap-1.5">
         {(
           [

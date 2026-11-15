@@ -234,12 +234,7 @@ function ClassDialog({
             <Label htmlFor="class-nama" required>
               Nama kelas
             </Label>
-            <Input
-              id="class-nama"
-              value={nama}
-              onChange={(e) => setNama(e.target.value)}
-              placeholder="5 Amanah"
-            />
+            <Input id="class-nama" value={nama} onChange={(e) => setNama(e.target.value)} />
           </div>
           <div>
             <Label htmlFor="class-tahun">Tahun</Label>
@@ -251,7 +246,6 @@ function ClassDialog({
               className="num"
               value={tahun}
               onChange={(e) => setTahun(e.target.value)}
-              placeholder="5"
             />
             <p className="mt-1.5 text-[11.5px] text-ink-4">
               Kosongkan untuk sekolah menengah (gunakan tingkatan).

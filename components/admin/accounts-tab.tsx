@@ -191,7 +191,6 @@ export function AccountsTab() {
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Cari nama, nama pengguna atau emel…"
               aria-label="Cari akaun"
               className="pl-9"
             />
@@ -502,7 +501,6 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
               value={username}
               autoComplete="off"
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="nurul.aisyah"
             />
           </div>
           <div>
@@ -513,7 +511,6 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
               id="acc-name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Nurul Aisyah binti Rahim"
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -542,7 +539,6 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="pilihan"
               />
               {/* Login now prefers the email — an account without one falls
                   back to its username, so the field is advice, not a gate. */}
@@ -768,7 +764,6 @@ function EditAccountDialog({
               value={email}
               autoComplete="off"
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="pilihan"
             />
             <p className="mt-1.5 text-[11.5px] text-ink-4">
               Alamat yang guru taip pada skrin log masuk, dan yang dipautkan pada log masuk

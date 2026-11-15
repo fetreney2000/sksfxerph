@@ -97,11 +97,6 @@ test.describe("authentication", () => {
     // A Guru Biasa holds no review stage, so the queue band is not for them.
     await expect(page.getByRole("link", { name: /RPH menunggu semakan/ })).toHaveCount(0);
 
-    await page.keyboard.press("Control+k");
-    await page.getByPlaceholder(/Cari arahan/).fill("sekolah");
-    await expect(page.getByText("Paparan Sekolah", { exact: true })).toHaveCount(0);
-    await page.keyboard.press("Escape");
-
     // 2. Typing the URL must redirect, not render a screen full of data the
     //    role is not entitled to. The route group keeps the address the same.
     for (const url of ["/semakan", "/sekolah", "/laporan"]) {
@@ -308,31 +303,6 @@ test.describe("eRPH smoke", () => {
 
     // The deadline must be a real Friday 16:00, not the off-by-a-month bug.
     await expect(page.getByText(/Jumaat, \d+ Oktober 2026 · 16:00/)).toBeVisible();
-
-    expect(errors, errors.join("\n")).toEqual([]);
-  });
-
-  test("command palette opens with Ctrl+K and filters", async ({ page }) => {
-    const errors = collectErrors(page);
-    await page.goto("/minggu");
-
-    const dialog = page.getByRole("dialog", { name: "Arahan pantas" });
-
-    // Ctrl+K is handled by a React listener, so it can only work once the
-    // bundle has hydrated. Retry rather than racing the mount.
-    await expect(async () => {
-      await page.keyboard.press("Control+k");
-      await expect(dialog).toBeVisible({ timeout: 1_500 });
-    }).toPass({ timeout: 20_000 });
-
-    // exact: the footer also says "↑↓ navigasi"
-    await expect(dialog.getByText("Navigasi", { exact: true })).toBeVisible();
-
-    await dialog.getByPlaceholder(/Cari arahan/).fill("semakan");
-    await expect(dialog.getByText("Semakan RPH", { exact: true })).toBeVisible();
-
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });

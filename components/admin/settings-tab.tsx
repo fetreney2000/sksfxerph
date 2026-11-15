@@ -165,7 +165,6 @@ export function SettingsTab() {
                 className="num"
                 value={sessionInput}
                 onChange={(e) => setSessionInput(e.target.value)}
-                placeholder="2026/2027"
                 aria-describedby="sesi-hint"
               />
               <p id="sesi-hint" className="mt-1.5 text-[11.5px] text-ink-4">

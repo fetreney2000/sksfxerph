@@ -95,7 +95,6 @@ export function LoginCard() {
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
-              placeholder="nurul@kpm.edu.my"
               required
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}

@@ -117,7 +117,6 @@ export default function ArkibPage() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Cari kelas, subjek atau tajuk…"
             aria-label="Cari dalam arkib"
             className="pl-9"
           />

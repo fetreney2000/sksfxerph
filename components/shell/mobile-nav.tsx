@@ -21,8 +21,7 @@ import { ms } from "@/lib/i18n/ms";
  * Bottom navigation — frontend research §4.2(9) "mobile-first: bottom nav".
  *
  * The sidebar is desktop-only (`hidden lg:flex`), so without this a teacher on
- * a phone has no visible way to move between screens except the ⌘K palette,
- * which is not discoverable at 6am on a 5-inch screen.
+ * a phone has no visible way to move between screens.
  *
  * Four destinations get a tab. Everything else for the role is in **Lagi**,
  * which is how Laporan stopped disappearing for reviewers on a phone; a role
