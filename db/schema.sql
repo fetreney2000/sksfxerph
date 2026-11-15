@@ -592,6 +592,27 @@ create table erph.rph_template (
 );
 create index rph_template_lookup_idx on erph.rph_template (school_id, subject_code, visibility);
 
+-- ── 8a · RPT LINKS ─────────────────────────────────────────────────────────
+-- A teacher's Rancangan Pengajaran Tahunan lives in their own Google Drive;
+-- the file bytes never touch this database. What is stored here is the link
+-- to it, titled per subject, so a GPK or Guru Besar can open and check it.
+-- One row per (teacher, session, title): re-attaching the same subject's RPT
+-- updates the link rather than stacking a second row the reviewer has to
+-- guess between.
+create table erph.rpt_link (
+  id         uuid primary key default gen_random_uuid(),
+  school_id  uuid not null references erph.school(id) on delete cascade,
+  owner_id   uuid not null references erph.user(id) on delete cascade,
+  session    text not null,
+  title      text not null check (char_length(title) between 1 and 120),
+  url        text not null check (char_length(url) between 1 and 2000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists rpt_link_owner_title_uniq
+  on erph.rpt_link (school_id, owner_id, session, lower(title));
+create index rpt_link_school_idx on erph.rpt_link (school_id, session);
+
 create table erph.notification (
   id         uuid primary key default gen_random_uuid(),
   school_id  uuid references erph.school(id) on delete cascade,
@@ -2354,6 +2375,7 @@ alter table erph.rph_review          enable row level security;
 -- by virtue of having no policy at all.
 alter table erph.rph_signature       enable row level security;
 alter table erph.rph_template        enable row level security;
+alter table erph.rpt_link            enable row level security;
 alter table erph.notification        enable row level security;
 alter table erph.sync_op             enable row level security;
 alter table erph.export_file         enable row level security;
@@ -2466,6 +2488,15 @@ create policy template_insert on erph.rph_template
   for insert with check (owner_id = erph.actor() and visibility <> 'system');
 create policy template_update on erph.rph_template
   for update using (owner_id = erph.actor()) with check (owner_id = erph.actor());
+
+-- A teacher's RPT links: the owner manages their own, and whoever may
+-- supervise the teacher may open them — a GPK their supervised teachers, a
+-- Guru Besar the whole school. No separate reviewer policy needed:
+-- `may_supervise` already grants the owner their own row too.
+create policy rpt_owner_write on erph.rpt_link
+  for all using (owner_id = erph.actor()) with check (owner_id = erph.actor());
+create policy rpt_reviewer_read on erph.rpt_link
+  for select using (erph.may_supervise(school_id, owner_id));
 
 create policy notification_read on erph.notification
   for select using (user_id = erph.actor());

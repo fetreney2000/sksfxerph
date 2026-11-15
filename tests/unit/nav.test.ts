@@ -24,6 +24,7 @@ describe("navigation — the editor is an action, not a destination", () => {
     // The bottom bar is a subset of `navFor`; dropping "Tulis" left a phone
     // with only two tabs, so Arkib now takes the freed slot.
     expect(hrefsFor("guru_biasa")).toContain("/arkib");
+    expect(hrefsFor("guru_biasa")).toContain("/rpt");
   });
 });
 
@@ -59,7 +60,7 @@ describe("navigation — the home matches the role", () => {
 });
 
 describe("mobile navigation — four tabs, then Lagi", () => {
-  it("keeps the reviewer's four main screens and puts Arkib and Templat behind Lagi", () => {
+  it("keeps the reviewer's four main screens and puts the rest behind Lagi", () => {
     const { primary, secondary } = mobileNavFor("gpk");
 
     expect(primary.map((item) => item.href)).toEqual([
@@ -70,6 +71,7 @@ describe("mobile navigation — four tabs, then Lagi", () => {
     ]);
     expect(secondary.flatMap((group) => group.items.map((item) => item.href))).toEqual([
       "/arkib",
+      "/rpt",
       "/templat",
     ]);
   });
@@ -77,7 +79,7 @@ describe("mobile navigation — four tabs, then Lagi", () => {
   it("shows a Guru Biasa every destination they have, with no empty Lagi tab", () => {
     const { primary, secondary } = mobileNavFor("guru_biasa");
 
-    expect(primary.map((item) => item.href)).toEqual(["/minggu", "/arkib", "/templat"]);
+    expect(primary.map((item) => item.href)).toEqual(["/minggu", "/arkib", "/rpt", "/templat"]);
     expect(secondary).toEqual([]);
   });
 

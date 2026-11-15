@@ -38,6 +38,7 @@ export const ms = {
     editor: "Penyunting RPH",
     templat: "Perpustakaan Templat",
     arkib: "Sejarah dan Arkib",
+    rpt: "RPT Tahunan",
     semakan: "Semakan RPH",
     sekolah: "Paparan Sekolah",
     guru: "Guru",

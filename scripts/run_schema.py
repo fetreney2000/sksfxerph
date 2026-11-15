@@ -254,12 +254,12 @@ def main() -> int:
     n_tables = r.one(
         "select count(*) from information_schema.tables where table_schema='erph' and table_type='BASE TABLE'"
     )[0]
-    check("18 tables in erph", n_tables == 18, f"found {n_tables}")
+    check("19 tables in erph", n_tables == 19, f"found {n_tables}")
 
     # policies live in TWO schemas: erph.* (tables) and storage.objects (buckets)
     n_policies = r.one("select count(*) from pg_policies where schemaname='erph'")[0]
     n_storage = r.one("select count(*) from pg_policies where schemaname='storage'")[0]
-    check("25 policies on erph tables", n_policies == 25, f"found {n_policies}")
+    check("27 policies on erph tables", n_policies == 27, f"found {n_policies}")
     check(
         "3 policies on storage.objects",
         n_storage == 3,

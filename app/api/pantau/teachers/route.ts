@@ -41,6 +41,8 @@ export interface TeacherRow {
   fixedTotal: number;
   lastReviewedAt: string | null;
   classes: string | null;
+  /** The teacher's RPT links for the session — Drive only, view-only. */
+  rptLinks: { title: string; url: string }[];
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -92,6 +94,36 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const rows = (data ?? []) as unknown as RpcRow[];
 
+  // The teachers' RPT links for this session, keyed by owner. Queried against
+  // the already-scoped row set above — never the whole school — so a GPK sees
+  // links only for their own supervised teachers, exactly like the plans. No
+  // RPC change needed: `pantau_teachers` owns the scope, this only decorates it.
+  const ids = rows.map((r) => r.user_id);
+  let linksByOwner = new Map<string, { title: string; url: string }[]>();
+  if (ids.length > 0) {
+    const { data: linkRows, error: linkErr } = await gate.db
+      .from("rpt_link")
+      .select("owner_id, title, url")
+      .eq("school_id", schoolId)
+      .eq("session", session)
+      .in("owner_id", ids)
+      .order("title", { ascending: true });
+    if (linkErr) {
+      console.error("[pantau] RPT links failed:", linkErr.message);
+    } else {
+      linksByOwner = new Map<string, { title: string; url: string }[]>();
+      for (const row of (linkRows ?? []) as unknown as {
+        owner_id: string;
+        title: string;
+        url: string;
+      }[]) {
+        const list = linksByOwner.get(row.owner_id) ?? [];
+        list.push({ title: row.title, url: row.url });
+        linksByOwner.set(row.owner_id, list);
+      }
+    }
+  }
+
   const items: TeacherRow[] = rows.map((r) => ({
     userId: r.user_id,
     fullName: r.full_name,
@@ -104,6 +136,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     fixedTotal: Number(r.fixed_total ?? 0),
     lastReviewedAt: r.last_reviewed_at,
     classes: r.classes,
+    rptLinks: linksByOwner.get(r.user_id) ?? [],
   }));
 
   return NextResponse.json({ items });

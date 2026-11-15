@@ -198,6 +198,30 @@ test.describe("authentication", () => {
     await page.goto("/arkib");
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
 
+    // No `rph` means no RPT either — there is nothing of theirs to attach.
+    await expect(page.getByRole("link", { name: /RPT Tahunan/ })).toHaveCount(0);
+    await page.goto("/rpt");
+    await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("a teacher reaches their RPT links from the Guru group", async ({ page }) => {
+    const errors = collectErrors(page);
+    await login(page);
+
+    await expect(page.getByRole("link", { name: /RPT Tahunan/ }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await page
+      .getByRole("link", { name: /RPT Tahunan/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/rpt/, { timeout: 15_000 });
+    // Local mode has no backend and no reviewers: the page says so instead of
+    // offering a form whose saves would go nowhere.
+    await expect(page.getByText(/memerlukan mod disegerakkan/)).toBeVisible();
+
     expect(errors, errors.join("\n")).toEqual([]);
   });
 

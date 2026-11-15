@@ -1,4 +1,5 @@
 import {
+  BookMarked,
   BookOpen,
   FileText,
   History,
@@ -54,6 +55,9 @@ export const NAV: NavGroup[] = [
         badge: "drafts",
       },
       { href: "/arkib", label: ms.nav.arkib, short: "Arkib", icon: History, perm: "rph" },
+      // Drive links, not files: the RPT itself stays in the teacher's Drive
+      // and only the link is stored, so a supervisor can open and check it.
+      { href: "/rpt", label: ms.nav.rpt, short: "RPT", icon: BookMarked, perm: "rph" },
     ],
   },
   {
@@ -142,6 +146,7 @@ export const MOBILE_PRIMARY_ORDER: readonly string[] = [
   "/laporan",
   "/utama",
   "/arkib",
+  "/rpt",
   "/templat",
 ];
 
@@ -159,10 +164,10 @@ export interface MobileNav {
  *
  * A role with four or fewer destinations has no sheet — a "Lagi" tab that opens
  * an empty drawer is worse than no tab at all. A GPK gets their four main
- * screens (Minggu, Semakan, Sekolah, Laporan) and finds Arkib and Templat under
- * Lagi; a Guru Besar — who teaches no class and has no Minggu or Arkib — sees
- * Semakan, Sekolah, Laporan and Templat directly; a Guru Biasa sees all three
- * of their destinations directly.
+ * screens (Minggu, Semakan, Sekolah, Laporan) and finds Arkib, RPT and Templat
+ * under Lagi; a Guru Besar — who teaches no class and has no Minggu or Arkib —
+ * sees Semakan, Sekolah, Laporan and Templat directly; a Guru Biasa sees all
+ * four of their destinations directly.
  */
 export function mobileNavFor(role: string | null | undefined): MobileNav {
   const rank = (href: string) => {
@@ -190,6 +195,7 @@ export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/minggu": { title: ms.nav.minggu, crumb: "Ruang kerja" },
   "/editor": { title: ms.nav.editor, crumb: "Draf aktif" },
   "/templat": { title: ms.nav.templat, crumb: "Templat tersedia" },
+  "/rpt": { title: ms.nav.rpt, crumb: "Pautan Drive" },
   // The wizard is not a library screen, so it does not inherit the library's
   // crumb — a teacher authoring a plan should be able to tell from the title
   // bar which of the two screens they are on.

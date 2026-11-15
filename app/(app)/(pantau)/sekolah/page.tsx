@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Users } from "lucide-react";
+import { Bell, ExternalLink, Users } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { TeacherRow } from "@/app/api/pantau/teachers/route";
@@ -70,6 +70,8 @@ interface Row {
   returned: number;
   fixed: number;
   last: string;
+  /** The teacher's RPT links for the session — Drive only, view-only. */
+  rptLinks: { title: string; url: string }[];
 }
 
 /**
@@ -143,6 +145,7 @@ function fromApi(r: TeacherRow): Row {
     returned: r.returnedTotal,
     fixed: r.fixedTotal,
     last: r.lastReviewedAt ? shortDate(r.lastReviewedAt) : "-",
+    rptLinks: r.rptLinks ?? [],
   };
 }
 
@@ -196,9 +199,12 @@ export default function SekolahPage() {
         compliance: t.compliance,
         // The bundled rows carry no review history, so the pair is shown as
         // absent rather than as a teacher who was never sent anything back.
+        // The bundled rows carry no RPT links — demo fixtures name no Drive
+        // files, and reviewers in local mode have nothing to open.
         returned: 0,
         fixed: 0,
         last: t.last,
+        rptLinks: [],
       }));
 
   // Worst first. `pantau_teachers` returns them alphabetically, which is the
@@ -499,6 +505,7 @@ export default function SekolahPage() {
                 </TH>
                 <TH>Dikembalikan → dibetulkan</TH>
                 <TH>Terakhir disemak</TH>
+                <TH>RPT</TH>
                 <TH className="text-right">Tindakan</TH>
               </tr>
             </THead>
@@ -550,6 +557,34 @@ export default function SekolahPage() {
                     )}
                   </TD>
                   <TD className="num text-[12.5px] text-ink-3">{t.last}</TD>
+                  <TD>
+                    {/* The teacher's Drive links, opened read-only in a new tab.
+                        View-only by design: verifying happens outside the app,
+                        so there is no state here to approve, only links to open. */}
+                    {t.rptLinks.length === 0 ? (
+                      <span className="text-[12.5px] text-ink-4">—</span>
+                    ) : (
+                      <span className="flex flex-wrap gap-1.5">
+                        {t.rptLinks.map((link) => (
+                          <a
+                            key={link.title}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={link.title}
+                            className="inline-flex max-w-40 items-center gap-1 rounded-full border border-border-strong bg-surface px-2 py-0.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface-3"
+                          >
+                            <ExternalLink
+                              className="h-3 w-3 shrink-0"
+                              strokeWidth={2}
+                              aria-hidden
+                            />
+                            <span className="ellip">{link.title}</span>
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                  </TD>
                   <TD className="text-right">
                     {/* Offered only where it does something. A teacher who is
                         up to date has nothing to nudge, and the branch this
