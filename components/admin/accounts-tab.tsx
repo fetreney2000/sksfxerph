@@ -544,6 +544,12 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="pilihan"
               />
+              {/* Login now prefers the email — an account without one falls
+                  back to its username, so the field is advice, not a gate. */}
+              <p className="mt-1.5 text-[11.5px] text-ink-4">
+                Yang guru akan taip pada skrin log masuk. Kosongkan untuk log masuk dengan nama
+                pengguna sahaja.
+              </p>
             </div>
           </div>
           {/* Only where a role has an office to hold: the pentadbir's account
@@ -765,8 +771,9 @@ function EditAccountDialog({
               placeholder="pilihan"
             />
             <p className="mt-1.5 text-[11.5px] text-ink-4">
-              Alamat yang dipautkan pada log masuk Google pertama kali. Nama pengguna tidak
-              ditukar di sini — ia yang peranti sudah log masuk dengannya.
+              Alamat yang guru taip pada skrin log masuk, dan yang dipautkan pada log masuk
+              Google pertama kali. Nama pengguna tidak ditukar di sini — ia yang peranti sudah
+              log masuk dengannya.
             </p>
           </div>
           {error && <FieldError>{error}</FieldError>}

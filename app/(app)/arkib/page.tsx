@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Trash2 } from "lucide-react";
+import { Copy, Search, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -39,9 +39,12 @@ export default function ArkibPage() {
   const needle = q.trim().toLowerCase();
   const docs = needle
     ? archive.filter((d) =>
-        [d.className, d.subjectName, d.payload.tajuk, d.payload.standard_kandungan].some((f) =>
-          f.toLowerCase().includes(needle),
-        ),
+        [
+          d.classNames.join(" "),
+          d.subjectName,
+          d.payload.tajuk,
+          d.payload.standard_kandungan,
+        ].some((f) => f.toLowerCase().includes(needle)),
       )
     : archive;
 
@@ -291,7 +294,7 @@ export default function ArkibPage() {
                   <TD className="num whitespace-nowrap">{d.planDate}</TD>
                   <TD>
                     <div className="font-semibold">
-                      {d.className} · {d.subjectName}
+                      {d.classNames.join(", ")} · {d.subjectName}
                     </div>
                   </TD>
                   <TD>
@@ -311,10 +314,23 @@ export default function ArkibPage() {
                       >
                         Buka
                       </Button>
+                      {/* Salin: open the penyunting with this plan's content
+                          pre-filled as an unsaved draft — nothing is written
+                          until the teacher saves it under a week of their
+                          choosing. */}
                       <Button
                         size="sm"
                         variant="ghost"
-                        aria-label={`Padam ${d.className} ${d.subjectName} ${d.planDate}`}
+                        aria-label={`Salin ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
+                        onClick={() => router.push(`/editor?copy=${d.id}`)}
+                      >
+                        <Copy className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                        Salin
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Padam ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
                         onClick={() => setConfirming(d)}
                       >
                         <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
@@ -364,7 +380,7 @@ export default function ArkibPage() {
             <DialogTitle>Keluarkan rancangan daripada arkib?</DialogTitle>
             <DialogDescription>
               {confirming
-                ? `${confirming.className} · ${confirming.subjectName} · ${confirming.planDate}`
+                ? `${confirming.classNames.join(", ")} · ${confirming.subjectName} · ${confirming.planDate}`
                 : ""}
             </DialogDescription>
           </DialogHeader>

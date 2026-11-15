@@ -90,6 +90,7 @@ def main() -> int:
         encoding="utf-8"
     )
     delta19 = (ROOT / "db" / "migrations" / "019_week_numbering.sql").read_text(encoding="utf-8")
+    delta20 = (ROOT / "db" / "migrations" / "020_multi_class.sql").read_text(encoding="utf-8")
     old_schema = from_git(BASELINE, "db/schema.sql")
     old_seed = from_git(BASELINE, "db/seed.sql")
 
@@ -205,8 +206,9 @@ def main() -> int:
             run(delta17, "017")
             run(delta18, "018")
             run(delta19, "019")
+            run(delta20, "020")
         print(
-            "  [OK ] migration applied (001a→019, old signature pre-installed)"
+            "  [OK ] migration applied (001a→020, old signature pre-installed)"
         )
     except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] {str(e).splitlines()[0][:300]}")
@@ -1088,9 +1090,9 @@ def main() -> int:
             cur.execute("select id from erph.class where school_id = %s limit 1", (school,))
             class_id = cur.fetchone()[0]
             cur.execute(
-                "insert into erph.rph_document (school_id, owner_id, class_id, subject_code, "
+                "insert into erph.rph_document (school_id, owner_id, class_ids, subject_code, "
                 "session, week_no, plan_date, payload) "
-                "values (%s, %s, %s, 'MAT', '2026/2027', 3, date '2026-10-19', "
+                "values (%s, %s, array[%s], 'MAT', '2026/2027', 3, date '2026-10-19', "
                 "'{\"objektif\":\"asli\"}'::jsonb) returning id",
                 (school, teacher, class_id),
             )
@@ -1184,9 +1186,9 @@ def main() -> int:
             )
             conn.commit()
             cur.execute(
-                "insert into erph.rph_document (school_id, owner_id, class_id, subject_code, "
+                "insert into erph.rph_document (school_id, owner_id, class_ids, subject_code, "
                 "session, week_no, plan_date, payload) "
-                "values (%s, %s, %s, 'MAT', '2026/2027', 7, date '2026-11-02', "
+                "values (%s, %s, array[%s], 'MAT', '2026/2027', 7, date '2026-11-02', "
                 "'{\"objektif\":\"Hanya objektif\"}'::jsonb) returning id",
                 (school, teacher, class_id),
             )
@@ -1259,9 +1261,9 @@ def main() -> int:
             # not a uuid, so the cast raises — and the good op beside it must
             # still be applied.
             cur.execute(
-                "insert into erph.rph_document (school_id, owner_id, class_id, subject_code, "
+                "insert into erph.rph_document (school_id, owner_id, class_ids, subject_code, "
                 "session, week_no, plan_date, payload) "
-                "values (%s, %s, %s, 'MAT', '2026/2027', 8, date '2026-11-09', "
+                "values (%s, %s, array[%s], 'MAT', '2026/2027', 8, date '2026-11-09', "
                 "'{\"objektif\":\"Baik\"}'::jsonb) returning id",
                 (school, teacher, class_id),
             )
@@ -1485,6 +1487,179 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         conn.rollback()
         check("019 week numbering", False, str(e).splitlines()[0][:140])
+    finally:
+        with conn.cursor() as cur:
+            cur.execute("select set_config('request.jwt.claims', null, false)")
+            conn.commit()
+
+    # ── 020: one plan may cover several classes ─────────────────────────────
+    # The scalar `class_id` became `class_ids uuid[]`: the wizard ticks
+    # classes, so one plan may be taught to more than one of them. The
+    # migration's job is the backfill, the policies and the key; the sync
+    # behaviour it enables is asserted right after.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select column_name from information_schema.columns "
+                "where table_schema='erph' and table_name='rph_document' "
+                "and column_name in ('class_id','class_ids')"
+            )
+            cols = {r[0] for r in cur.fetchall()}
+            check("020 class_ids replaced class_id", cols == {"class_ids"}, str(sorted(cols)))
+
+            cur.execute(
+                "select is_nullable from information_schema.columns "
+                "where table_schema='erph' and table_name='rph_document' "
+                "and column_name='class_ids'"
+            )
+            check("020 class_ids is NOT NULL", cur.fetchone()[0] == "NO")
+
+            cur.execute(
+                "select indexdef from pg_indexes "
+                "where schemaname='erph' and indexname='rph_document_uniq'"
+            )
+            idx = cur.fetchone()[0]
+            check(
+                "020 the idempotency key covers the class set",
+                "class_ids" in idx,
+                idx[:100],
+            )
+
+            cur.execute(
+                "select count(*) from pg_policies where schemaname='erph' "
+                "and tablename='rph_document' and policyname in "
+                "('rph_owner_insert','rph_owner_update') "
+                "and (qual like '%classes_in_school%' or with_check like '%classes_in_school%')"
+            )
+            check("020 the owner policies test the whole set", cur.fetchone()[0] == 2)
+
+            # The seed's one submitted plan was written against a single class,
+            # so the backfill must have given it exactly that class — not an
+            # empty list, not both.
+            cur.execute(
+                "select cardinality(class_ids), "
+                "(select count(*) from erph.class c "
+                " where c.id = any(d.class_ids) and c.nama = '5 Amanah') "
+                "from erph.rph_document d where deleted_at is null"
+            )
+            rows = cur.fetchall()
+            check(
+                "020 existing plans keep their class as a one-element set",
+                rows and all(r[0] == 1 and r[1] == 1 for r in rows),
+                f"{len(rows)} plans, all one-element and matching 5 Amanah",
+            )
+
+            # The sync behaviour. As the teacher: a two-class op applies as one
+            # document; a follow-up op claiming one of those classes merges
+            # into it (the overlap), and a legacy lone `class_id` is honoured.
+            cur.execute("select id from erph.school limit 1")
+            school = cur.fetchone()[0]
+            cur.execute(
+                "select id from erph.user where username = 'nurul.aisyah'"
+            )
+            teacher_id = cur.fetchone()[0]
+            cur.execute(
+                "select id from erph.class where school_id = %s order by nama",
+                (school,),
+            )
+            class_ids = [r[0] for r in cur.fetchall()]
+
+            cur.execute(
+                "select set_config('request.jwt.claims', "
+                "(select json_build_object('sub', id)::text from erph.user where id = %s), false)",
+                (teacher_id,),
+            )
+            conn.commit()
+
+            two_class_op = json.dumps(
+                [
+                    {
+                        "op_id": str(uuid.uuid4()),
+                        "class_ids": [str(c) for c in class_ids[:2]],
+                        "subject_code": "BM",
+                        "session": "2026/2027",
+                        "week_no": 1,
+                        "plan_date": "2026-03-16",
+                        "payload": {"objektif": "Dua kelas"},
+                    }
+                ]
+            )
+            verdict = cur.execute(
+                "select erph.sync_rph(%s::jsonb)", (two_class_op,)
+            ).fetchone()[0]
+            check(
+                "020 a two-class op applies as one document",
+                verdict[0].get("result") == "applied",
+                str(verdict)[:120],
+            )
+            doc_id = verdict[0].get("id")
+            cur.execute(
+                "select cardinality(class_ids) from erph.rph_document where id = %s",
+                (doc_id,),
+            )
+            check("020 …with both classes on the row", cur.fetchone()[0] == 2)
+
+            # The same logical lesson flushed again from a second device with
+            # the old scalar wire format: the overlap resolves onto the same
+            # row and its class list unions, so nothing is lost.
+            legacy_op = json.dumps(
+                [
+                    {
+                        "op_id": str(uuid.uuid4()),
+                        "class_id": str(class_ids[0]),
+                        "subject_code": "BM",
+                        "session": "2026/2027",
+                        "week_no": 1,
+                        "plan_date": "2026-03-16",
+                        "payload": {"objektif": "Dua kelas"},
+                    }
+                ]
+            )
+            verdict = cur.execute(
+                "select erph.sync_rph(%s::jsonb)", (legacy_op,)
+            ).fetchone()[0]
+            check(
+                "020 the legacy scalar wire format still lands",
+                verdict[0].get("result") == "applied" and verdict[0].get("id") == doc_id,
+                str(verdict)[:120],
+            )
+            cur.execute("select count(*) from erph.rph_document where id = %s", (doc_id,))
+            check("020 …merged, not duplicated", cur.fetchone()[0] == 1)
+
+            # And a class outside the school is refused, element by element —
+            # not with an exception: the op comes back as a rejected verdict
+            # the queue marks permanent.
+            verdict = cur.execute(
+                "select erph.sync_rph(%s::jsonb)",
+                (
+                    json.dumps(
+                        [
+                            {
+                                "op_id": str(uuid.uuid4()),
+                                "class_ids": [str(class_ids[0]), str(uuid.uuid4())],
+                                "subject_code": "BM",
+                                "session": "2026/2027",
+                                "week_no": 2,
+                                "plan_date": "2026-03-23",
+                                "payload": {},
+                            }
+                        ]
+                    ),
+                ),
+            ).fetchone()[0]
+            check(
+                "020 a foreign class in the set is refused",
+                verdict[0].get("result") == "rejected"
+                and not verdict[0].get("retryable", True)
+                and "sekolah" in verdict[0].get("error", ""),
+                str(verdict)[:140],
+            )
+
+            cur.execute("select set_config('request.jwt.claims', null, false)")
+            conn.commit()
+    except Exception as e:  # noqa: BLE001
+        conn.rollback()
+        check("020 multi-class", False, str(e).splitlines()[0][:140])
     finally:
         with conn.cursor() as cur:
             cur.execute("select set_config('request.jwt.claims', null, false)")

@@ -28,6 +28,35 @@ db.version(1).stores({
   notifications: "id, readAt, createdAt",
 });
 
+/**
+ * One plan may cover several classes (`class_ids uuid[]` on the server, 020),
+ * so the scalar `classId`/`className` became the parallel arrays
+ * `classIds`/`classNames`. The upgrade maps every stored row in place; the
+ * `classId` index is dropped because overlap checks filter in JS on the
+ * compound index that remains — Dexie cannot index inside an array.
+ */
+db.version(2)
+  .stores({
+    documents: "id, [ownerId+session], [ownerId+session+weekNo+planDate], status, planDate",
+  })
+  .upgrade(async (tx) => {
+    // The scalar fields no longer exist on `RphDocument`, but every row this
+    // upgrade runs over was written by the previous version and has exactly
+    // them — so the legacy shape is declared here, where it is true.
+    type LegacyDoc = RphDocument & { classId?: string; className?: string };
+    await tx
+      .table("documents")
+      .toCollection()
+      .modify((doc: LegacyDoc) => {
+        if (!Array.isArray(doc.classIds)) {
+          doc.classIds = doc.classId ? [doc.classId] : [];
+          doc.classNames = doc.className ? [doc.className] : [];
+          delete doc.classId;
+          delete doc.className;
+        }
+      });
+  });
+
 export { db };
 
 /* ── Small helpers the UI leans on ─────────────────────────────────────────── */
@@ -51,10 +80,16 @@ export async function documentsForWeek(
   return rows.sort((a, b) => (a.planDate < b.planDate ? -1 : a.planDate > b.planDate ? 1 : 0));
 }
 
-/** The natural-key lookup used before creating a new plan. */
+/**
+ * The overlap lookup used before creating a new plan: a duplicate is another
+ * live plan with the same subject on the same day that claims *any* of the
+ * classes this draft covers — mirroring the `class_ids && v_class_ids`
+ * resolution `sync_rph` applies server-side. Disjoint class sets are two
+ * different lessons and may coexist.
+ */
 export async function findByNaturalKey(
   ownerId: string,
-  classId: string,
+  classIds: string[],
   subjectCode: string,
   session: string,
   weekNo: number,
@@ -63,6 +98,11 @@ export async function findByNaturalKey(
   return db.documents
     .where("[ownerId+session+weekNo+planDate]")
     .equals([ownerId, session, weekNo, planDate])
-    .and((d) => d.classId === classId && d.subjectCode === subjectCode)
+    .and(
+      (d) =>
+        d.subjectCode === subjectCode &&
+        Array.isArray(d.classIds) &&
+        d.classIds.some((c) => classIds.includes(c)),
+    )
     .first();
 }

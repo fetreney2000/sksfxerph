@@ -150,7 +150,10 @@ describe("the exported file's name", () => {
   });
 
   it("refuses a field that is longer than it has any right to be", async () => {
-    const res = await POST(post({ ...BASE_BODY, className: "x".repeat(500) }));
+    // 600 is the bound the multi-class joined label earned (thirty classes,
+    // `cardinality between 1 and 30`, joined with ", ") — so this is over it
+    // by a comfortable margin, not by one character.
+    const res = await POST(post({ ...BASE_BODY, className: "x".repeat(700) }));
 
     expect(res.status).toBe(422);
   });

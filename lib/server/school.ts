@@ -20,7 +20,8 @@ import { adminDb } from "@/lib/server/db";
  *
  * Everything else in the app already resolves a school by **id**, never by
  * code: `schoolIdFor()` walks `school_member`, `sync_rph` derives it from
- * `class_id`, and `rph_document` has a `school_id` uuid with no code column.
+ * `school_member` too (its classes are validated against that school), and
+ * `rph_document` has a `school_id` uuid with no code column.
  * The code is therefore a label, and this is the last place that ever treated
  * it as a key — so it is now read as the single active school instead.
  *

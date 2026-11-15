@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { RphPaper } from "@/components/rph/rph-paper";
+import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -18,17 +19,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label, Textarea } from "@/components/ui/field";
+import { Label, Select, Textarea } from "@/components/ui/field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { reviewStageFor } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
 import { supabaseConfigured } from "@/lib/config";
-import { longDate } from "@/lib/date";
+import { longDate, weekOptions } from "@/lib/date";
 import type { QueueItem } from "@/lib/demo/review";
-import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
+import { useCurrentWeek } from "@/lib/hooks/use-calendar";
+import { useReviewQueueData, useSchoolStats, useWeekPlans } from "@/lib/hooks/use-remote";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
+import { RpcError, submitRph } from "@/lib/rpc";
 import { completeness, normalisePayload } from "@/lib/schemas/rph";
 import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review";
 
@@ -45,6 +48,19 @@ function decisionMessage(decision: "sahkan" | "hantar_balik"): string {
   return "Disahkan dan ditandatangani — guru dimaklumkan";
 }
 
+/**
+ * What a week-browse row lets the reviewer actually do.
+ *
+ * A `draft` is actionable through the submit-on-behalf step (the server's
+ * `submit_rph` already permits staff to submit for their teachers), a
+ * `submitted` plan is the ordinary decision, and everything else — approved,
+ * returned, forwarded — is listed only so the week reads as a whole. Re-deciding
+ * an audited plan would fork the audit trail, so it is view-only here.
+ */
+function isActionable(q: QueueItem): boolean {
+  return q.status === "draft" || q.status === "submitted";
+}
+
 export default function SemakanPage() {
   // Remote when configured, bundled demo otherwise — same shape either way.
   const { id: meId, role } = useUser();
@@ -58,6 +74,23 @@ export default function SemakanPage() {
   const [graded, setGraded] = React.useState<Record<string, 0 | 1>>({});
   const [comment, setComment] = React.useState("");
   const [filter, setFilter] = React.useState<"belum" | "semua">("belum");
+
+  // ── Minggu lampau ────────────────────────────────────────────────────────
+  // Null selects the ordinary pending queue; a number browses that whole
+  // school week, any status. The picker is driven by `weekOptions()`, which
+  // already applies the school's declared weeks — a gap between declarations
+  // is not offered, because its dates belong to nobody.
+  const currentWeekNo = useCurrentWeek();
+  const [weekFilter, setWeekFilter] = React.useState<number | null>(null);
+  // `currentWeekNo` is the trigger, not a value the body reads: `weekOptions()`
+  // reads `currentWeek()` internally, and re-running the memo when the school's
+  // declarations arrive is what keeps the picker from staying empty forever.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: subscribe-then-read — the dependency fires the recompute the store's update needs.
+  const weekOpts = React.useMemo(() => weekOptions(), [currentWeekNo]);
+  const { items: weekPlans, refetch: refetchWeek } = useWeekPlans(weekFilter);
+  /** The list on screen: the queue, or the browsed week. */
+  const list = weekFilter === null ? QUEUE : weekPlans;
+
   /**
    * The detail pane is a full-screen dialog on a phone.
    *
@@ -79,12 +112,25 @@ export default function SemakanPage() {
   // Selection must follow the data: the queue resolves asynchronously in
   // synced mode, so a value captured at first render can be stale.
   React.useEffect(() => {
-    if (!selected && QUEUE.length > 0) setSelected(QUEUE[0]?.id);
-  }, [QUEUE, selected]);
+    if (!selected && list.length > 0) setSelected(list[0]?.id);
+  }, [list, selected]);
 
-  const item = QUEUE.find((q) => q.id === selected) ?? QUEUE[0];
+  const item = list.find((q) => q.id === selected) ?? list[0];
   /** A return must carry a reason: an empty "RPH perlu dibaiki" is not actionable. */
   const canReturn = comment.trim().length > 0;
+  /**
+   * Week mode only: a decided plan cannot be decided again, so the workspace
+   * renders read-only. In queue mode every row is `submitted` by definition.
+   */
+  const readOnly = weekFilter !== null && item !== undefined && !isActionable(item);
+  /** The explanatory note for a row the reviewer cannot (yet) decide. */
+  const itemNote = item
+    ? readOnly
+      ? ms.review.decidedNote
+      : item.status === "draft"
+        ? ms.review.draftNote
+        : undefined
+    : undefined;
 
   const openReview = (id: string) => {
     if (id !== selected) setComment("");
@@ -97,13 +143,21 @@ export default function SemakanPage() {
   };
 
   const visible = React.useMemo(
-    () => (filter === "belum" ? QUEUE.filter((q) => !(q.id in graded)) : QUEUE),
-    [filter, graded, QUEUE],
+    () =>
+      weekFilter !== null
+        ? list
+        : filter === "belum"
+          ? list.filter((q) => !(q.id in graded))
+          : list,
+    [filter, graded, list, weekFilter],
   );
 
   const decide = React.useCallback(
     (decision: ReviewDecision) => {
       if (!item || deciding) return;
+      // A decided plan (week mode) is view-only: re-deciding it would fork
+      // what the audit trail already recorded.
+      if (!isActionable(item)) return;
       if (decision === "hantar_balik" && !comment.trim()) {
         toast.info(ms.review.returnReasonRequired);
         return;
@@ -126,41 +180,78 @@ export default function SemakanPage() {
       const applyDecision = () => {
         setGraded((g) => ({ ...g, [item.id]: decision === "sahkan" ? 1 : 0 }));
         setComment("");
-        // Advance to the next ungraded item — the queue is the whole workflow.
-        const next = QUEUE.find((q) => !(q.id in graded) && q.id !== item.id);
+        // Advance to the next actionable, ungraded item — the queue is the
+        // whole workflow. Week mode has decided rows in between; they are
+        // skipped, not landed on.
+        const next = list.find((q) => isActionable(q) && !(q.id in graded) && q.id !== item.id);
         if (next) setSelected(next.id);
         // On a phone the dialog is the workspace. Once the last decision is
         // made, leave it so the reviewer sees the finished queue and toast,
         // rather than the plan they just approved still filling the screen.
         else setMobileOpen(false);
+        // Week mode: the decision changed that row's status in place, so the
+        // browsed week must re-read the server to show it — the local copy
+        // still says what it said before.
+        if (weekFilter !== null) void refetchWeek();
       };
 
       if (supabaseConfigured) {
-        void decideRph({
-          userId: meId,
-          documentId: item.id,
-          version: item.version,
-          payload: item.payload,
-          decision,
-          comment: comment.trim() || undefined,
-        })
-          .then(() => {
+        void (async () => {
+          try {
+            // A draft must be submitted before the decide RPCs will touch it —
+            // they only answer a `submitted` plan. `submit_rph` lets staff
+            // submit on the teacher's behalf, and it bumps the document
+            // version, so the signature envelope has to be built over the
+            // version the submit *returned*, not the one the queue row had.
+            let version = item.version;
+            if (item.status === "draft") {
+              const verdict = await submitRph(item.id, false);
+              if (verdict && !verdict.ok) {
+                // e.g. the school requires 100% completeness and this draft
+                // falls short: the server's word is final, and "hantar"
+                // (`force`) is the *teacher's* acknowledged escape hatch, not
+                // something a reviewer presses for them.
+                toast.error(verdict.error ?? "RPH tidak dapat dihantar.");
+                setDeciding(false);
+                return;
+              }
+              if (typeof verdict?.version === "number") version = verdict.version;
+              toast.success(ms.review.submitFirst);
+            }
+            await decideRph({
+              userId: meId,
+              documentId: item.id,
+              version,
+              payload: item.payload,
+              decision,
+              comment: comment.trim() || undefined,
+            });
             toast.success(decisionMessage(decision));
             applyDecision();
-          })
-          .catch((err: unknown) =>
+          } catch (err) {
+            // An expired session is NOT a review failure: claiming "Diputuskan"
+            // while the server never saw it would be a lie. Send them to re-auth.
+            if (err instanceof RpcError && err.isAuthFailure) {
+              toast.error("Sesi anda telah tamat. Sila log masuk semula.");
+              window.setTimeout(() => window.location.assign("/login"), 1200);
+              return;
+            }
             toast.error(
               `Gagal menyemak: ${err instanceof Error ? err.message : "ralat rangkaian"}`,
-            ),
-          )
-          .finally(() => setDeciding(false));
+            );
+          } finally {
+            setDeciding(false);
+          }
+        })();
       } else {
+        // Local mode: there is no server to submit to, so a draft is decided
+        // on the demo data directly.
         toast.success(decisionMessage(decision));
         applyDecision();
         setDeciding(false);
       }
     },
-    [item, deciding, graded, comment, QUEUE, meId],
+    [item, deciding, graded, comment, list, meId, weekFilter, refetchWeek],
   );
 
   React.useEffect(() => {
@@ -217,7 +308,9 @@ export default function SemakanPage() {
         {/* ── Queue ──────────────────────────────────────────────────────── */}
         <Card className="overflow-hidden">
           <CardHeader className="flex-wrap gap-2.5">
-            <CardTitle>{ms.review.queue}</CardTitle>
+            <CardTitle>
+              {weekFilter === null ? ms.review.queue : `${ms.review.weekSuffix} ${weekFilter}`}
+            </CardTitle>
             <span className="ml-auto hidden items-center gap-1.5 lg:flex">
               <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono text-[10.5px] font-semibold text-ink-3">
                 J
@@ -230,25 +323,62 @@ export default function SemakanPage() {
           </CardHeader>
 
           <div className="border-b border-border px-4 py-3">
-            <Tabs value={filter} onValueChange={(v) => setFilter(v as "belum" | "semua")}>
-              <TabsList>
-                <TabsTrigger value="belum">
-                  Belum semak ({QUEUE.length - Object.keys(graded).length})
-                </TabsTrigger>
-                <TabsTrigger value="semua">Semua ({QUEUE.length})</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <p className="mt-2 text-[11.5px] text-ink-4 lg:hidden">{ms.review.tapHint}</p>
-            <div className="mt-2.5 hidden items-center gap-2 text-[11.5px] text-ink-4 lg:flex">
-              <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
-                1
-              </kbd>
-              {ms.review.approveHint}
-              <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
-                0
-              </kbd>
-              {ms.review.grade0}
+            {/* Minggu lampau: pick a past week to browse every plan it holds,
+                or leave on "Minggu semasa" for the ordinary pending queue. */}
+            <div className="flex items-center gap-2">
+              <Label
+                htmlFor="week-filter"
+                className="shrink-0 text-[11.5px] font-semibold text-ink-3"
+              >
+                {ms.review.weekLabel}
+              </Label>
+              <Select
+                id="week-filter"
+                value={weekFilter === null ? "" : String(weekFilter)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setWeekFilter(v === "" ? null : Number(v));
+                  // The old selection belongs to the other list.
+                  setSelected(undefined);
+                  setComment("");
+                }}
+                className="h-8 min-w-0 flex-1 py-1 text-[12.5px]"
+              >
+                <option value="">{ms.review.weekCurrent}</option>
+                {weekOpts.map((o) => (
+                  <option key={o.week} value={o.week}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
             </div>
+            {weekFilter === null ? (
+              <>
+                <div className="mt-2.5">
+                  <Tabs value={filter} onValueChange={(v) => setFilter(v as "belum" | "semua")}>
+                    <TabsList>
+                      <TabsTrigger value="belum">
+                        Belum semak ({QUEUE.length - Object.keys(graded).length})
+                      </TabsTrigger>
+                      <TabsTrigger value="semua">Semua ({QUEUE.length})</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                <p className="mt-2 text-[11.5px] text-ink-4 lg:hidden">{ms.review.tapHint}</p>
+                <div className="mt-2.5 hidden items-center gap-2 text-[11.5px] text-ink-4 lg:flex">
+                  <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
+                    1
+                  </kbd>
+                  {ms.review.approveHint}
+                  <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
+                    0
+                  </kbd>
+                  {ms.review.grade0}
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-[11.5px] text-ink-4">{ms.review.browseHint}</p>
+            )}
           </div>
 
           <div className="overflow-y-auto lg:max-h-[560px]">
@@ -277,7 +407,12 @@ export default function SemakanPage() {
                     <span className="block text-[11.5px] text-ink-4">{q.ageLabel}</span>
                   </span>
                   <span className="flex flex-col items-end gap-1.5">
-                    {g === undefined ? (
+                    {weekFilter !== null ? (
+                      // Week mode lists every status, so the badge is the
+                      // plan's own — the "Baru / Lengkap / Baiki" badges below
+                      // answer a queue question, not a week question.
+                      <StatusBadge status={q.status} />
+                    ) : g === undefined ? (
                       <Badge variant="info">Baru</Badge>
                     ) : g === 1 ? (
                       <Badge variant="success">Lengkap</Badge>
@@ -290,7 +425,9 @@ export default function SemakanPage() {
             })}
             {visible.length === 0 && (
               <p className="px-4 py-10 text-center text-[13px] text-ink-4">
-                Semua RPH sudah disemak. 👍
+                {weekFilter !== null
+                  ? "Tiada RPH untuk minggu ini."
+                  : "Semua RPH sudah disemak. 👍"}
               </p>
             )}
           </div>
@@ -334,6 +471,8 @@ export default function SemakanPage() {
                 canReturn={canReturn}
                 deciding={deciding}
                 onDecide={decide}
+                readOnly={readOnly}
+                note={itemNote}
               />
             </CardContent>
           </Card>
@@ -375,11 +514,20 @@ export default function SemakanPage() {
                 canReturn={canReturn}
                 deciding={deciding}
                 onDecide={decide}
+                readOnly={readOnly}
+                note={itemNote}
               />
             </div>
 
             <div className="shrink-0 border-t border-border bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <DecisionBar canReturn={canReturn} deciding={deciding} onDecide={decide} />
+              {readOnly ? (
+                <ViewOnlyNote text={itemNote ?? ms.review.decidedNote} tone="muted" />
+              ) : (
+                <>
+                  {itemNote && <ViewOnlyNote text={itemNote} tone="info" className="mb-2.5" />}
+                  <DecisionBar canReturn={canReturn} deciding={deciding} onDecide={decide} />
+                </>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -406,6 +554,8 @@ function ReviewWorkspace({
   canReturn,
   deciding,
   onDecide,
+  readOnly = false,
+  note,
 }: {
   item: QueueItem;
   mode: "desktop" | "mobile";
@@ -416,6 +566,10 @@ function ReviewWorkspace({
   canReturn: boolean;
   deciding: boolean;
   onDecide: (decision: ReviewDecision) => void;
+  /** Week mode only: a decided plan renders without the decision controls. */
+  readOnly?: boolean;
+  /** Why the row is not (yet) decidable — the draft or decided note. */
+  note?: string;
 }) {
   const desktop = mode === "desktop";
 
@@ -436,11 +590,26 @@ function ReviewWorkspace({
 
       <div>
         <AutoCheck item={item} />
-        <CommentBox comment={comment} onComment={onComment} />
-        {desktop && (
+        {readOnly ? (
+          // A decided plan: no comment box (there is nothing to comment into),
+          // no decisions — the note says why the row is closed.
+          desktop && note ? (
+            <ViewOnlyNote text={note} tone="muted" />
+          ) : null
+        ) : (
           <>
-            <DecisionButtons canReturn={canReturn} deciding={deciding} onDecide={onDecide} />
-            <InfoNote />
+            <CommentBox comment={comment} onComment={onComment} />
+            {desktop && (
+              <>
+                <DecisionButtons
+                  canReturn={canReturn}
+                  deciding={deciding}
+                  onDecide={onDecide}
+                />
+                {note ? <ViewOnlyNote text={note} tone="info" /> : null}
+                <InfoNote />
+              </>
+            )}
           </>
         )}
       </div>
@@ -653,6 +822,37 @@ function InfoNote() {
         <br />
         {ms.review.signedNote}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Why a browsed row is not (yet) decidable, or what deciding a draft will do.
+ *
+ * `info` marks an *actionable* row with an extra step (the draft note); `muted`
+ * marks a closed one (the decided note) — the two read differently on purpose.
+ */
+function ViewOnlyNote({
+  text,
+  tone,
+  className,
+}: {
+  text: string;
+  tone: "info" | "muted";
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex gap-2.5 rounded-[10px] p-3 text-[12.5px] leading-[1.55]",
+        tone === "info"
+          ? "border border-info-line bg-info-soft text-info-ink"
+          : "border border-border bg-surface-2 text-ink-3",
+        className,
+      )}
+    >
+      <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
+      <p>{text}</p>
     </div>
   );
 }

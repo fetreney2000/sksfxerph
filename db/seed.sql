@@ -42,7 +42,7 @@ insert into erph.subject (code, nama, curriculum) values
   ('SAIN', 'Sains',         'KSSR')
 on conflict (code) do nothing;
 
--- ── 3 · classes (rph_document.class_id is NOT NULL — no class, no plan) ──────
+-- ── 3 · classes (rph_document.class_ids is NOT NULL — no class, no plan) ─────
 insert into erph.class (school_id, nama, tahun, session)
 select s.id, v.nama, v.tahun, '2026/2027'
 from erph.school s
@@ -88,9 +88,9 @@ on conflict do nothing;
 -- aktiviti + refleksi), status 'submitted' so a Guru Besar logging in can
 -- grade it immediately.
 insert into erph.rph_document
-  (school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
+  (school_id, owner_id, class_ids, subject_code, session, week_no, plan_date,
    slot_time, slot_time_end, status, payload, version, submitted_at)
-select s.id, u.id, c.id, 'MAT', '2026/2027', 1, date '2026-10-05',
+select s.id, u.id, array[c.id], 'MAT', '2026/2027', 1, date '2026-10-05',
        time '07:30', time '12:40', 'submitted',
        jsonb_build_object(
          'payload_version', 2,
@@ -120,6 +120,6 @@ join erph.class c on c.school_id = s.id and c.nama = '5 Amanah' and c.session = 
 where s.kod_sekolah = 'SK0000'
   and not exists (
     select 1 from erph.rph_document d
-    where d.school_id = s.id and d.owner_id = u.id and d.class_id = c.id
+    where d.school_id = s.id and d.owner_id = u.id and c.id = any(d.class_ids)
       and d.session = '2026/2027' and d.week_no = 1 and d.plan_date = date '2026-10-05'
   );

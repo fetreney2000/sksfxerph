@@ -58,7 +58,18 @@ language sql stable security definer set search_path = erph, public as $$
              and exists (select 1 from erph.rph_review r
                           where r.document_id = d2.id and r.grade = 1)),
          max(d.reviewed_at),
-         string_agg(distinct c.nama, ', ' order by c.nama)
+         -- Classes per teacher, as a self-contained subquery rather than a
+         -- join: a plan now covers several classes, so joining class onto the
+         -- document would multiply every row of it and inflate the counts
+         -- above — and the function body is SQL with a GROUP BY on the
+         -- teacher, which an outer reference to d.class_ids cannot survive.
+         (select string_agg(distinct c.nama, ', ' order by c.nama)
+            from erph.rph_document d2
+            join erph.class c on c.id = any(d2.class_ids)
+           where d2.owner_id = m.user_id
+             and d2.school_id = p_school
+             and d2.session = p_session
+             and d2.deleted_at is null)
     from erph.school_member m
     join erph.user u on u.id = m.user_id
     left join erph.rph_document d
@@ -66,7 +77,6 @@ language sql stable security definer set search_path = erph, public as $$
           and d.school_id = m.school_id
           and d.session = p_session
           and d.deleted_at is null
-    left join erph.class c on c.id = d.class_id
    where m.school_id = p_school
      and m.is_active
      and m.role in ('guru_biasa','gpk','guru_besar')

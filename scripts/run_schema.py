@@ -274,8 +274,9 @@ def main() -> int:
     # Bump when adding a function — this count is a guard against one being
     # lost, not a formality. 012 added `jawatan_for` and `admin_set_jawatan`;
     # 015 added `admin_set_profile` and `admin_edit_subject`; 019 added
-    # `admin_set_calendar_week` and `admin_clear_calendar_week`.
-    check("41 functions in erph", n_funcs == 41, f"found {n_funcs}")
+    # `admin_set_calendar_week` and `admin_clear_calendar_week`; 020 added
+    # `classes_in_school` and `teaches_classes`.
+    check("43 functions in erph", n_funcs == 43, f"found {n_funcs}")
 
     # NOTE: group into lists — a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -379,8 +380,8 @@ def main() -> int:
             insert into erph.school_setting (school_id) select id from erph.school where kod_sekolah='SKTEST';
             insert into erph.class (school_id, nama, tahun, session)
             select id, '5 Ujian', 5, '2026/2027' from erph.school where kod_sekolah='SKTEST';
-            insert into erph.rph_document (school_id, owner_id, class_id, subject_code, session, week_no, plan_date, payload)
-            select s.id, u.id, c.id, 'MAT', '2026/2027', 1, '2026-10-05',
+            insert into erph.rph_document (school_id, owner_id, class_ids, subject_code, session, week_no, plan_date, payload)
+            select s.id, u.id, array[c.id], 'MAT', '2026/2027', 1, '2026-10-05',
                    -- A *complete* payload: the review RPCs now refuse to
                    -- approve a plan that is missing sections, so the fixture
                    -- has to be one that could honestly be approved. The
@@ -775,9 +776,9 @@ def main() -> int:
         # the grade — so a false grade is a false figure.
         r.q(
             f"""
-            insert into erph.rph_document (school_id, owner_id, class_id, subject_code,
+            insert into erph.rph_document (school_id, owner_id, class_ids, subject_code,
                                            session, week_no, plan_date, payload)
-            select s.id, u.id, c.id, 'MAT', '2026/2027', 4, '2026-10-26',
+            select s.id, u.id, array[c.id], 'MAT', '2026/2027', 4, '2026-10-26',
                    jsonb_build_object('objektif', 'Hanya objektif')
               from erph.school s, erph.user u, erph.class c
              where s.kod_sekolah='SKTEST' and c.nama='5 Ujian' and u.username='uji';
@@ -1297,9 +1298,9 @@ def main() -> int:
         # the version moved under the signature that reviewer was about to make.
         r.q(
             """
-            insert into erph.rph_document (school_id, owner_id, class_id, subject_code,
+            insert into erph.rph_document (school_id, owner_id, class_ids, subject_code,
                                            session, week_no, plan_date, payload)
-            select s.id, u.id, c.id, 'MAT', '2026/2027', 2, '2026-10-12',
+            select s.id, u.id, array[c.id], 'MAT', '2026/2027', 2, '2026-10-12',
                    '{"objektif":"asli"}'::jsonb
               from erph.school s, erph.user u, erph.class c
              where s.kod_sekolah='SKTEST' and c.nama='5 Ujian' and u.username='uji';
@@ -1325,7 +1326,7 @@ def main() -> int:
                 {
                     "op_id": str(uuid.uuid4()),
                     "id": str(doc2),
-                    "class_id": str(class_id),
+                    "class_ids": [str(class_id)],
                     "subject_code": "MAT",
                     "session": "2026/2027",
                     "week_no": 2,
@@ -1359,6 +1360,65 @@ def main() -> int:
                 after[2] == "submitted",
                 f"status now {after[2]}",
             )
+        )
+
+        # ── one plan may cover several classes ─────────────────────────────
+        # 020 widened `class_id` to `class_ids`: the wizard ticks classes, so a
+        # plan filed for two classes is one document with both. The op's set is
+        # canonicalised server-side, an overlap with an existing plan merges
+        # onto it, and a lone `class_id` — what the first release sent — is
+        # still honoured as a one-element set, because an installed PWA keeps
+        # running the app shell it precached.
+        #
+        # '6 Ujian' already exists — the admin console test above created it.
+        class_id2 = r.one("select id from erph.class where nama='6 Ujian'")[0]
+
+        act_as("uji")
+        multi_op = json.dumps(
+            [
+                {
+                    "op_id": str(uuid.uuid4()),
+                    "id": str(uuid.uuid4()),
+                    "class_ids": [str(class_id), str(class_id2)],
+                    "subject_code": "MAT",
+                    "session": "2026/2027",
+                    "week_no": 6,
+                    "plan_date": "2026-11-02",
+                    "payload": {"objektif": "Dua kelas"},
+                },
+                # The same logical plan, flushed from a second device with the
+                # scalar wire format: one of the two classes, same key.
+                {
+                    "op_id": str(uuid.uuid4()),
+                    "class_id": str(class_id2),
+                    "subject_code": "MAT",
+                    "session": "2026/2027",
+                    "week_no": 6,
+                    "plan_date": "2026-11-02",
+                    "payload": {"objektif": "Dari peranti kedua"},
+                },
+            ]
+        )
+        r.q(f"select erph.sync_rph('{multi_op}'::jsonb)")
+        conn.commit()
+        merged = r.one(
+            f"""
+            select class_ids::text, payload->>'objektif', (select count(*) from erph.rph_document d3
+             where d3.owner_id = (select id from erph.user where username='uji')
+               and d3.session = '2026/2027' and d3.week_no = 6)
+              from erph.rph_document
+             where school_id = {SK} and week_no = 6
+            """
+        )
+        got_ids = set(str(merged[0]).strip("{}").split(",")) & {str(class_id), str(class_id2)}
+        admin.append(
+            ("sync applies a multi-class plan as one document", merged[2] == 1, f"{merged[2]} rows"),
+        )
+        admin.append(
+            ("…and the overlapping op unions into it", sorted(got_ids) == sorted([str(class_id), str(class_id2)]), merged[0]),
+        )
+        admin.append(
+            ("…with the newer payload", merged[1] == "Dari peranti kedua", str(merged[1])),
         )
 
         # ── the Administrator is visible only to a pentadbir ──────────────

@@ -62,7 +62,7 @@
 -- deliberately, because a statutory record must not vanish when a person row
 -- does:   rph_document.owner_id · rph_document.reviewed_by
 --         rph_review.reviewer_id · export_file.created_by
--- plus rph_document.class_id / .subject_code, dskp_standard.subject_code,
+-- plus rph_document.subject_code, dskp_standard.subject_code,
 -- rph_template.subject_code and teaching_assignment.subject_code — all
 -- RESTRICT on reference data.
 --
@@ -78,7 +78,7 @@ begin;
 select set_config('app.purge', '1', false);
 
 -- ── 2 · saved eRPH ─────────────────────────────────────────────────────────
--- First, because owner_id, reviewed_by, class_id and subject_code are all
+-- First, because owner_id, reviewed_by and subject_code are all
 -- RESTRICT. Cascades into rph_revision and rph_review — that is what step 1
 -- exists for — and into export_file.document_id.
 delete from erph.rph_document;

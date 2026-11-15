@@ -53,10 +53,14 @@ const MATRIX: Record<MemberRole, readonly Permission[]> = {
   // Guru Mata Pelajaran (KPM HR12–HR21): their own RPH and nothing else.
   guru_biasa: ["rph", "templat"],
   // GPK Pentadbiran (KPM HR02) — "menyelia dan menilai pengajaran" — so it
-  // supervises: grade, monitor, report, and see who reviewed what.
+  // supervises: grade, monitor, report, and see who reviewed what. A GPK still
+  // teaches, so they keep `rph` for their own classes.
   gpk: ["rph", "semak", "pantau", "laporan", "audit", "templat"],
-  // PGB (KPM HR01) reaches the same screens as its GPK today.
-  guru_besar: ["rph", "semak", "pantau", "laporan", "audit", "templat"],
+  // PGB (KPM HR01) supervises the whole school but teaches no class: no `rph`,
+  // so no /minggu, /arkib or /editor — only the supervision screens above.
+  // They stay a reviewer (`semak`) with school-wide scope, which is what
+  // `erph.may_supervise` checks independently of this table.
+  guru_besar: ["semak", "pantau", "laporan", "audit", "templat"],
   // Administrator sets the app up. Deliberately outside `is_staff` in SQL, so
   // it can never grade a plan, read whole-school compliance or open the log —
   // and deliberately *without* `rph`: they do not teach, so they have no plans
@@ -85,10 +89,14 @@ export const REVIEWER_ROLES: readonly MemberRole[] = ["gpk", "guru_besar"];
  *
  * Derived rather than configured: the Administrator has no `rph`, so sending
  * them to `/minggu` — a page gated on `rph` — would bounce them straight back
- * and produce a redirect loop. One rule, used by `/`, `/login` and every
- * `requirePermission` fallback, so the three can never disagree.
+ * and produce a redirect loop. The Guru Besar is the same shape with a
+ * different job: no `rph` either, but a review queue to work through, so they
+ * land on `/semakan` rather than the admin console. One rule, used by `/`,
+ * `/login` and every `requirePermission` fallback, so the three can never
+ * disagree.
  */
 export function homeFor(role: string | null | undefined): string {
+  if (!can(role, "rph") && can(role, "semak")) return "/semakan";
   return can(role, "rph") ? "/minggu" : "/utama";
 }
 

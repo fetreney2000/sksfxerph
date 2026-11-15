@@ -424,7 +424,15 @@ create table erph.rph_document (
   id               uuid primary key default gen_random_uuid(),
   school_id        uuid not null references erph.school(id),
   owner_id         uuid not null references erph.user(id),
-  class_id         uuid not null references erph.class(id),   -- wizard step 1 ⇒ NOT NULL
+  class_ids        uuid[] not null
+                   constraint rph_document_class_ids_check
+                   check (cardinality(class_ids) between 1 and 30),
+                   -- wizard step 1 ⇒ NOT NULL; one plan may cover several classes.
+                   -- No FK: a foreign key cannot span array elements, so tenant
+                   -- and teaching checks move to classes_in_school() /
+                   -- teaches_classes() in the policies, and sync_rph validates
+                   -- every element before it writes. Classes are archived, never
+                   -- deleted, so a dangling id has nowhere to come from.
   subject_code     text not null references erph.subject(code),
   session          text not null check (session ~ '^[0-9]{4}/[0-9]{4}$'),
   week_no          smallint not null check (week_no between 1 and 52),
@@ -480,11 +488,13 @@ create table erph.rph_document (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
--- Idempotency key: one live plan per teacher×class×subject×week×date.
--- All key columns are NOT NULL, so the plain unique index behaves as expected
--- (PostgreSQL treats NULLs as distinct — which is why class_id/subject_code are NOT NULL).
+-- Idempotency key: one live plan per teacher×class-set×subject×week×date.
+-- `class_ids` is stored canonically — sorted and de-duplicated, which sync_rph
+-- does before it writes — so array equality under the btree is deterministic
+-- and an exact-duplicate race (the same plan flushed twice from two tabs)
+-- still collides here and merges, exactly as the single-class key did.
 create unique index rph_document_uniq
-  on erph.rph_document (owner_id, class_id, subject_code, session, week_no, plan_date)
+  on erph.rph_document (owner_id, class_ids, subject_code, session, week_no, plan_date)
   where deleted_at is null;
 create index rph_document_school_week_idx on erph.rph_document (school_id, session, week_no, status);
 create index rph_document_owner_idx       on erph.rph_document (owner_id, session, week_no, plan_date)
@@ -780,7 +790,18 @@ language sql stable security definer set search_path = erph, public as $$
              and exists (select 1 from erph.rph_review r
                           where r.document_id = d2.id and r.grade = 1)),
          max(d.reviewed_at),
-         string_agg(distinct c.nama, ', ' order by c.nama)
+         -- Classes per teacher, as a self-contained subquery rather than a
+         -- join: a plan now covers several classes, so joining class onto the
+         -- document would multiply every row of it and inflate the counts
+         -- above — and the function body is SQL with a GROUP BY on the
+         -- teacher, which an outer reference to d.class_ids cannot survive.
+         (select string_agg(distinct c.nama, ', ' order by c.nama)
+            from erph.rph_document d2
+            join erph.class c on c.id = any(d2.class_ids)
+           where d2.owner_id = m.user_id
+             and d2.school_id = p_school
+             and d2.session = p_session
+             and d2.deleted_at is null)
     from erph.school_member m
     join erph.user u on u.id = m.user_id
     left join erph.rph_document d
@@ -788,7 +809,6 @@ language sql stable security definer set search_path = erph, public as $$
           and d.school_id = m.school_id
           and d.session = p_session
           and d.deleted_at is null
-    left join erph.class c on c.id = d.class_id
    where m.school_id = p_school
      and m.is_active
      and m.role in ('guru_biasa','gpk','guru_besar')
@@ -1011,6 +1031,27 @@ returns boolean language sql stable security definer set search_path = erph, pub
           join erph.class c2 on c2.id = t2.class_id
           where t2.user_id = erph.actor() and c2.school_id = c.school_id)
     );
+$$;
+
+-- Array forms for rph_document.class_ids: one plan may cover several classes,
+-- and every one of them must pass the same test the single-class version
+-- applied. Expressed as "no element fails" rather than "some element passes",
+-- so an empty or all-NULL list can never sneak through — unnest of an empty
+-- array yields no rows, which makes these vacuously true, and the table's
+-- cardinality check is what refuses that case.
+create or replace function erph.classes_in_school(p_ids uuid[], p_school uuid)
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select not exists (
+    select 1 from unnest(p_ids) u(id)
+     where not exists (
+       select 1 from erph.class c where c.id = u.id and c.school_id = p_school));
+$$;
+
+create or replace function erph.teaches_classes(p_ids uuid[])
+returns boolean language sql stable security definer set search_path = erph, public as $$
+  select not exists (
+    select 1 from unnest(p_ids) u(id)
+     where not erph.teaches_class(u.id));
 $$;
 
 -- SUBMIT ─ enforce KPM completeness, stamp state, keep history
@@ -1238,14 +1279,16 @@ begin
 end $$;
 
 -- SYNC ─ batch, idempotent, offline-friendly; returns authoritative versions.
--- p_ops: [{op_id, id?, entity:'rph', class_id, subject_code, session, week_no,
---          plan_date, payload, status?, client_updated_at?, content_hash?}]
+-- p_ops: [{op_id, id?, entity:'rph', class_ids (or legacy single class_id),
+--          subject_code, session, week_no, plan_date, payload, status?,
+--          client_updated_at?, content_hash?}]
 create or replace function erph.sync_rph(p_ops jsonb)
 returns jsonb language plpgsql security definer set search_path = erph, public as $$
 declare
   v_op jsonb; v_op_id uuid; v_id uuid; v_uid uuid := erph.actor();
   v_school uuid; v_doc_id uuid; v_ver int; v_status erph.rph_status;
   v_rows int; v_pct smallint; v_client_ts timestamptz;
+  v_class_ids uuid[]; v_by_id boolean;
   v_out jsonb := '[]'::jsonb;
 begin
   if v_uid is null then raise exception 'Belum log masuk'; end if;
@@ -1290,11 +1333,37 @@ begin
         continue;
       end if;
 
-      -- 2) validate target class belongs to caller's school + session
-      if not exists (
-           select 1 from erph.class c
-            where c.id = (v_op->>'class_id')::uuid
-              and c.school_id = v_school and c.session = v_op->>'session' and c.is_active)
+      -- 2) the classes this op writes to. `class_ids` is the wire format now —
+      -- one plan may cover several classes. A lone `class_id` is what the first
+      -- release sent, and is still honoured as a one-element set: an installed
+      -- PWA keeps running the app shell it precached, and refusing it would
+      -- strand every queued plan on that device.
+      --
+      -- Canonical order is decided here, not at the client: sorted and
+      -- de-duplicated, so the btree under rph_document_uniq compares equal sets
+      -- as equal and the unique index keeps catching an exact-duplicate race.
+      v_class_ids :=
+        coalesce(
+          (select array_agg(distinct x::uuid order by x::uuid)
+             from jsonb_array_elements_text(v_op->'class_ids') t(x)),
+          (select array[(v_op->>'class_id')::uuid]));
+      if v_class_ids is null
+         or exists (select 1 from unnest(v_class_ids) u(id) where u.id is null) then
+        v_out := v_out || jsonb_build_array(
+          jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
+                             'error', 'Sekurang-kurangnya satu kelas diperlukan'));
+        continue;
+      end if;
+
+      -- 2b) validate every class belongs to caller's school + session
+      if exists (
+           select 1 from unnest(v_class_ids) u(id)
+            where not exists (
+              select 1 from erph.class c
+               where c.id = u.id
+                 and c.school_id = v_school
+                 and c.session = v_op->>'session'
+                 and c.is_active))
       then
         v_out := v_out || jsonb_build_array(
           jsonb_build_object('op_id', v_op_id, 'result', 'rejected', 'retryable', false,
@@ -1308,22 +1377,53 @@ begin
         continue;
       end if;
 
-      -- 3) resolve canonical row: by id, else by natural key (merge duplicates)
+      -- 3) resolve canonical row: by id, else by natural key (merge duplicates).
+      --
+      -- The class half of the natural key is now an *overlap* (`&&`): the same
+      -- lesson written twice collides only when both claim a shared class.
+      -- Disjoint sets are two different lessons and may coexist.
+      --
+      -- Which branch resolved the row decides how the class list merges below.
+      -- An op that names its own row (by id) is authoritative and the list may
+      -- shrink — that is the editor's "untick a class" doing its job. An op
+      -- resolved by key is an offline duplicate, and its classes union *in*
+      -- rather than overwriting, so two devices that split the classes of one
+      -- lesson between them lose nothing when they finally reach the server.
+      v_by_id := false;
       select id, version, status into v_doc_id, v_ver, v_status
         from erph.rph_document
        where owner_id = v_uid and deleted_at is null
-         and (id = v_id
-              or (class_id = (v_op->>'class_id')::uuid
-                  and subject_code = v_op->>'subject_code'
-                  and session = v_op->>'session'
-                  and week_no = (v_op->>'week_no')::smallint
-                  and plan_date = (v_op->>'plan_date')::date))
-       order by (id = v_id) desc
-       limit 1;
+         and id = v_id;
+      if found then
+        v_by_id := true;
+      else
+        select id, version, status into v_doc_id, v_ver, v_status
+          from erph.rph_document
+         where owner_id = v_uid and deleted_at is null
+           and subject_code = v_op->>'subject_code'
+           and session = v_op->>'session'
+           and week_no = (v_op->>'week_no')::smallint
+           and plan_date = (v_op->>'plan_date')::date
+           and class_ids && v_class_ids
+         limit 1;
+      end if;
 
       if v_doc_id is not null then
+        begin
         update erph.rph_document
-           set -- A plan a reviewer is reading is not editable. The editor already
+           set -- The class list. An op that named its own row (v_by_id) is
+               -- authoritative, so the set may shrink: that is the editor's
+               -- "untick a class" doing its job. An op resolved by natural key
+               -- is an offline duplicate, so its classes union *in* rather than
+               -- overwrite, and two devices that split one lesson's classes
+               -- between them lose nothing when they reach the server.
+               class_ids = case when v_by_id
+                                then v_class_ids
+                                else (select array_agg(distinct x order by x)
+                                        from unnest(erph.rph_document.class_ids
+                                                    || v_class_ids) t(x))
+                           end,
+               -- A plan a reviewer is reading is not editable. The editor already
                -- locks a plan once it has been submitted (`weekLocked`), and the
                -- server now says the same: only a draft, or a returned plan the
                -- teacher is fixing, may be rewritten. Without this a client that
@@ -1365,13 +1465,47 @@ begin
                                    then now() else submitted_at end
          where id = v_doc_id and owner_id = v_uid
         returning version, status into v_ver, v_status;
+        exception when unique_violation then
+          -- The by-id rewrite claimed a class set that collides with another
+          -- live plan on the same subject, week and date — a teacher unticking
+          -- one class while a second plan still claims another. Refusing would
+          -- leave the op retryable and the queue stuck behind it, so instead
+          -- the lists union and the teacher resolves the overlap in the editor.
+          update erph.rph_document
+             set class_ids = (select array_agg(distinct x order by x)
+                                from unnest(erph.rph_document.class_ids
+                                            || v_class_ids) t(x)),
+                payload = case when status in ('draft','returned')
+                               then v_op->'payload' else payload end,
+                version = version + case when status in ('draft','returned')
+                               then 1 else 0 end,
+                client_updated_at = v_client_ts,
+                slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
+                slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end),
+                content_hash = case when status in ('draft','returned')
+                               then coalesce(v_op->>'content_hash', content_hash)
+                               else content_hash end,
+                status = case
+                          when v_op->>'status' is null then status
+                          when status in ('approved', 'returned')
+                               and v_op->>'status' <> 'submitted' then status
+                          when v_op->>'status' = 'submitted' and v_pct = 100
+                            then 'submitted'::erph.rph_status
+                          else status
+                        end,
+                submitted_at = case when v_op->>'status' = 'submitted' and v_pct = 100
+                                    and submitted_at is null
+                                    then now() else submitted_at end
+          where id = v_doc_id and owner_id = v_uid
+        returning version, status into v_ver, v_status;
+        end;
       else
         begin
           insert into erph.rph_document
-            (id, school_id, owner_id, class_id, subject_code, session, week_no, plan_date,
+            (id, school_id, owner_id, class_ids, subject_code, session, week_no, plan_date,
              slot_time, slot_time_end, payload, status, version, client_updated_at, content_hash, submitted_at)
           values
-            (v_id, v_school, v_uid, (v_op->>'class_id')::uuid, v_op->>'subject_code',
+            (v_id, v_school, v_uid, v_class_ids, v_op->>'subject_code',
              v_op->>'session', (v_op->>'week_no')::smallint, (v_op->>'plan_date')::date,
              coalesce((v_op->>'slot_time')::time, '07:30'::time),
              coalesce((v_op->>'slot_time_end')::time, '12:40'::time),
@@ -1385,9 +1519,15 @@ begin
              case when v_op->>'status' = 'submitted' and v_pct = 100 then now() end)
           returning id, version, status into v_doc_id, v_ver, v_status;
         exception when unique_violation then
-          -- race: another request created the same logical plan → merge into it
+          -- race: another request created the same logical plan → merge into it.
+          -- The class lists union: the racing op may have arrived with a wider
+          -- set than the row that won the insert, and dropping a class here
+          -- would strand a lesson a device already filed.
           update erph.rph_document
-             set -- Same rule as the branch above: a plan under review is not
+             set class_ids = (select array_agg(distinct x order by x)
+                                from unnest(erph.rph_document.class_ids
+                                            || v_class_ids) t(x)),
+                 -- Same rule as the branch above: a plan under review is not
                  -- rewritten, and its version does not move either.
                  payload = case when status in ('draft','returned')
                                 then v_op->'payload' else payload end,
@@ -1397,7 +1537,7 @@ begin
                  slot_time = coalesce((v_op->>'slot_time')::time, slot_time),
                  slot_time_end = coalesce((v_op->>'slot_time_end')::time, slot_time_end)
            where owner_id = v_uid
-             and class_id = (v_op->>'class_id')::uuid
+             and class_ids && v_class_ids
              and subject_code = v_op->>'subject_code'
              and session = v_op->>'session'
              and week_no = (v_op->>'week_no')::smallint
@@ -1771,7 +1911,7 @@ begin
 end $$;
 
 -- ── Classes ──────────────────────────────────────────────────────────────────
--- `rph_document.class_id` is NOT NULL and `sync_rph` refuses a class outside
+-- `rph_document.class_ids` is NOT NULL and `sync_rph` refuses a class outside
 -- the caller's school and session, so a class list the administrator cannot
 -- edit means a class list nobody can ever plan against. This is the source the
 -- editor reads — the demo fixtures in `lib/demo/seed.ts` are local-mode only
@@ -1783,7 +1923,7 @@ returns table (id uuid, nama text, tahun smallint, tingkatan smallint,
 language sql stable security definer set search_path = erph, public as $$
   select c.id, c.nama, c.tahun, c.tingkatan, c.is_active,
          (select count(*) from erph.rph_document d
-           where d.class_id = c.id and d.deleted_at is null)
+           where c.id = any(d.class_ids) and d.deleted_at is null)
     from erph.class c
    where c.school_id = p_school and c.session = p_session
      and erph.has_role(p_school, array['pentadbir']::erph.member_role[])
@@ -2274,15 +2414,15 @@ create policy rph_owner_insert on erph.rph_document
   for insert with check (
     owner_id = erph.actor()
     and school_id in (select unnest(erph.my_schools()))
-    and erph.class_in_school(class_id, school_id)
-    and erph.teaches_class(class_id)
+    and erph.classes_in_school(class_ids, school_id)
+    and erph.teaches_classes(class_ids)
   );
 create policy rph_owner_update on erph.rph_document
   for update using (owner_id = erph.actor() and deleted_at is null)
   with check (
     owner_id = erph.actor()
     and school_id in (select unnest(erph.my_schools()))
-    and erph.class_in_school(class_id, school_id)
+    and erph.classes_in_school(class_ids, school_id)
   );
 -- A GPK reads only the plans of the teachers assigned to them; a Guru Besar
 -- reads the whole school, and everyone reads their own.

@@ -50,6 +50,12 @@ describe("navigation — the home matches the role", () => {
     expect(hrefs).not.toContain("/semakan");
     expect(hrefs).not.toContain("/utama");
   });
+
+  it("gives the Guru Besar the supervision screens but no week or archive", () => {
+    // A Guru Besar teaches no class: /minggu and /arkib are `rph` screens and
+    // must not appear, while the review queue is their landing page.
+    expect(hrefsFor("guru_besar")).toEqual(["/semakan", "/sekolah", "/laporan", "/templat"]);
+  });
 });
 
 describe("mobile navigation — four tabs, then Lagi", () => {
@@ -72,6 +78,18 @@ describe("mobile navigation — four tabs, then Lagi", () => {
     const { primary, secondary } = mobileNavFor("guru_biasa");
 
     expect(primary.map((item) => item.href)).toEqual(["/minggu", "/arkib", "/templat"]);
+    expect(secondary).toEqual([]);
+  });
+
+  it("gives the Guru Besar their four supervision screens directly", () => {
+    const { primary, secondary } = mobileNavFor("guru_besar");
+
+    expect(primary.map((item) => item.href)).toEqual([
+      "/semakan",
+      "/sekolah",
+      "/laporan",
+      "/templat",
+    ]);
     expect(secondary).toEqual([]);
   });
 

@@ -153,10 +153,11 @@ export default function MingguPage() {
           teacher was looking at when they pressed the button. */}
       <div data-print="screen">
         {/* ── Reviewer queue ─────────────────────────────────────────────────
-            The Guru Besar and GPK also hold plans of their own, so they keep
-            Minggu Ini as their home. Their real job still comes first: the
-            queue the red sidebar badge points at is now a band above the week,
-            not a number they have to notice and decode. */}
+            The GPK also holds plans of their own, so they keep Minggu Ini as
+            their home (the Guru Besar teaches no class and lands on /semakan
+            instead). Their real job still comes first: the queue the red
+            sidebar badge points at is now a band above the week, not a number
+            they have to notice and decode. */}
         {pendingReviews > 0 && (
           <Link
             href="/semakan"
@@ -489,7 +490,7 @@ export default function MingguPage() {
                       <div className="min-w-0">
                         <p className="text-[12.8px] leading-[1.5] text-ink-2">
                           <b className="text-ink">
-                            RPH {d.className} · {d.subjectName}
+                            RPH {d.classNames.join(", ")} · {d.subjectName}
                           </b>{" "}
                           {d.status === "approved"
                             ? "telah disahkan"
@@ -625,10 +626,10 @@ function PlanRow({ doc }: { doc: RphDocument }) {
     <TR className={doc.status === "draft" ? "bg-primary-soft" : undefined}>
       <TD>
         <div className="flex items-center gap-2.5">
-          <Avatar initials={doc.className.slice(0, 2)} tone="blue" small />
+          <Avatar initials={doc.classNames.join(", ").slice(0, 2)} tone="blue" small />
           <div className="min-w-0">
             <div className="truncate font-semibold">
-              {doc.className} · {doc.subjectName}
+              {doc.classNames.join(", ")} · {doc.subjectName}
             </div>
             <div className="text-[11.5px] text-ink-3">{doc.subjectCode}</div>
           </div>
@@ -703,12 +704,12 @@ function PlanCard({ doc }: { doc: RphDocument }) {
   return (
     <li className={cn("p-4", doc.status === "draft" && "bg-primary-soft")}>
       <div className="flex items-start gap-3">
-        <Avatar initials={doc.className.slice(0, 2)} tone="blue" small />
+        <Avatar initials={doc.classNames.join(", ").slice(0, 2)} tone="blue" small />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-[14px] font-bold">
-                {doc.className} · {doc.subjectName}
+                {doc.classNames.join(", ")} · {doc.subjectName}
               </p>
               <p className="text-[11.5px] text-ink-3">{doc.subjectCode}</p>
             </div>

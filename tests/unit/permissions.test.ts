@@ -10,8 +10,10 @@ import { can, homeFor, permissionsFor, REVIEWER_ROLES } from "@/lib/auth/permiss
  *
  * The four roles and their intended reach, from the review that produced them:
  *   Guru Biasa        — their own RPH, nothing else
- *   Guru Penolong Kanan — supervise: grade, monitor, report, read the log
- *   Guru Besar        — the same screens as its GPK
+ *   Guru Penolong Kanan — their own RPH, plus supervise: grade, monitor, report,
+ *                         read the log
+ *   Guru Besar        — supervise only: grade, monitor, report, read the log.
+ *                       They teach no class, so no RPH of their own.
  *   Administrator     — set the app up and curate templates; never teach,
  *                       grade, monitor or read the log
  */
@@ -31,8 +33,15 @@ describe("permissions", () => {
     ]);
   });
 
-  it("Guru Besar reaches the same screens as its GPK", () => {
-    expect(permissionsFor("guru_besar")).toEqual(permissionsFor("gpk"));
+  it("Guru Besar supervises without writing plans", () => {
+    expect(permissionsFor("guru_besar")).toEqual([
+      "semak",
+      "pantau",
+      "laporan",
+      "audit",
+      "templat",
+    ]);
+    expect(can("guru_besar", "rph")).toBe(false);
   });
 
   it("Administrator sets up the app and never grades", () => {
@@ -44,7 +53,7 @@ describe("permissions", () => {
   });
 
   /**
-   * The Administrator does not teach.
+   * The Administrator does not teach — and neither does the Guru Besar.
    *
    * Holding `rph` would let them create, submit and be graded on plans of their
    * own — and would put `/minggu`, `/editor` and `/arkib` in front of someone
@@ -55,7 +64,7 @@ describe("permissions", () => {
   it("Administrator holds no plans of their own", () => {
     expect(can("pentadbir", "rph")).toBe(false);
     expect(can("pentadbir", "templat")).toBe(true);
-    for (const role of ["guru_biasa", "gpk", "guru_besar"]) {
+    for (const role of ["guru_biasa", "gpk"]) {
       expect(can(role, "rph"), `${role} should hold plans`).toBe(true);
       expect(can(role, "templat"), `${role} should reach the library`).toBe(true);
     }
@@ -64,21 +73,28 @@ describe("permissions", () => {
   /**
    * `homeFor` is what `/`, `/login` and every `requirePermission` fallback
    * redirect to. Getting it wrong for the Administrator means redirecting them
-   * to a page that gates on `rph` — which sends them back, in a loop.
+   * to a page that gates on `rph` — which sends them back, in a loop. The Guru
+   * Besar is the same shape with a different destination: no `rph` either, but
+   * a review queue to work through.
    */
   it("sends each role to a home it is actually allowed to open", () => {
     expect(homeFor("guru_biasa")).toBe("/minggu");
     expect(homeFor("gpk")).toBe("/minggu");
-    expect(homeFor("guru_besar")).toBe("/minggu");
+    expect(homeFor("guru_besar")).toBe("/semakan");
     expect(homeFor("pentadbir")).toBe("/utama");
     expect(homeFor("system")).toBe("/utama");
     expect(homeFor(undefined)).toBe("/utama");
     // Whatever home is chosen, the role must be permitted to be there.
+    const needed: Record<string, "rph" | "semak" | "pentadbir"> = {
+      "/minggu": "rph",
+      "/semakan": "semak",
+      "/utama": "pentadbir",
+    };
     for (const role of ["guru_biasa", "gpk", "guru_besar", "pentadbir", "system"]) {
       const home = homeFor(role);
-      const needed = home === "/minggu" ? "rph" : "pentadbir";
-      const allowed = home === "/minggu" ? can(role, "rph") : true;
-      expect(allowed, `${role} -> ${home} needs ${needed}`).toBe(true);
+      const perm = needed[home] ?? "pentadbir";
+      const allowed = home === "/utama" ? true : can(role, perm);
+      expect(allowed, `${role} -> ${home} needs ${perm}`).toBe(true);
     }
   });
 

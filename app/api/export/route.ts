@@ -53,7 +53,10 @@ const bodySchema = z.object({
   // header parameter early.
   schoolName: z.string().max(120).optional(),
   planDate: z.string().max(20).optional(),
-  className: z.string().max(80).optional(),
+  // Up to 30 classes joined with ", " — the joined label of a multi-class
+  // plan, not one name. Class names are short (school registers), but the
+  // bound has to survive thirty of them, not one long one.
+  className: z.string().max(600).optional(),
   subjectName: z.string().max(120).optional(),
   /** Masa Mula / Masa Tamat — both are printed, so both are carried through. */
   slotTime: z.string().max(10).optional(),

@@ -156,7 +156,7 @@ returns table (id uuid, nama text, tahun smallint, tingkatan smallint,
 language sql stable security definer set search_path = erph, public as $$
   select c.id, c.nama, c.tahun, c.tingkatan, c.is_active,
          (select count(*) from erph.rph_document d
-           where d.class_id = c.id and d.deleted_at is null)
+           where c.id = any(d.class_ids) and d.deleted_at is null)
     from erph.class c
    where c.school_id = p_school and c.session = p_session
      and erph.has_role(p_school, array['pentadbir']::erph.member_role[])

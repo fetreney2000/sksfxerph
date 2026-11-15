@@ -187,6 +187,17 @@ export const ms = {
     grade0: "kembalikan",
     signedNote:
       "Mengesahkan bermakna menandatangani rancangan ini dengan kunci penyemak sendiri — nama, versi dan masa keputusan tercatat bersamanya, dan guru boleh mengesahkannya sendiri.",
+    // ── Minggu lampau (week browser) ─────────────────────────────────────────
+    // The week picker beside the queue: a reviewer reaching a backdated RPH
+    // the teacher never submitted, or reading a past week whole.
+    weekLabel: "Semak minggu lampau",
+    weekCurrent: "Minggu semasa",
+    weekSuffix: "Minggu",
+    browseHint: "Memaparkan semua RPH minggu ini — draf, dihantar dan yang sudah diputuskan.",
+    draftNote:
+      "Draf belum dihantar guru. Sahkan di sini untuk menghantarnya bagi pihak guru terlebih dahulu, kemudian buat keputusan.",
+    decidedNote: "RPH ini sudah diputuskan — paparan sahaja.",
+    submitFirst: "Dihantar bagi pihak guru",
   },
 
   a11y: {

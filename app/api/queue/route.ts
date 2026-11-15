@@ -59,6 +59,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const stage = reviewStageFor(gate.user.role);
   if (!stage) return NextResponse.json({ items: [] as QueueItem[] }, { status: 403 });
 
+  // ── Week mode (`?week=N`) ────────────────────────────────────────────────
+  // Without it the queue is the pending submissions, as it always was. With
+  // it, the call browses *every* plan of that school week, any status — which
+  // is how a reviewer reaches a backdated RPH: one the teacher wrote for a
+  // past week and never submitted (a draft the reviewer may submit on their
+  // behalf), or one already decided, which is listed so the week can be read
+  // as a whole but cannot be decided again here.
+  const weekParam = request.nextUrl.searchParams.get("week");
+  let week: number | null = null;
+  if (weekParam !== null) {
+    const parsed = Number(weekParam);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 53) {
+      return NextResponse.json({ error: "Minggu tidak sah" }, { status: 400 });
+    }
+    week = parsed;
+  }
+
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) {
     return NextResponse.json({ items: [] as QueueItem[] });
@@ -70,11 +87,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .from("rph_document")
     .select(
       "id, version, status, plan_date, slot_time, payload, owner_id, submitted_at, " +
-        "class:class_id(nama), subject:subject_code(nama), owner:owner_id(full_name)",
+        "class_ids, subject:subject_code(nama), owner:owner_id(full_name)",
     )
     .eq("school_id", schoolId)
     .eq("session", session)
-    .eq("status", stage.status);
+    // A plan removed through the app is a soft-deleted record, not a queue
+    // entry. The pending queue never filtered it because a deleted plan could
+    // not be `submitted` — its status moves with the delete — but week mode
+    // lists drafts too, and a deleted draft would have walked straight back in.
+    .is("deleted_at", null);
+  if (week === null) {
+    query = query.eq("status", stage.status);
+  } else {
+    query = query.eq("week_no", week);
+  }
 
   // Scope. RLS on rph_document enforces this too, but this handler holds the
   // secret key and therefore bypasses it — a filter the database would have
@@ -102,7 +128,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     query = query.in("owner_id", ids);
   }
 
-  const { data, error } = await query.order("submitted_at", { ascending: true }).limit(50);
+  const { data, error } = await query
+    // Pending queue: oldest submission first, the order a reviewer works
+    // through. Week mode: by the day the lesson was taught, so the week reads
+    // as a timetable rather than a backlog.
+    .order(week === null ? "submitted_at" : "plan_date", { ascending: true })
+    // A week of a whole school can be a hundred plans — teachers ×
+    // rph_per_week — so the browse cap is higher than the queue's.
+    .limit(week === null ? 50 : 200);
 
   if (error) {
     console.error("[queue] query failed:", error.message);
@@ -125,11 +158,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     payload: QueueItem["payload"];
     submitted_at: string | null;
     owner: { full_name: string } | null;
-    class: { nama: string } | null;
+    class_ids: string[] | null;
     subject: { nama: string } | null;
   }
 
   const rows = (data ?? []) as unknown as QueueRow[];
+
+  // `class_ids` is an array with no FK to embed through, so the names are
+  // resolved here: one read of the school's class list, then a map. Archived
+  // rows are included — a plan naming an archived class still prints its name.
+  const { data: classes, error: classErr } = await gate.db
+    .from("class")
+    .select("id, nama")
+    .eq("school_id", schoolId);
+  if (classErr) {
+    console.error("[queue] class lookup failed:", classErr.message);
+    return NextResponse.json(
+      { error: "Ralat pelayan semasa mengambil senarai semakan." },
+      { status: 500 },
+    );
+  }
+  const classNames = new Map(
+    (classes ?? []).map((c: { id: string; nama: string }) => [c.id, c.nama]),
+  );
 
   const items: QueueItem[] = rows.map((row) => {
     const name = row.owner?.full_name ?? "Guru";
@@ -139,7 +190,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       teacherName: name,
       initials: name.slice(0, 2).toUpperCase(),
       tone: "blue",
-      className: row.class?.nama ?? "—",
+      className:
+        (row.class_ids ?? [])
+          .map((id) => classNames.get(id) ?? "")
+          .filter(Boolean)
+          .join(", ") || "—",
       subjectName: row.subject?.nama ?? "—",
       planDate: row.plan_date,
       slotTime: row.slot_time ?? "07:30",

@@ -28,8 +28,8 @@ export const supabaseConfigured =
  * A label, not a key — and it is worth being explicit about why, because it
  * looks like it should be an identifier. Nothing joins on it: every table
  * references `school(id)`, `schoolIdFor()` walks `school_member`, `sync_rph`
- * derives the school from `class_id`, and `resolveSchool()` reads the active
- * row rather than matching this string. That is exactly what lets an
+ * derives the school from `school_member` too, and `resolveSchool()` reads the
+ * active row rather than matching this string. That is exactly what lets an
  * administrator change `kod_sekolah` from /pentadbiran without editing `.env`
  * and redeploying.
  *
@@ -75,8 +75,8 @@ export const SCHOOL = {
 export const SESSION = "2026/2027";
 
 /**
- * The account local mode's demo plans are filed under — `cikgu`, the demo
- * Guru Besar in `lib/server/auth/local.ts`.
+ * The account local mode's demo plans are filed under — `gpk`, the demo GPK
+ * in `lib/server/auth/local.ts` (a Guru Besar holds no plans of their own).
  *
  * One constant, here rather than beside the seed, because it is also the
  * fallback for "whose plans this browser is holding" (lib/owner.ts) and the

@@ -38,10 +38,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     // Local mode only. The fixtures carry class ids like `c-5a`, which are not
-    // UUIDs — `sync_rph` casts `class_id`, so writing them into a synced
-    // deployment would leave a dashboard full of demo plans that can never
-    // reach the server, each one failing on every flush. The comment on this
-    // function has always said "(local mode)"; the call is what forgot.
+    // UUIDs — `sync_rph` validates every element of `class_ids`, so writing
+    // them into a synced deployment would leave a dashboard full of demo plans
+    // that can never reach the server, each one failing on every flush. The
+    // comment on this function has always said "(local mode)"; the call is
+    // what forgot.
     if (!supabaseConfigured) void seedLocalData(currentWeek());
 
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {

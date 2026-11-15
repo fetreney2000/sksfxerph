@@ -89,8 +89,8 @@ function toLocal(row: DocumentRow): RphDocument {
     // by the previous account on this browser stayed under the shared key and
     // the next account read every one of them as its own.
     ownerId: row.owner_id,
-    classId: row.class_id,
-    className: row.class?.nama ?? "",
+    classIds: row.class_ids ?? [],
+    classNames: row.class_names ?? [],
     subjectCode: row.subject_code,
     subjectName: row.subject?.nama ?? "",
     session: row.session || currentSession(),

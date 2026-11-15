@@ -132,7 +132,7 @@ export async function flushQueue(): Promise<SyncResult[]> {
           op_id: op.opId,
           id: op.entityId,
           entity: op.entity,
-          class_id: op.payload.classId,
+          class_ids: op.payload.classIds,
           subject_code: op.payload.subjectCode,
           session: op.payload.session,
           week_no: op.payload.weekNo,

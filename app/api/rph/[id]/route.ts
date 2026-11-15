@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
+import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
 
 /**
  * DELETE /api/rph/[id] — take a plan out of the archive.
@@ -29,7 +29,10 @@ export async function DELETE(
     return NextResponse.json({ error: "ID tidak sah" }, { status: 400 });
   }
 
-  const gate = await requireDbUser(request);
+  // Writing or deleting a plan is a teacher's act. The ownership check below
+  // already limits this to the caller's own rows, but a Guru Besar has no rows
+  // of their own to begin with — the permission says so up front.
+  const gate = await requirePermission(request, "rph");
   if ("error" in gate) return gate.error;
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);

@@ -78,6 +78,13 @@ export interface SubmitResult {
   completeness?: number;
   error?: string;
   status?: string;
+  /**
+   * `rph_document.version` after the submit — submit_bump means a submitted
+   * plan's version is one higher than the draft the client last saw, so a
+   * decision that signs must use THIS value, not a stale one from the queue
+   * row. Only set when `ok`.
+   */
+  version?: number;
 }
 
 /** Server-gated submission; the server's verdict wins over the local meter. */

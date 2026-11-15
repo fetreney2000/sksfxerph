@@ -21,7 +21,7 @@ import { SubjectsTab } from "./subjects-tab";
  *
  * Four tabs rather than two: the original covered accounts and deadlines, but
  * its own permission promises "accounts, classes, subjects, session, deadlines"
- * — and classes are not a nicety. They are what `rph_document.class_id` points
+ * — and classes are not a nicety. They are what `rph_document.class_ids` points
  * at, so a school that cannot manage them cannot plan against a class nobody
  * created.
  *

@@ -13,6 +13,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * administrator could have been reached the same way.
  */
 
+// Every successful sign-in mints a session cookie, which needs the secret —
+// set it here so this file tests the lockout, not the environment.
+vi.hoisted(() => {
+  process.env.SESSION_SECRET =
+    process.env.SESSION_SECRET ?? "unit-test-secret-0123456789abcdef0123456789abcdef";
+});
+
 interface UserRow {
   id: string;
   username: string;
@@ -61,8 +68,17 @@ vi.mock("@/lib/server/db", () => ({
         select() {
           return chain;
         },
-        ilike(_column: string, value: string) {
-          chain.row = [...store.users.values()].find((u) => u.username === value) ?? null;
+        ilike(column: string, value: string) {
+          // The route picks the column by the identifier's shape: an address
+          // is matched against `email`, a bare name against `username` —
+          // both case-insensitively, as PostgREST's `ilike` would.
+          chain.row =
+            [...store.users.values()].find(
+              (u) =>
+                u.username.toLowerCase() === value.toLowerCase() ||
+                u.email?.toLowerCase() === value.toLowerCase(),
+            ) ?? null;
+          void column;
           return chain;
         },
         limit() {
@@ -182,5 +198,33 @@ describe("the login lockout", () => {
     expect(await res.json()).toEqual({
       error: "Nama pengguna atau kata laluan salah.",
     });
+  });
+
+  it("signs in by email, case-insensitively", async () => {
+    seed({ email: "suhaila@sktamanharmoni.local" });
+    const res = await POST(post("Suhaila@SKTamanHarmoni.local", "biasa123"));
+    expect(res.status).toBe(200);
+  });
+
+  it("gives the email-flavoured message when the address matches nobody", async () => {
+    const res = await POST(post("tiada@sktamanharmoni.local", "salah"));
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Emel atau kata laluan salah." });
+  });
+
+  it("counts lockout failures against the email path too", async () => {
+    const row = seed({ email: "suhaila@sktamanharmoni.local", failed_logins: 4 });
+    const res = await POST(post("suhaila@sktamanharmoni.local", "salah"));
+    expect(res.status).toBe(401);
+    expect(row.failed_logins).toBe(5);
+    expect(row.locked_until).not.toBeNull();
+  });
+
+  it("still reaches an account with no email through its username", async () => {
+    // The email is optional on `erph.user`; the split is guidance, not a
+    // lockout — the username door stays open for exactly these accounts.
+    seed({ email: null });
+    const res = await POST(post("guru.biasa", "biasa123"));
+    expect(res.status).toBe(200);
   });
 });

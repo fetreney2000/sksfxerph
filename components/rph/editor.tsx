@@ -125,7 +125,7 @@ async function exportDocx(doc: RphDocument): Promise<void> {
         payload: doc.payload,
         session: doc.session,
         planDate: doc.planDate,
-        className: doc.className,
+        className: doc.classNames.join(", "),
         subjectName: doc.subjectName,
         signerName: seal?.signerName ?? undefined,
         signerTitle: seal?.signerTitle ?? undefined,
@@ -141,7 +141,8 @@ async function exportDocx(doc: RphDocument): Promise<void> {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `RPH-${doc.className.replace(/\s+/g, "-")}-${doc.planDate}.docx`;
+    // The joined class label names the file; slashes in it would eat the name.
+    a.download = `RPH-${doc.classNames.join(", ").replace(/[\\/:*?"<>|\s]+/g, "-")}-${doc.planDate}.docx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -204,11 +205,16 @@ function notes(payload: RphPayload): Note[] {
   return out;
 }
 
-/** What `?template=` and `?reuse=` preload into the plan that does not exist yet. */
+/** What `?copy=`, `?template=` and `?reuse=` preload into the plan that does not exist yet. */
 interface SeedSource {
   payload: RphPayload;
   subjectCode?: string;
   subjectName?: string;
+  /** The classes the copied plan covered — they belong to the same school. */
+  classIds?: string[];
+  /** The slot the lesson was written for, when the source is a filed plan. */
+  slotTime?: string;
+  slotTimeEnd?: string;
 }
 
 /** A template as the penyunting opens it — `?edit=` needs the whole row. */
@@ -270,9 +276,37 @@ async function loadTemplateForEdit(id: string): Promise<TemplateRow | null> {
  * Every failure path returns `null` rather than throwing: a template someone
  * else has since deleted, or a week with nothing in it, should open an empty
  * editor — not an error page for a convenience feature. Offline, Dexie still
- * answers for `reuse`, so the command works with no network at all.
+ * answers for `reuse` and `copy`, so the command works with no network at all.
  */
-async function loadSeed(templateId?: string, reuse?: boolean): Promise<SeedSource | null> {
+async function loadSeed(
+  copyId?: string,
+  templateId?: string,
+  reuse?: boolean,
+): Promise<SeedSource | null> {
+  // `?copy=` is the most specific thing a URL can name — one exact plan the
+  // teacher picked from their archive a moment ago — so it wins over a
+  // template or last week's best plan if a hand-typed URL ever carries both.
+  if (copyId) {
+    try {
+      const doc = await db.documents.get(copyId);
+      // Only the teacher's own plans are theirs to copy. The archive lists
+      // nothing else, so this only matters for a hand-edited URL — but a
+      // classmate's plan arriving in this teacher's editor would be a leak,
+      // however small.
+      if (!doc || doc.ownerId !== ownerId()) return null;
+      return {
+        payload: normalisePayload(doc.payload),
+        subjectCode: doc.subjectCode,
+        subjectName: doc.subjectName,
+        classIds: doc.classIds,
+        slotTime: doc.slotTime,
+        slotTimeEnd: doc.slotTimeEnd,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   if (templateId) {
     try {
       const template = (await fetchTemplates()).find((row) => row.id === templateId);
@@ -371,9 +405,10 @@ export function RphEditor({
    * Dexie, nothing for the sync queue to send.
    *
    * It becomes real when the teacher presses Simpan, and not before. Seeded
-   * once the class list has arrived, because `class_id` is a foreign key the
-   * server checks: inventing a placeholder would produce a plan that looks
-   * saved and is rejected on every flush.
+   * once the class list has arrived, because every class in `class_ids` must be
+   * one the server checks against the caller's school and session: inventing a
+   * placeholder would produce a plan that looks saved and is rejected on every
+   * flush.
    */
   const [pending, setPending] = React.useState<RphDocument | null>(null);
   const [seeded, setSeeded] = React.useState(false);
@@ -429,7 +464,11 @@ export function RphEditor({
       const loaded =
         imported || editing
           ? null
-          : await loadSeed(params.get("template") ?? undefined, params.get("reuse") === "1");
+          : await loadSeed(
+              params.get("copy") ?? undefined,
+              params.get("template") ?? undefined,
+              params.get("reuse") === "1",
+            );
       if (cancelled) return;
 
       // The template has since been deleted, or this browser cannot reach the
@@ -460,6 +499,17 @@ export function RphEditor({
           : thisWeek;
 
       const now = Date.now();
+      // A copied plan brings its own classes; they are kept only while every
+      // one still belongs to this school's list — a class deleted since the
+      // source was written would leave the plan stamped with an id the server
+      // refuses on every flush. Anything that survives the filter, or nothing
+      // at all, falls back to the first class, the same default a blank plan
+      // gets.
+      const copiedClasses = (loaded?.classIds ?? []).filter((cid) =>
+        classes.some((c) => c.id === cid),
+      );
+      const classIds = copiedClasses.length > 0 ? copiedClasses : cls ? [cls.id] : [];
+      const classNames = classIds.map((cid) => classes.find((c) => c.id === cid)?.nama ?? "");
       setPending({
         id:
           typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -467,8 +517,11 @@ export function RphEditor({
             : `local-${now}`,
         schoolCode,
         ownerId: ownerId(),
-        classId: cls?.id ?? "",
-        className: cls?.nama ?? "",
+        // Step 1 ticks classes; the first one is the default and the teacher
+        // widens it from there. One plan, one review, one sheet — however many
+        // classes it covers.
+        classIds,
+        classNames,
         subjectCode: editing?.subjectCode ?? loaded?.subjectCode ?? subject.code,
         subjectName: editing?.subjectCode
           ? (subjects.find((s) => s.code === editing.subjectCode)?.nama ?? subject.nama)
@@ -477,11 +530,12 @@ export function RphEditor({
         weekNo: week,
         planDate:
           week === currentWeek() ? mytIso() : (schoolDays(week)[0] ?? weekMondayIso(week)),
-        slotTime: imported?.slotTime ?? "07:30",
-        slotTimeEnd: imported?.slotTimeEnd ?? "12:40",
+        slotTime: imported?.slotTime ?? loaded?.slotTime ?? "07:30",
+        slotTimeEnd: imported?.slotTimeEnd ?? loaded?.slotTimeEnd ?? "12:40",
         status: "draft",
-        // A template or last week's plan arrives *here*, not in the database —
-        // readable, editable and discardable before anything exists.
+        // A template, a copied plan or last week's plan arrives *here*, not in
+        // the database — readable, editable and discardable before anything
+        // exists.
         payload: imported?.payload ?? editing?.payload ?? loaded?.payload ?? emptyPayload(),
         version: 1,
         clientUpdatedAt: now,
@@ -629,10 +683,11 @@ export function RphEditor({
     try {
       const draft = { ...pending, payload: payloadRef.current };
 
-      // `rph_document` is keyed on teacher×class×subject×session×week×date, so
-      // a second plan for the same slot does not coexist — the server resolves
-      // it onto the first and the teacher's work silently becomes someone
-      // else's row, with no warning anywhere.
+      // `rph_document` is keyed on teacher×class-set×subject×session×week×date
+      // — and the class half is an *overlap*: a second plan for the same slot
+      // does not coexist only where both claim a shared class. The server
+      // resolves it onto the first and the teacher's work silently becomes
+      // someone else's row, with no warning anywhere.
       //
       // Dexie holds the server's plans too now (`lib/sync/pull`), so this
       // catches a plan written on another device as well as this one. Offering
@@ -644,14 +699,19 @@ export function RphEditor({
         .filter(
           (d) =>
             d.id !== draft.id &&
-            d.classId === draft.classId &&
-            d.subjectCode === draft.subjectCode,
+            d.subjectCode === draft.subjectCode &&
+            Array.isArray(d.classIds) &&
+            d.classIds.some((c) => draft.classIds.includes(c)),
         )
         .first();
 
       if (clash) {
+        // Name the shared class, not the whole label — that is the one the two
+        // plans are fighting over.
+        const shared =
+          clash.classNames[clash.classIds.findIndex((c) => draft.classIds.includes(c))] ?? "";
         toast.error(
-          `Anda sudah mempunyai RPH untuk ${draft.className} · ${draft.subjectName} pada ` +
+          `Anda sudah mempunyai RPH untuk ${shared} · ${draft.subjectName} pada ` +
             `${draft.planDate}. Buka yang sedia ada, atau tukar kelas, subjek atau tarikh.`,
         );
         router.push(`/editor/${clash.id}`);
@@ -1006,7 +1066,7 @@ export function RphEditor({
   }
 
   // An unsaved plan cannot be built until the class list has arrived: the
-  // document carries a real `class_id`, and a placeholder would produce
+  // document carries real ids in `class_ids`, and a placeholder would produce
   // something that looks saved and is rejected on every sync.
   if (!live) {
     return (
@@ -1095,7 +1155,7 @@ export function RphEditor({
     // through: a template has no class, no date and no week, so the sheet
     // prints the form's own dashes for what it does not have — which is the
     // truth, and better than borrowing this browser's date.
-    planClassName: asTemplate ? undefined : live.className,
+    planClassName: asTemplate ? undefined : live.classNames.join(", "),
     subjectName: live.subjectName,
     planDate: asTemplate ? undefined : live.planDate,
     slotTime: live.slotTime,
@@ -1231,7 +1291,7 @@ export function RphEditor({
               <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
                 {asTemplate
                   ? (editingTemplate?.title ?? live.subjectName)
-                  : `${live.className} · ${live.subjectName}`}
+                  : `${live.classNames.join(", ")} · ${live.subjectName}`}
               </h2>
               {!asTemplate && (
                 <p className="text-[12.5px] text-ink-3">
@@ -1470,7 +1530,7 @@ export function RphEditor({
           <DialogHeader>
             <DialogTitle>Hantar RPH untuk semakan?</DialogTitle>
             <DialogDescription>
-              {live.className} · {live.subjectName} · {longDate(live.planDate)}
+              {live.classNames.join(", ")} · {live.subjectName} · {longDate(live.planDate)}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
@@ -1659,6 +1719,27 @@ function Row({ k, v, tone }: { k: string; v: string; tone?: "ok" | "bad" | "warn
 
 /* ══ Step 1 · Profil ═══════════════════════════════════════════════════ */
 
+/**
+ * Sort the class list and de-duplicate it, keeping the names parallel — the
+ * same canonical form `sync_rph` writes server-side, so a client-side overlap
+ * check agrees with the server's unique index. Names come from the school's
+ * live list first, falling back to the names already on the document for a
+ * class that has since been archived.
+ */
+function canonicalClasses(
+  ids: string[],
+  names: string[],
+  classes: { id: string; nama: string }[],
+): { classIds: string[]; classNames: string[] } {
+  const known = new Map(classes.map((c) => [c.id, c.nama]));
+  const byId = new Map<string, string>();
+  ids.forEach((id, i) => {
+    if (id && !byId.has(id)) byId.set(id, known.get(id) ?? names[i] ?? "");
+  });
+  const sorted = [...byId.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return { classIds: sorted.map(([id]) => id), classNames: sorted.map(([, n]) => n) };
+}
+
 function StepProfil({
   doc,
   payload,
@@ -1683,13 +1764,19 @@ function StepProfil({
   const { items: subjects } = useSchoolSubjects();
 
   // A plan written against a class or subject that has since been archived
-  // still has to render its own value — otherwise the select would silently
-  // show the first option while `doc.classId` kept pointing somewhere else, and
-  // the next save would not change anything the user could see.
+  // still has to render its own value — otherwise the tick list would silently
+  // drop a class the plan still covers, and the next save would not change
+  // anything the user could see.
   const classOptions = React.useMemo(() => {
-    if (classes.some((c) => c.id === doc.classId)) return classes;
-    return [...classes, { id: doc.classId, nama: doc.className, session: doc.session }];
-  }, [classes, doc.classId, doc.className, doc.session]);
+    const missing = doc.classIds.filter((id) => !classes.some((c) => c.id === id));
+    if (missing.length === 0) return classes;
+    return [
+      ...classes,
+      ...doc.classIds
+        .map((id, i) => ({ id, nama: doc.classNames[i] ?? "", session: doc.session }))
+        .filter((c) => missing.includes(c.id) && c.id),
+    ];
+  }, [classes, doc.classIds, doc.classNames, doc.session]);
 
   const subjectOptions = React.useMemo(() => {
     if (subjects.some((s) => s.code === doc.subjectCode)) return subjects;
@@ -1745,22 +1832,55 @@ function StepProfil({
         {/* Only a plan files under a class, inside a week, on a date. */}
         {!template && (
           <>
-            <div>
-              <Label htmlFor="f-733697">{ms.editor.class}</Label>
-              <Select
-                id="f-733697"
-                value={doc.classId}
-                onChange={(e) => {
-                  const cls = classes.find((c) => c.id === e.target.value);
-                  if (cls) onPatch({ classId: cls.id, className: cls.nama });
-                }}
-              >
-                {classOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nama}
-                  </option>
-                ))}
-              </Select>
+            <div className="min-w-0">
+              {/* A tick list, not a select: a plan is filed once for every class
+                  it covers, so choosing "5 Amanah and 5 Bidara" is one document
+                  covering both, not a copy for each. One class must stay — a
+                  plan with none has no school week to file under — so the last
+                  remaining tick cannot be unticked until another is. */}
+              <fieldset className="rounded-[10px] border border-border bg-surface-2/40 px-3 py-2.5">
+                <legend className="px-0 text-[12.5px] font-semibold text-ink-2">
+                  {ms.editor.class}
+                </legend>
+                <div className="flex max-h-36 flex-wrap content-start gap-x-4 gap-y-1.5 overflow-y-auto">
+                  {classOptions.map((c) => {
+                    const checked = doc.classIds.includes(c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        className="inline-flex items-center gap-2 text-[13px] text-ink-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={checked && doc.classIds.length === 1}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              onPatch(
+                                canonicalClasses(
+                                  [...doc.classIds, c.id],
+                                  doc.classNames,
+                                  classes,
+                                ),
+                              );
+                            } else {
+                              const i = doc.classIds.indexOf(c.id);
+                              const ids = doc.classIds.filter((id) => id !== c.id);
+                              const names = doc.classNames.filter((_, j) => j !== i);
+                              onPatch({ classIds: ids, classNames: names });
+                            }
+                          }}
+                        />
+                        {c.nama}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <p className="mt-1.5 text-[11.5px] text-ink-4">
+                Tick semua kelas yang rancangan ini dilaksanakan — satu RPH untuk beberapa
+                kelas.
+              </p>
             </div>
             <div>
               <Label htmlFor="f-week">{ms.editor.week}</Label>

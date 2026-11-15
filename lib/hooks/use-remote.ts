@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { handleExpiredSession } from "@/lib/client/auth-session";
-import { schoolCode, supabaseConfigured } from "@/lib/config";
+import { schoolCode, supabaseConfigured, weekOfIso } from "@/lib/config";
 import { QUEUE, type QueueItem, SCHOOL_STATS } from "@/lib/demo/review";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSession } from "@/lib/hooks/use-session";
@@ -115,6 +115,62 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
   }
   if (remote.isLoading) return { items: [], loading: true };
   return { items: remote.data?.items ?? [], loading: false };
+}
+
+/**
+ * Every plan of one school week, any status — the reviewer's week browser.
+ *
+ * The pending queue filters by status, so a backdated plan never showed up in
+ * it: one the teacher never submitted (a draft), or one already decided, were
+ * both invisible to the one person who may need to reach them. This hook asks
+ * `/api/queue?week=N` instead, which the server answers with the whole week,
+ * and the page decides what is actionable.
+ *
+ * Returns `refetch` because a decision changes the row's status in place —
+ * approved, returned, or submitted-on-behalf — and the list should say so
+ * without a manual reload.
+ *
+ * `week === null` (the current queue selected) never enables the query; the
+ * caller uses `useReviewQueueData` for that view, and the demo fallback below
+ * would otherwise leak the bundled dataset into a synced school's screen.
+ */
+export function useWeekPlans(week: number | null): {
+  items: QueueItem[];
+  loading: boolean;
+  refetch: () => Promise<unknown>;
+} {
+  const session = useSession();
+  const remote = useQuery<{ items: QueueItem[] }>({
+    queryKey: ["review-week", schoolCode, session, week],
+    queryFn: async () => {
+      const res = await fetch(`/api/queue?week=${week}`, { credentials: "same-origin" });
+      // Same rules as the queue: an expired session leaves; every other
+      // failure is an empty week, never the demo data.
+      if (handleExpiredSession(res.status)) return { items: [] };
+      if (!res.ok) return { items: [] };
+      return (await res.json()) as { items: QueueItem[] };
+    },
+    // Only a real week in synced mode asks the server. In local mode there is
+    // no backend, so the bundled dataset is filtered by the week each plan
+    // was written for — the same substitution every demo hook makes.
+    enabled: supabaseConfigured && week !== null,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  if (!supabaseConfigured) {
+    return {
+      items: week === null ? [] : QUEUE.filter((q) => weekOfIso(q.planDate) === week),
+      loading: false,
+      refetch: async () => undefined,
+    };
+  }
+  if (remote.isLoading) return { items: [], loading: true, refetch: remote.refetch };
+  return {
+    items: remote.data?.items ?? [],
+    loading: false,
+    refetch: () => remote.refetch(),
+  };
 }
 
 /** School compliance; falls back to the bundled demo figures in local mode. */

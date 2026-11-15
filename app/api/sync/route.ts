@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { supabaseConfigured } from "@/lib/config";
 import { rateLimit } from "@/lib/http/rate-limit";
-import { requireDbUser } from "@/lib/server/auth/guard";
+import { requirePermission } from "@/lib/server/auth/guard";
 import type { SyncResult } from "@/lib/types";
 
 /**
@@ -28,7 +28,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Penyegerakan tidak disediakan" }, { status: 503 });
   }
 
-  const gate = await requireDbUser(request);
+  // Sync carries plan writes, and only a plan-writing role has writes to
+  // carry. The client never sends an empty batch (`flushQueue` returns before
+  // the fetch), so gating the whole handler cannot turn a reviewer's idle
+  // poll into a 403 — and a Guru Besar's browser holds no documents to queue.
+  // Review decisions travel through `/api/rpc/review`, untouched by this.
+  const gate = await requirePermission(request, "rph");
   if ("error" in gate) return gate.error;
 
   // Keyed by user, not IP: a teacher retrying on a flaky connection should not

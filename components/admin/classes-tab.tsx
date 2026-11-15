@@ -24,16 +24,18 @@ import { useAdminSave } from "@/lib/hooks/use-admin-save";
  *
  * This is the list the editor reads. Before it existed the picker served the
  * local demo fixtures in *every* mode, and their ids (`c-5a`) are not UUIDs —
- * `rph_document.class_id` is, and `sync_rph` casts it, so a plan built against
- * a fixture was rejected on every flush with "kelas bukan dalam sekolah/sesi
- * anda". On screen that looked like a sync that never finished. Real class ids
- * are therefore not a convenience here; they are the difference between a plan
- * that saves and one that silently never arrives.
+ * `rph_document.class_ids` holds them, and `sync_rph` validates every element
+ * against the caller's school, so a plan built against a fixture was rejected
+ * on every flush with "kelas bukan dalam sekolah/sesi anda". On screen that
+ * looked like a sync that never finished. Real class ids are therefore not a
+ * convenience here; they are the difference between a plan that saves and one
+ * that silently never arrives.
  *
- * Archiving rather than deleting: `rph_document.class_id` has no ON DELETE, so
- * a class with plans behind it cannot be removed — and would not be right to
- * remove, since the plan is a record. `doc_count` is shown for exactly that
- * reason: it turns "archive this class" from a guess into a decision.
+ * Archiving rather than deleting: `rph_document.class_ids` has no FK to the
+ * class table (an array cannot carry one), so a class with plans behind it is
+ * not removed by the database either — and would not be right to remove, since
+ * the plan is a record. `doc_count` is shown for exactly that reason: it turns
+ * "archive this class" from a guess into a decision.
  */
 export function ClassesTab() {
   const { busy, save } = useAdminSave();

@@ -70,7 +70,7 @@ export async function reuseLastWeek(
 
     const exists = await findByNaturalKey(
       owner,
-      doc.classId,
+      doc.classIds,
       doc.subjectCode,
       session,
       toWeek,

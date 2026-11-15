@@ -101,7 +101,7 @@ export function WeekSheets({
           planDate={doc.planDate}
           slotTime={doc.slotTime}
           slotTimeEnd={doc.slotTimeEnd}
-          planClassName={doc.className}
+          planClassName={doc.classNames.join(", ")}
           subjectName={doc.subjectName}
           teacherName={teacherName}
           schoolName={schoolName}

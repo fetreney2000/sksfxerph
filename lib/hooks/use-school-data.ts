@@ -13,10 +13,11 @@ import type { SchoolClass, Subject } from "@/lib/types";
  * caller's own school.
  *
  * This split exists because the fixtures are not safe in synced mode. Their ids
- * (`c-5a`) are not UUIDs, `rph_document.class_id` is a UUID column, and
- * `sync_rph` casts it — so a plan built against a fixture was rejected on every
- * flush with "kelas bukan dalam sekolah/sesi anda", which reads on screen as a
- * sync that never finishes. Serving the real classes is the fix, and it is also
+ * (`c-5a`) are not UUIDs, `rph_document.class_ids` holds UUIDs, and
+ * `sync_rph` validates every element against the caller's school — so a plan
+ * built against a fixture was rejected on every flush with "kelas bukan dalam
+ * sekolah/sesi anda", which reads on screen as a sync that never finishes.
+ * Serving the real classes is the fix, and it is also
  * what makes the administrator's class list mean anything: a class added on
  * `/pentadbiran` appears here without a redeploy.
  *

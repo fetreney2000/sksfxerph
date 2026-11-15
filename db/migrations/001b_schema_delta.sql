@@ -55,6 +55,12 @@ alter table erph.school_setting drop constraint if exists school_setting_rph_per
 alter table erph.school_setting add constraint school_setting_rph_per_week_check
   check (rph_per_week between 1 and 7);
 
+-- The classes a plan covers. Created here, ahead of the migration that
+-- backfills and renames onto it (020), because 007/016/017 re-emit
+-- `erph.sync_rph` — whose body names this column — and a function body is
+-- validated when the function is created, not when it runs.
+alter table erph.rph_document add column if not exists class_ids uuid[];
+
 -- ── 3 · the single-stage reviewer is gone ──────────────────────────────────
 drop function if exists erph.review_rph(uuid, smallint, text);
 

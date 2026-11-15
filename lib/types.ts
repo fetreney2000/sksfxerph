@@ -74,8 +74,15 @@ export interface RphDocument {
   id: string;
   schoolCode: string;
   ownerId: string;
-  classId: string;
-  className: string;
+  /**
+   * The classes this plan covers — the wizard's step 1 ticks them, and one
+   * document is one review, one approval and one sheet for all of them.
+   * Stored sorted and distinct (the canonical form `sync_rph` writes), so a
+   * `classIds` comparison in the client matches the server's unique index.
+   */
+  classIds: string[];
+  /** The classes' names, parallel to `classIds` and joined for display. */
+  classNames: string[];
   subjectCode: string;
   subjectName: string;
   session: string;

@@ -158,9 +158,11 @@ export interface MobileNav {
  * Split a role's navigation into bottom-bar tabs and the "Lagi" sheet.
  *
  * A role with four or fewer destinations has no sheet — a "Lagi" tab that opens
- * an empty drawer is worse than no tab at all. A reviewer gets their four main
+ * an empty drawer is worse than no tab at all. A GPK gets their four main
  * screens (Minggu, Semakan, Sekolah, Laporan) and finds Arkib and Templat under
- * Lagi; a Guru Biasa sees all three of their destinations directly.
+ * Lagi; a Guru Besar — who teaches no class and has no Minggu or Arkib — sees
+ * Semakan, Sekolah, Laporan and Templat directly; a Guru Biasa sees all three
+ * of their destinations directly.
  */
 export function mobileNavFor(role: string | null | undefined): MobileNav {
   const rank = (href: string) => {

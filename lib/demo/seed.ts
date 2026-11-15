@@ -68,8 +68,8 @@ const partialPayload = () => ({
 });
 
 export interface SeedPlan {
-  classId: string;
-  className: string;
+  classIds: string[];
+  classNames: string[];
   subjectCode: string;
   subjectName: string;
   dayIndex: number;
@@ -87,8 +87,8 @@ export interface SeedPlan {
 
 const PLAN_SEED: SeedPlan[] = [
   {
-    classId: "c-5a",
-    className: "5 Amanah",
+    classIds: ["c-5a"],
+    classNames: ["5 Amanah"],
     subjectCode: "MAT",
     subjectName: "Matematik",
     dayIndex: 0,
@@ -99,8 +99,8 @@ const PLAN_SEED: SeedPlan[] = [
     makePayload: completePayload,
   },
   {
-    classId: "c-4m",
-    className: "4 Melur",
+    classIds: ["c-4m"],
+    classNames: ["4 Melur"],
     subjectCode: "MAT",
     subjectName: "Matematik",
     dayIndex: 0,
@@ -111,8 +111,8 @@ const PLAN_SEED: SeedPlan[] = [
     makePayload: completePayload,
   },
   {
-    classId: "c-5a",
-    className: "5 Amanah",
+    classIds: ["c-5a"],
+    classNames: ["5 Amanah"],
     subjectCode: "MAT",
     subjectName: "Matematik",
     dayIndex: 2,
@@ -122,8 +122,8 @@ const PLAN_SEED: SeedPlan[] = [
     makePayload: partialPayload,
   },
   {
-    classId: "c-4m",
-    className: "4 Melur",
+    classIds: ["c-4m"],
+    classNames: ["4 Melur"],
     subjectCode: "MAT",
     subjectName: "Matematik",
     dayIndex: 3,
@@ -133,8 +133,8 @@ const PLAN_SEED: SeedPlan[] = [
     makePayload: partialPayload,
   },
   {
-    classId: "c-5b",
-    className: "5 Bidara",
+    classIds: ["c-5b"],
+    classNames: ["5 Bidara"],
     subjectCode: "MAT",
     subjectName: "Matematik",
     dayIndex: 4,
@@ -167,12 +167,12 @@ export async function seedLocalData(weekNo: number): Promise<void> {
       return {
         id: mintId(),
         schoolCode,
-        // Filed under the demo Guru Besar's own id, not a shared placeholder:
+        // Filed under the demo GPK's own id, not a shared placeholder:
         // every read path asks for the signed-in account's plans, and a
         // constant here is what put one teacher's week on another's screen.
         ownerId: DEMO_OWNER_ID,
-        classId: seed.classId,
-        className: seed.className,
+        classIds: seed.classIds,
+        classNames: seed.classNames,
         subjectCode: seed.subjectCode,
         subjectName: seed.subjectName,
         session: SESSION,

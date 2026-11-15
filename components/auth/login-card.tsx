@@ -18,14 +18,18 @@ import { supabaseConfigured } from "@/lib/config";
 import { LOCAL_ACCOUNT, LOCAL_DEMO_PASSWORD } from "@/lib/server/auth/local";
 
 /**
- * Username + password sign-in against `erph.user`.
+ * Email + password sign-in against `erph.user`.
  *
  * Supabase Auth (Google OAuth / GoTrue) is deliberately not used — credentials
  * live in our own table and are verified by scrypt in `/api/auth/login`. The
  * response sets an httpOnly cookie; nothing token-shaped ever reaches JS.
+ *
+ * One field serves both doors: teachers type their school email, the
+ * pentadbir their username — the route routes on the identifier's shape, so
+ * the form does not need a mode switch.
  */
 export function LoginCard() {
-  const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,7 +44,7 @@ export function LoginCard() {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: identifier, password }),
       });
 
       const body = (await res.json().catch(() => null)) as {
@@ -73,7 +77,7 @@ export function LoginCard() {
       <CardHeader className="flex-col items-start gap-1 pb-0">
         <CardTitle className="text-base">Log masuk</CardTitle>
         <CardDescription className="pt-0">
-          Gunakan nama pengguna dan kata laluan sekolah anda.
+          Gunakan emel sekolah anda dan kata laluan. Pentadbir log masuk dengan nama pengguna.
         </CardDescription>
       </CardHeader>
 
@@ -81,17 +85,20 @@ export function LoginCard() {
         <form onSubmit={signIn} noValidate>
           <div className="mb-3.5">
             <Label htmlFor="f-login-username" required>
-              Nama pengguna
+              Emel atau nama pengguna
             </Label>
             <Input
               id="f-login-username"
               name="username"
+              type="text"
+              inputMode="email"
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
+              placeholder="nurul@kpm.edu.my"
               required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
             />
           </div>
 
@@ -121,9 +128,9 @@ export function LoginCard() {
           <p className="mt-3.5 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
             <User className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
             <span>
-              <b>Mod setempat.</b> Tiada pangkalan data ditetapkan. Gunakan demo: nama pengguna{" "}
-              <b>{LOCAL_ACCOUNT.username}</b>, kata laluan <b>{LOCAL_DEMO_PASSWORD}</b>. Semua
-              ciri berfungsi; penyegerakan aktif sebaik kunci API ditambah.
+              <b>Mod setempat.</b> Tiada pangkalan data ditetapkan. Gunakan demo: emel{" "}
+              <b>{LOCAL_ACCOUNT.email}</b>, kata laluan <b>{LOCAL_DEMO_PASSWORD}</b>. Semua ciri
+              berfungsi; penyegerakan aktif sebaik kunci API ditambah.
             </span>
           </p>
         )}

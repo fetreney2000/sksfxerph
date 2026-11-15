@@ -232,7 +232,7 @@ for (let i = 0; i < 5; i += 1) {
   const planDate = iso(weekMonday(week) + i * DAY);
   const existing = await api(
     `/rest/v1/rph_document?school_id=eq.${schoolId}&owner_id=eq.${kartini.user_id}` +
-      `&class_id=eq.${cls.id}&subject_code=eq.${subjectCode}&session=eq.${SESSION}` +
+      `&class_ids=cs.%7B${cls.id}%7D&subject_code=eq.${subjectCode}&session=eq.${SESSION}` +
       `&week_no=eq.${week}&plan_date=eq.${planDate}&deleted_at=is.null&select=id,status`,
   );
   if (existing?.length && !FORCE) {
@@ -255,7 +255,7 @@ for (let i = 0; i < 5; i += 1) {
       {
         school_id: schoolId,
         owner_id: kartini.user_id,
-        class_id: cls.id,
+        class_ids: [cls.id],
         subject_code: subjectCode,
         session: SESSION,
         week_no: week,

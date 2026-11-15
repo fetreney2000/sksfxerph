@@ -20,9 +20,9 @@ import type { adminDb } from "@/lib/server/db";
  * It is `school`'s UNIQUE natural key, so it looks like the one field that must
  * not move. It isn't: nothing in the database references it — `school_id` is
  * the foreign key on `rph_document`, `class`, `school_member` and every other
- * table — and `sync_rph` derives the school from `class_id`. The single place
- * that ever looked a school up *by* its code was `resolveSchool()`, and that
- * now reads the active row instead, precisely so this field can be edited
+ * table — and `sync_rph` derives the school from `school_member`. The single
+ * place that ever looked a school up *by* its code was `resolveSchool()`, and
+ * that now reads the active row instead, precisely so this field can be edited
  * without stranding the branding on a code no row has any more.
  *
  * Validation is duplicated here rather than left to SQL so the common case —
