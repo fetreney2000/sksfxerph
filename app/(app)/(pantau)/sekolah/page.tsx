@@ -579,7 +579,7 @@ export default function SekolahPage() {
                               strokeWidth={2}
                               aria-hidden
                             />
-                            <span className="ellip">{link.title}</span>
+                            <span className="min-w-0 ellip">{link.title}</span>
                           </a>
                         ))}
                       </span>
