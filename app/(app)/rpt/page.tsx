@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Info, Link2, Trash2 } from "lucide-react";
+import { ExternalLink, Link2, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import type { RptLink } from "@/app/api/rpt/route";
@@ -108,16 +108,6 @@ export default function RptPage() {
         <span className="num text-xs text-ink-3">Sesi {session}</span>
       </div>
 
-      <div className="mb-4 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
-        <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
-        <p>
-          Fail RPT kekal dalam Google Drive anda — yang disimpan di sini hanya pautannya,
-          mengikut mata pelajaran. Pastikan perkongsian fail ditetapkan kepada sesiapa yang
-          mempunyai pautan boleh melihat, supaya GPK dan Guru Besar boleh membukanya dari
-          Paparan Sekolah.
-        </p>
-      </div>
-
       {!supabaseConfigured ? (
         <Card>
           <CardContent className="py-10 text-center text-[13px] text-ink-4">
@@ -186,9 +176,13 @@ export default function RptPage() {
                 </p>
               )}
               {items.map((link) => (
+                // `min-w-0`: this row is a grid item, and grid items default
+                // to `min-width: auto` — without it the track sizes to the
+                // full unbroken URL and the whole card scrolls sideways,
+                // no matter how well the text inside truncates.
                 <div
                   key={link.id}
-                  className="flex items-center gap-2.5 rounded-[10px] border border-border bg-surface-2 px-3 py-2"
+                  className="flex min-w-0 items-center gap-2.5 rounded-[10px] border border-border bg-surface-2 px-3 py-2"
                 >
                   <Link2
                     className="h-4 w-4 shrink-0 text-ink-4"
