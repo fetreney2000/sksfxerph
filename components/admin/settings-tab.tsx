@@ -18,11 +18,11 @@ import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import { setSession } from "@/lib/session";
 
 /**
- * Tab 4 — session and the weekly deadline.
+ * Tab 4 - session and the weekly deadline.
  *
  * The session field was read-only for as long as `SESSION` was a build-time
  * constant, which meant the school year could only be rolled over by editing
- * source and redeploying — the one thing an administrator cannot do. It is
+ * source and redeploying - the one thing an administrator cannot do. It is
  * editable now, and the write goes three ways at once: the database row, the
  * server-side queries that filter on it, and `setSession()` here, which pushes
  * the new value into the client store so the very next plan is stamped with it.
@@ -33,7 +33,7 @@ import { setSession } from "@/lib/session";
  *
  * The consequence is stated in the UI rather than discovered: rolling the year
  * over moves every existing plan out of the dashboard and archive, because both
- * filter on the current session. Those rows are not deleted — they are in the
+ * filter on the current session. Those rows are not deleted - they are in the
  * database, and switching back shows them again.
  */
 
@@ -59,7 +59,7 @@ export function SettingsTab() {
   const [weekday, setWeekday] = React.useState(5);
   const [time, setTime] = React.useState("16:00");
   const [requireComplete, setRequireComplete] = React.useState(true);
-  // Five for a school that runs Monday to Friday — the school's own rule, and
+  // Five for a school that runs Monday to Friday - the school's own rule, and
   // what "pematuhan sekolah" divides by.
   const [rphPerWeek, setRphPerWeek] = React.useState(5);
   const [sessionInput, setSessionInput] = React.useState("");
@@ -125,7 +125,7 @@ export function SettingsTab() {
     );
   }
 
-  // No stored setting means the read failed or this account has no school —
+  // No stored setting means the read failed or this account has no school -
   // never "the school's rule is Friday at 16:00". A form of defaults is a
   // form an administrator can save over the real answer.
   if (!stored) {
@@ -211,7 +211,7 @@ export function SettingsTab() {
                   percentage, so it is stated where it is set rather than
                   buried in the calculation it feeds. */}
               <p id="rph-hint" className="mt-1.5 text-[11.5px] text-ink-4">
-                Satu RPH bagi setiap hari persekolahan — asas kadar pematuhan sekolah.
+                Satu RPH bagi setiap hari persekolahan - asas kadar pematuhan sekolah.
               </p>
             </div>
           </div>
@@ -227,7 +227,7 @@ export function SettingsTab() {
               Halang penghantaran sehingga kelengkapan 100%
               <span className="mt-0.5 block text-[11.5px] text-ink-4">
                 Guru hanya boleh menghantar apabila semua bahagian wajib telah diisi. GPK atau
-                Guru Besar tidak boleh mengesahkan RPH yang belum lengkap — gred 1 bermaksud
+                Guru Besar tidak boleh mengesahkan RPH yang belum lengkap - gred 1 bermaksud
                 lengkap.
               </span>
             </span>
@@ -249,7 +249,7 @@ export function SettingsTab() {
                 </p>
                 <p className="mt-1">
                   Rancangan sesi {stored?.current_session} tidak akan dipaparkan dalam papan
-                  pemuka mahupun arkib sehingga sesi ditukar semula. Tiada data dipadam — ia
+                  pemuka mahupun arkib sehingga sesi ditukar semula. Tiada data dipadam - ia
                   kekal dalam pangkalan data.
                 </p>
               </div>
@@ -281,7 +281,7 @@ export function SettingsTab() {
         <CardContent className="grid gap-2 text-[12.5px] leading-[1.6] text-ink-3">
           <p>
             <span className="font-semibold text-ink-2">Tarikh akhir</span> menentukan bila
-            "ketepatan masa" diukur — rancangan yang tiba selepas waktu ini dikira lewat.
+            "ketepatan masa" diukur - rancangan yang tiba selepas waktu ini dikira lewat.
           </p>
           <p>
             <span className="font-semibold text-ink-2">Kelengkapan 100%</span> menghalang

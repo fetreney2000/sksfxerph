@@ -5,7 +5,7 @@ import { normalisePayload, type RphPayload } from "@/lib/schemas/rph";
  *
  * It goes through `sessionStorage` rather than a route parameter because a
  * lesson plan's fields are kilobytes of Malay prose and a URL is the wrong
- * place for them — and rather than straight into Dexie because the penyunting
+ * place for them - and rather than straight into Dexie because the penyunting
  * creates nothing until the teacher saves. Importing a file should not leave a
  * draft behind if they navigate away without reading it.
  *

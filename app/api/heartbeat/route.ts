@@ -6,7 +6,7 @@ import { adminDb, hasAdminCredentials } from "@/lib/server/db";
 /**
  * Keep-alive heartbeat + deployment diagnostics.
  *
- * Called once a day by Vercel Cron (Hobby cron fires at most 1×/day — see
+ * Called once a day by Vercel Cron (Hobby cron fires at most 1×/day - see
  * erph-backend-research.md §2.1) so that the **Supabase free project never
  * auto-pauses**. A paused project would mean the whole school gets an error on
  * Monday morning after a 7-day holiday, and pausing also stops pg_cron, so the
@@ -15,12 +15,12 @@ import { adminDb, hasAdminCredentials } from "@/lib/server/db";
  * It also answers the two questions you want answered first when auth is
  * hand-rolled: can we reach the database at all, and does `erph.actor()`
  * resolve a user id from the `X-Erph-User` header? If `actor` reports `broken`
- * while `db` reports `ok`, PostgREST is not surfacing the secret key's role —
+ * while `db` reports `ok`, PostgREST is not surfacing the secret key's role -
  * see §3b of db/schema.sql.
  *
  * ## What an anonymous caller is told
  *
- * Only `ok`. The other figures — `db`, `actor`, `mode`, `latency_ms` — tell an
+ * Only `ok`. The other figures - `db`, `actor`, `mode`, `latency_ms` - tell an
  * attacker whether this deployment is live, whether it has a database, and
  * whether the secret key is wired up, which is reconnaissance for the next
  * attempt rather than an answer to any question a caller should be asking.
@@ -31,7 +31,7 @@ import { adminDb, hasAdminCredentials } from "@/lib/server/db";
  *
  * The secret is `CRON_SECRET`, which Vercel sends as `Authorization: Bearer
  * <secret>` on cron requests when it is set. With no secret configured the
- * diagnostics are simply never shown — a deployment that has not set one
+ * diagnostics are simply never shown - a deployment that has not set one
  * loses a debugging aid, not a function.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -108,6 +108,6 @@ function isPrivileged(request: NextRequest): boolean {
   const a = Buffer.from(bearer);
   const b = Buffer.from(secret);
   // `timingSafeEqual` throws on a length mismatch, so the length is compared
-  // first — and a wrong length is not a secret.
+  // first - and a wrong length is not a secret.
   return a.length === b.length && timingSafeEqual(a, b);
 }

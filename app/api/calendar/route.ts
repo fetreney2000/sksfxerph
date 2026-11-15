@@ -2,13 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
 
 /**
- * GET /api/calendar — the weeks this school's administrator has declared.
+ * GET /api/calendar - the weeks this school's administrator has declared.
  *
  * Every screen that asks "what week is it" needs the answer from the database
  * once a calendar override exists: the breadcrumb, the week picker, the
  * dashboard's deadline and the archive all run on `currentWeek()`, which is
  * automatic until someone declares otherwise. So this is deliberately *not*
- * administrator-only — the people who must not set the calendar are exactly
+ * administrator-only - the people who must not set the calendar are exactly
  * the people whose pages have to read it.
  *
  * Scoped to the caller's own school, because an anchor from another one would
@@ -17,7 +17,7 @@ import { requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
  * An empty list is a complete answer, not a failure: local mode, a fresh
  * deployment and a school that has never overridden anything all produce it,
  * and the client numbers weeks from the term start in every one of those cases.
- * This route only runs in synced mode — `requireDbUser` answers 503 locally,
+ * This route only runs in synced mode - `requireDbUser` answers 503 locally,
  * which is why the client treats a failed load as "no declarations" rather
  * than as a reason to stop rendering.
  */

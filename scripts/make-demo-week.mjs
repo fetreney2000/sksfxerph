@@ -10,7 +10,7 @@
  *
  * The signature is generated here, not in a browser. The design puts the key
  * pair in the reviewer's device; a script key is structurally a *second
- * device*, which the system allows and which verifies — but it is not Bob's
+ * device*, which the system allows and which verifies - but it is not Bob's
  * key, so signing from his laptop afterwards would produce a different one.
  *
  * Run:  node scripts/make-demo-week.mjs [--force]
@@ -202,8 +202,8 @@ if (!kartini || !bob) throw new Error("Kartini or Bob has no membership here.");
 console.log(`Kartini ${kartini.user_id}, Bob ${bob.user_id}`);
 
 // Bob's office. The weekly cover sheet prints the signer's jawatan, read from
-// erph.user — and 'gpk' does not say which of the three Penolong Kanan offices
-// he holds, so the demo states one rather than leave "—" beneath a signature
+// erph.user - and 'gpk' does not say which of the three Penolong Kanan offices
+// he holds, so the demo states one rather than leave "-" beneath a signature
 // this script has just made. One GPK, one school: any of the three is as true
 // as the other until the school says otherwise.
 const BOB_JAWATAN = "pk_pentadbiran";
@@ -236,7 +236,7 @@ for (let i = 0; i < 5; i += 1) {
       `&week_no=eq.${week}&plan_date=eq.${planDate}&deleted_at=is.null&select=id,status`,
   );
   if (existing?.length && !FORCE) {
-    console.log(`  ${planDate}: already exists (${existing[0].status}) — skipped`);
+    console.log(`  ${planDate}: already exists (${existing[0].status}) - skipped`);
     created.push(existing[0].id);
     continue;
   }
@@ -334,7 +334,7 @@ for (const id of created) {
       ...asUser(bob.user_id),
       body: JSON.stringify({
         p_document: doc.id,
-        p_comment: "Data contoh — dijana oleh skrip untuk semakan paparan.",
+        p_comment: "Data contoh - dijana oleh skrip untuk semakan paparan.",
       }),
     });
     console.log(`  ${doc.id.slice(0, 8)}: sahkan ✔`);

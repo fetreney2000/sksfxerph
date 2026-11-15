@@ -1,7 +1,7 @@
 /**
  * Stable content hash for no-op detection.
  *
- * Not cryptographic — the server only compares it to decide whether a sync op
+ * Not cryptographic - the server only compares it to decide whether a sync op
  * actually changed anything. FNV-1a so it needs no dependency and computes
  * identically on server and client.
  *

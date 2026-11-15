@@ -9,14 +9,14 @@ import { currentSchool } from "@/lib/school";
 import type { RphStatus } from "@/lib/types";
 
 /**
- * Page 1 of a week's submission — "SEMAKAN RANCANGAN HARIAN GURU".
+ * Page 1 of a week's submission - "SEMAKAN RANCANGAN HARIAN GURU".
  *
  * This is a different shape from the pages behind it, and that is the whole
  * reason it is a separate component. The daily RPH is one lesson on one day,
  * written by a teacher. The cover is one *week* of them: submitted once, on
  * one date, carrying one pentadbir's signature, jawatan and the date they
  * confirmed it. Those fields cannot be repeated onto every daily page without
- * the sheet lying — six pages cannot have been submitted at six different
+ * the sheet lying - six pages cannot have been submitted at six different
  * times, and cannot each hold the week's single approval.
  *
  * Printed ahead of the week it covers, so the district receiving a stapled
@@ -25,7 +25,7 @@ import type { RphStatus } from "@/lib/types";
 /**
  * How each status is written on the printed cover sheet.
  *
- * Deliberately not the screen's labels: the grade — `(1)` and `(0)` — is the
+ * Deliberately not the screen's labels: the grade - `(1)` and `(0)` - is the
  * reviewer's marking and belongs on the screens where they make it. What a
  * reader of a stapled stack needs is the word, as the paper form has it.
  */
@@ -39,7 +39,7 @@ const STATUS_LABEL: Record<RphStatus, string> = {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** "19-01-2026 | 09:06 AM" — the form's own stamp, down to the minute.
+/** "19-01-2026 | 09:06 AM" - the form's own stamp, down to the minute.
  *
  * Built from the school's wall clock (`mytFields`) rather than `Date#getHours`,
  * which renders the machine printing the sheet. A cover signed at 01:06 UTC is
@@ -47,34 +47,34 @@ const pad = (n: number) => String(n).padStart(2, "0");
  * on its record.
  */
 function submissionStamp(value: number | string | null | undefined): string {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return "-";
   const f = mytFields(value);
-  if (!f) return "—";
+  if (!f) return "-";
   const h12 = f.hour % 12 === 0 ? 12 : f.hour % 12;
   return `${pad(f.date)}-${pad(f.month + 1)}-${f.year} | ${pad(h12)}:${pad(f.minute)} ${f.hour < 12 ? "AM" : "PM"}`;
 }
 
-/** "21-01-2026" — the date alone, for TARIKH PENGESAHAN, in MYT. */
+/** "21-01-2026" - the date alone, for TARIKH PENGESAHAN, in MYT. */
 function dayStamp(value: string | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return "-";
   const f = mytFields(value);
-  if (!f) return "—";
+  if (!f) return "-";
   return `${pad(f.date)}-${pad(f.month + 1)}-${f.year}`;
 }
 
-const or = (s: string | null | undefined) => (s?.trim() ? s.trim() : "—");
+const or = (s: string | null | undefined) => (s?.trim() ? s.trim() : "-");
 
 interface Props {
   weekNo: number;
   session: string;
   teacherName?: string;
-  /** Epoch ms or ISO — the form prints the minute, so both are accepted. */
+  /** Epoch ms or ISO - the form prints the minute, so both are accepted. */
   submittedAt?: number | string | null;
   status: RphStatus;
   /** Verified material, or null while the week is unsigned. */
   signature?: SignaturePayload | null;
   signatureState?: SignatureState;
-  /** CATATAN PENTADBIR. Blank when the reviewer left none — as on the paper. */
+  /** CATATAN PENTADBIR. Blank when the reviewer left none - as on the paper. */
   comment?: string | null;
   schoolName?: string;
   className?: string;
@@ -93,7 +93,7 @@ export function RphCover({
   className,
 }: Props) {
   const sealed = signatureState === "valid" ? (signature ?? null) : null;
-  // "M1 / 2026" — the week and the calendar year it belongs to, which is what
+  // "M1 / 2026" - the week and the calendar year it belongs to, which is what
   // gets written on the paper form by hand.
   const weekLabel = `M${weekNo} / ${(session.split("/")[0] ?? session).trim()}`;
 
@@ -148,11 +148,11 @@ export function RphCover({
           </tr>
           <tr>
             <Label>NAMA PENTADBIR</Label>
-            <Value span={3}>{sealed ? or(sealed.signerName) : "—"}</Value>
+            <Value span={3}>{sealed ? or(sealed.signerName) : "-"}</Value>
           </tr>
           <tr>
             <Label>JAWATAN</Label>
-            <Value span={3}>{sealed ? or(sealed.signerTitle) : "—"}</Value>
+            <Value span={3}>{sealed ? or(sealed.signerTitle) : "-"}</Value>
           </tr>
           <tr>
             <Label>CATATAN PENTADBIR</Label>
@@ -165,7 +165,7 @@ export function RphCover({
           </tr>
           <tr>
             <Label>TARIKH PENGESAHAN</Label>
-            <Value span={3}>{sealed ? dayStamp(sealed.signedAt) : "—"}</Value>
+            <Value span={3}>{sealed ? dayStamp(sealed.signedAt) : "-"}</Value>
           </tr>
         </tbody>
       </table>

@@ -7,7 +7,7 @@ import type { RphDocument, SyncResult } from "@/lib/types";
  * Offline mutation queue.
  *
  * Protocol (erph-backend-research.md §7):
- *   1. Every edit-commit mints one `opId` (crypto.randomUUID) — kept forever so
+ *   1. Every edit-commit mints one `opId` (crypto.randomUUID) - kept forever so
  *      a retry of the same op is a server-side no-op via `sync_op`.
  *   2. Writes only ever touch Dexie; the network is fire-and-forget.
  *   3. Flush is batched, retried with exponential backoff, and never blocks UI.
@@ -27,7 +27,7 @@ const newId = () => (canUseCrypto ? crypto.randomUUID() : `${Date.now()}-${Math.
  *
  * Writes are funnelled through a single drain so rows can never land out of
  * order: without it, Dexie runs overlapping transactions and a keystroke from
- * a moment ago can overwrite the one after it — the form would save stale text.
+ * a moment ago can overwrite the one after it - the form would save stale text.
  * Only the newest doc is written; intermediate ones are superseded anyway.
  */
 let pendingDoc: RphDocument | null = null;
@@ -56,7 +56,7 @@ export function saveDocument(doc: RphDocument): Promise<void> {
 async function writeDocument(doc: RphDocument): Promise<void> {
   const now = Date.now();
 
-  // Local mode has no queue consumer — flushQueue() clears it on sight — so
+  // Local mode has no queue consumer - flushQueue() clears it on sight - so
   // enqueueing here would be a write followed immediately by a delete on every
   // keystroke, and the depth it produces would make the sync chip advertise
   // work that will never be sent. One put, nothing else.
@@ -103,7 +103,7 @@ async function writeDocument(doc: RphDocument): Promise<void> {
 export async function flushQueue(): Promise<SyncResult[]> {
   // Local mode: there is no remote to sync to, and IndexedDB already *is* the
   // persisted copy. Drain the vestigial queue instead of showing "n belum diselesaikan"
-  // to a teacher forever — the chip would otherwise lie about pending work.
+  // to a teacher forever - the chip would otherwise lie about pending work.
   if (!hasBackend()) {
     await db.syncQueue.clear();
     return [];
@@ -122,7 +122,7 @@ export async function flushQueue(): Promise<SyncResult[]> {
   try {
     // No Authorization header to attach: /api/sync authenticates the httpOnly
     // session cookie, which the browser sends automatically on a same-origin
-    // fetch. (There is no Supabase JWT any more — Supabase Auth is not used.)
+    // fetch. (There is no Supabase JWT any more - Supabase Auth is not used.)
     const res = await fetch("/api/sync", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -164,7 +164,7 @@ export async function flushQueue(): Promise<SyncResult[]> {
 async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> {
   const byOp = new Map(results.map((r) => [r.opId, r]));
   const merges: { localId: string; serverId: string }[] = [];
-  /** Ops the server refused outright, with the reason — the teacher is told. */
+  /** Ops the server refused outright, with the reason - the teacher is told. */
   const refused: { entityId: string; error: string }[] = [];
   /** Ops worth trying again: the server failed, not decided. */
   const retry: { opId: string; error: string; attempts: number }[] = [];
@@ -181,7 +181,7 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
           status: res.status ?? op.payload.status,
         });
 
-        // The server resolved this write to a DIFFERENT row than we sent —
+        // The server resolved this write to a DIFFERENT row than we sent -
         // our offline-created plan collided with one already on the server
         // and was merged into it (backend §7: surface this, don't hide it).
         if (res.id && res.id !== op.entityId) {
@@ -193,7 +193,7 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
         if (res.retryable) {
           // The server failed rather than decided. The op id was released
           // along with the work it had done, so this very op can be tried
-          // again — and until it succeeds, the edit stays in the queue rather
+          // again - and until it succeeds, the edit stays in the queue rather
           // than being dropped on the floor.
           retry.push({
             opId,
@@ -203,7 +203,7 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
           continue;
         }
         // A rejection the server decided on: it will refuse again, so keeping
-        // the op would block the queue behind it. It is dropped — but not
+        // the op would block the queue behind it. It is dropped - but not
         // silently: the edit never reached the server, and the teacher is
         // the only person who can do anything about that.
         refused.push({ entityId: op?.entityId ?? opId, error: res.error ?? "ditolak" });
@@ -215,7 +215,7 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
   });
 
   // The retries are put back with a delay, so a server that is having a bad
-  // minute is not asked again immediately — and with the same escalating
+  // minute is not asked again immediately - and with the same escalating
   // backoff as a network failure, so a server that stays down is asked less
   // and less often.
   if (retry.length > 0) {
@@ -223,7 +223,7 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
   }
 
   if (merges.length > 0) {
-    // One notification per flush rather than one per row — a burst of merges
+    // One notification per flush rather than one per row - a burst of merges
     // after a long offline spell should not bury the teacher in identical
     // alerts. The user-facing message is the point; the ids are for support.
     await db.notifications.add({
@@ -239,7 +239,7 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
   }
 
   if (refused.length > 0) {
-    // The edit is still on this device — it is the server that never took it.
+    // The edit is still on this device - it is the server that never took it.
     // Saying so is the difference between a teacher checking and a teacher
     // believing the plan was filed.
     await db.notifications.add({
@@ -248,8 +248,8 @@ async function reconcile(opIds: string[], results: SyncResult[]): Promise<void> 
       title: "RPH tidak dihantar ke pelayan",
       body:
         refused.length === 1
-          ? `Pelayan menolak satu RPH (${refused[0]?.error}). RPH ini masih ada dalam peranti ini — semak dan hantar semula.`
-          : `Pelayan menolak ${refused.length} RPH. RPH tersebut masih ada dalam peranti ini — semak dan hantar semula.`,
+          ? `Pelayan menolak satu RPH (${refused[0]?.error}). RPH ini masih ada dalam peranti ini - semak dan hantar semula.`
+          : `Pelayan menolak ${refused.length} RPH. RPH tersebut masih ada dalam peranti ini - semak dan hantar semula.`,
       createdAt: Date.now(),
     });
   }
@@ -274,7 +274,7 @@ export const isOnline = () => typeof navigator !== "undefined" && navigator.onLi
  * Local-only mode: no Supabase env configured (see lib/config.ts).
  * The app is fully usable; sync simply never leaves the device.
  *
- * `supabaseConfigured` rather than the URL on its own — every read path
+ * `supabaseConfigured` rather than the URL on its own - every read path
  * already tests that, and a deployment that sets the URL without the anon key
  * must be local everywhere rather than local to read and synced to write,
  * which queued every plan forever against a server that answers 503.
@@ -305,7 +305,7 @@ function scheduleFlush(delayMs = 1000): void {
   }, delayMs);
 }
 
-/** Push a fresh document through the whole path — used by the editor. */
+/** Push a fresh document through the whole path - used by the editor. */
 export async function commit(doc: RphDocument): Promise<void> {
   await saveDocument(doc);
   if (hasBackend()) scheduleFlush();

@@ -77,7 +77,7 @@ import type { Curriculum, RphDocument } from "@/lib/types";
 /**
  * Download the plan as a KPM-formatted DOCX from /api/export.
  *
- * The route is pure JS (`docx`) so it works in local mode too — no Supabase
+ * The route is pure JS (`docx`) so it works in local mode too - no Supabase
  * involved. On any failure we fall back to the browser print dialog, which
  * also produces a PDF, so an export is never a dead end.
  */
@@ -86,7 +86,7 @@ import type { Curriculum, RphDocument } from "@/lib/types";
  *
  * Verified here rather than passed through. The exported file is the artefact
  * most likely to reach someone who cannot ask the app about it, so the printed
- * signature has to be one this process actually checked — and an unverifiable
+ * signature has to be one this process actually checked - and an unverifiable
  * one is dropped rather than rendered, since a seal that cannot be confirmed
  * must not appear to confirm anything.
  */
@@ -149,7 +149,7 @@ async function exportDocx(doc: RphDocument): Promise<void> {
     URL.revokeObjectURL(url);
     toast.success("RPH dimuat turun sebagai DOCX");
   } catch {
-    toast.info("Eksport gagal — membuka dialog cetak sebagai gantian");
+    toast.info("Eksport gagal - membuka dialog cetak sebagai gantian");
     window.print();
   }
 }
@@ -167,7 +167,7 @@ interface Note {
   field?: string;
   text: string;
   /**
-   * `blocking` notes mirror the four 25-point checks in `completeness()` —
+   * `blocking` notes mirror the four 25-point checks in `completeness()` -
    * there is no open blocking note exactly when the score is 100, so the
    * badge, the meter and this list can never contradict each other.
    *
@@ -193,10 +193,10 @@ function notes(payload: RphPayload): Note[] {
   if (!has(payload.objektif))
     add({ section: 1, field: "f-675227", text: ms.editor.missing.objektif, blocking: true });
   // An activity list whose first entry is a blank separator is not an empty
-  // list — asking for "at least one" is not the same as asking for "the first".
+  // list - asking for "at least one" is not the same as asking for "the first".
   if (!payload.aktiviti.some((a) => has(a.nama)))
     add({ section: 2, text: ms.editor.missing.noAktiviti, blocking: true });
-  // Bahagian 2 with objektif, matching the printed form — not bahagian 3.
+  // Bahagian 2 with objektif, matching the printed form - not bahagian 3.
   if (!has(payload.kriteria_kejayaan))
     add({ section: 1, field: "f-kriteria", text: ms.editor.missing.kriteria, blocking: true });
   if (!has(payload.refleksi))
@@ -210,14 +210,14 @@ interface SeedSource {
   payload: RphPayload;
   subjectCode?: string;
   subjectName?: string;
-  /** The classes the copied plan covered — they belong to the same school. */
+  /** The classes the copied plan covered - they belong to the same school. */
   classIds?: string[];
   /** The slot the lesson was written for, when the source is a filed plan. */
   slotTime?: string;
   slotTimeEnd?: string;
 }
 
-/** A template as the penyunting opens it — `?edit=` needs the whole row. */
+/** A template as the penyunting opens it - `?edit=` needs the whole row. */
 interface TemplateRow {
   id: string;
   title: string;
@@ -275,7 +275,7 @@ async function loadTemplateForEdit(id: string): Promise<TemplateRow | null> {
  *
  * Every failure path returns `null` rather than throwing: a template someone
  * else has since deleted, or a week with nothing in it, should open an empty
- * editor — not an error page for a convenience feature. Offline, Dexie still
+ * editor - not an error page for a convenience feature. Offline, Dexie still
  * answers for `reuse` and `copy`, so the command works with no network at all.
  */
 async function loadSeed(
@@ -283,14 +283,14 @@ async function loadSeed(
   templateId?: string,
   reuse?: boolean,
 ): Promise<SeedSource | null> {
-  // `?copy=` is the most specific thing a URL can name — one exact plan the
-  // teacher picked from their archive a moment ago — so it wins over a
+  // `?copy=` is the most specific thing a URL can name - one exact plan the
+  // teacher picked from their archive a moment ago - so it wins over a
   // template or last week's best plan if a hand-typed URL ever carries both.
   if (copyId) {
     try {
       const doc = await db.documents.get(copyId);
       // Only the teacher's own plans are theirs to copy. The archive lists
-      // nothing else, so this only matters for a hand-edited URL — but a
+      // nothing else, so this only matters for a hand-edited URL - but a
       // classmate's plan arriving in this teacher's editor would be a leak,
       // however small.
       if (!doc || doc.ownerId !== ownerId()) return null;
@@ -326,7 +326,7 @@ async function loadSeed(
         .where("[ownerId+session]")
         .equals([ownerId(), currentSession()])
         .toArray();
-      // The newest *written* plan from last week — an untouched blank from a
+      // The newest *written* plan from last week - an untouched blank from a
       // previous "RPH baharu" would seed this one with nothing at all.
       const source = docs
         .filter((d) => d.weekNo === currentWeek() - 1 && completeness(d.payload) > 0)
@@ -349,11 +349,11 @@ async function loadSeed(
  * `mode="template"` is the same wizard pointed at a different destination.
  *
  * A template's whole value is the plan inside it, so the screen that writes
- * one is the screen that writes a plan — with the parts that only make sense
+ * one is the screen that writes a plan - with the parts that only make sense
  * for a *filed* plan taken out. Class, week, date and time are dropped
  * because nothing stores them: showing a teacher a date picker whose result
  * goes nowhere is a form that lies about what it does. What is left is what
- * `erph.rph_template` keeps — the payload, and the subject the plan was
+ * `erph.rph_template` keeps - the payload, and the subject the plan was
  * written for.
  *
  * Nothing is ever written to Dexie in this mode. A template is not a plan for
@@ -374,7 +374,7 @@ export function RphEditor({
 
   /**
    * `useLiveQuery` is what makes the dashboard update the instant the editor
-   * saves — both screens subscribe to the same Dexie row, no global store.
+   * saves - both screens subscribe to the same Dexie row, no global store.
    *
    * The discriminated return matters: `undefined` alone can't tell "still
    * loading" apart from "document doesn't exist", and showing a teacher a
@@ -382,12 +382,12 @@ export function RphEditor({
    */
   const found = useLiveQuery(async () => {
     // No id is "not saved yet", not "nothing here". The editor opens blank and
-    // the teacher's first explicit save is what creates the row — opening the
+    // the teacher's first explicit save is what creates the row - opening the
     // penyunting must never leave a document behind that nobody chose to write.
     if (!id) return { state: "unsaved" as const };
     const doc = await db.documents.get(id);
     // Normalised on read. Dexie holds whatever was saved, and a plan written
-    // before the template reshape carries no `kriteria_kejayaan` — which is
+    // before the template reshape carries no `kriteria_kejayaan` - which is
     // how opening an existing RPH from the archive crashed the editor on the
     // first field that assumed it existed.
     return doc
@@ -401,7 +401,7 @@ export function RphEditor({
   const { items: subjects } = useSchoolSubjects();
 
   /**
-   * A document that exists only in React state — no id in the URL, no row in
+   * A document that exists only in React state - no id in the URL, no row in
    * Dexie, nothing for the sync queue to send.
    *
    * It becomes real when the teacher presses Simpan, and not before. Seeded
@@ -419,7 +419,7 @@ export function RphEditor({
    * below is built from the store, so a declaration landing after mount has to
    * re-render this component to reach the picker. And the seeding effect waits
    * for it, because that effect *chooses* the week a new plan files under
-   * rather than merely displaying it — stamping one before the school's
+   * rather than merely displaying it - stamping one before the school's
    * declarations arrived would file it on the term-start grid whatever the
    * school had said, and nothing later corrects that.
    */
@@ -437,13 +437,13 @@ export function RphEditor({
     // has both from its fixtures; synced mode re-runs this when they arrive.
     //
     // A template needs no class, so in template mode the subject list alone
-    // is enough — a school that has not created a class yet can still curate
+    // is enough - a school that has not created a class yet can still curate
     // its library.
     //
     // And the calendar: seeding *decides* which week this plan files under, so
     // it waits for the school's answer rather than guessing at the term-start
     // grid and stamping a number nothing can later correct. The wait is a
-    // skipped pass, not a spinner — nothing renders from `pending` yet.
+    // skipped pass, not a spinner - nothing renders from `pending` yet.
     if (id || seeded || !subject || (!asTemplate && !cls) || !calendarReady) return;
 
     let cancelled = false;
@@ -482,15 +482,15 @@ export function RphEditor({
       setEditingTemplate(editing);
 
       // Which week this plan files under. `/arkib` links here with `?week=`
-      // so a missed week can be filled in; anything else — absent, nonsense,
-      // or a week the school has not reached — lands on the week at hand.
+      // so a missed week can be filled in; anything else - absent, nonsense,
+      // or a week the school has not reached - lands on the week at hand.
       // The date follows the week, so the two can never disagree: this week
       // opens on today, an earlier one on its Monday.
       const asked = Number(params.get("week"));
       const thisWeek = currentWeek();
       // `weekExists` as well as `<= thisWeek`: a week number the school has
       // renumbered away has no dates of its own, and stamping it anyway would
-      // give this plan a `week_no` its own `plan_date` disagrees with — the
+      // give this plan a `week_no` its own `plan_date` disagrees with - the
       // archive offers only weeks that exist, and a hand-typed URL should not
       // be able to undo that.
       const week =
@@ -500,7 +500,7 @@ export function RphEditor({
 
       const now = Date.now();
       // A copied plan brings its own classes; they are kept only while every
-      // one still belongs to this school's list — a class deleted since the
+      // one still belongs to this school's list - a class deleted since the
       // source was written would leave the plan stamped with an id the server
       // refuses on every flush. Anything that survives the filter, or nothing
       // at all, falls back to the first class, the same default a blank plan
@@ -518,7 +518,7 @@ export function RphEditor({
         schoolCode,
         ownerId: ownerId(),
         // Step 1 ticks classes; the first one is the default and the teacher
-        // widens it from there. One plan, one review, one sheet — however many
+        // widens it from there. One plan, one review, one sheet - however many
         // classes it covers.
         classIds,
         classNames,
@@ -534,7 +534,7 @@ export function RphEditor({
         slotTimeEnd: imported?.slotTimeEnd ?? loaded?.slotTimeEnd ?? "12:40",
         status: "draft",
         // A template, a copied plan or last week's plan arrives *here*, not in
-        // the database — readable, editable and discardable before anything
+        // the database - readable, editable and discardable before anything
         // exists.
         payload: imported?.payload ?? editing?.payload ?? loaded?.payload ?? emptyPayload(),
         version: 1,
@@ -552,14 +552,14 @@ export function RphEditor({
   /** What is on screen: a stored plan, or one that has not been saved yet. */
   const live = persisted ?? pending;
 
-  // The school year the preview prints — server-resolved, so the paper shows
+  // The school year the preview prints - server-resolved, so the paper shows
   // the same year the plan will be filed under.
   const session = useSession();
   const school = useSchool();
 
   const [submitOpen, setSubmitOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  /** Writes in flight — the indicator only speaks up if one is genuinely slow. */
+  /** Writes in flight - the indicator only speaks up if one is genuinely slow. */
   const inFlight = React.useRef(0);
 
   // ── Tier B: the gated wizard became four collapsible sections ────────────
@@ -571,20 +571,20 @@ export function RphEditor({
   const [active, setActive] = React.useState(0);
   /** `null` = no choice yet, so we open the first section that still needs work. */
   const [openSet, setOpenSet] = React.useState<ReadonlySet<number> | null>(null);
-  /** Height of the app topbar — content-driven, so it cannot be a magic number. */
+  /** Height of the app topbar - content-driven, so it cannot be a magic number. */
   const [topInset, setTopInset] = React.useState(64);
   /** Phone-width: only one section open at a time (measured after mount). */
   const [narrow, setNarrow] = React.useState(false);
   /** Stored-section preference consumed exactly once per document. */
   const [resumed, setResumed] = React.useState(false);
-  /** Stable across every write to this row — safe as an effect dependency. */
+  /** Stable across every write to this row - safe as an effect dependency. */
   const liveId = live?.id;
 
   /**
    * What the teacher has typed, held *synchronously*.
    *
    * `live` only changes once Dexie confirms a write, so a render landing
-   * between two fast keystrokes restores the older stored value — and React
+   * between two fast keystrokes restores the older stored value - and React
    * resets a controlled input to its prop, which discards the characters
    * typed since. Tracing this showed `SLOW typing: ok / FAST typing: lost`.
    * The draft makes the keystroke the source of truth; the store is where it
@@ -606,7 +606,7 @@ export function RphEditor({
    */
   const signature = useSignature(persisted?.id, payload);
   // The plan being edited is always the signed-in teacher's own, so the
-  // printed NAMA comes from the session rather than from a stored owner id —
+  // printed NAMA comes from the session rather than from a stored owner id -
   // and never from a default, which is how the preview ended up naming every
   // teacher "Nurul Aisyah binti Rahim".
   const me = useUser();
@@ -614,7 +614,7 @@ export function RphEditor({
   /**
    * The A4 preview is a couple of hundred nodes; deferring it lets React paint
    * the field you are typing in first and catch the document up a beat later.
-   * A hook, so it lives with the others — before the loading guards.
+   * A hook, so it lives with the others - before the loading guards.
    */
   const deferredPayload = React.useDeferredValue(payload);
 
@@ -636,7 +636,7 @@ export function RphEditor({
       };
 
       // An unsaved plan is edited in memory only. `commit()` would put a row in
-      // Dexie *and* enqueue a network sync — exactly the write the teacher has
+      // Dexie *and* enqueue a network sync - exactly the write the teacher has
       // not asked for yet, and the reason opening the penyunting used to leave
       // a document behind.
       if (!persisted) {
@@ -645,7 +645,7 @@ export function RphEditor({
       }
 
       inFlight.current += 1;
-      // A Dexie put lands in about a millisecond — well inside a frame.
+      // A Dexie put lands in about a millisecond - well inside a frame.
       // Toggling the indicator for those would strobe it on every keystroke,
       // so it only turns amber if a write is still pending after 200ms:
       // routine success stays quiet, slowness becomes conspicuous.
@@ -655,7 +655,7 @@ export function RphEditor({
       try {
         // commit() writes to Dexie first (optimistic, instant for the UI) and
         // queues the network sync in the background. `payload` comes from the
-        // ref, never from `patch` — a doc-level patch carrying an older payload
+        // ref, never from `patch` - a doc-level patch carrying an older payload
         // would revert whatever was typed after it was built.
         await commit(next);
       } finally {
@@ -670,7 +670,7 @@ export function RphEditor({
   /**
    * The one action that turns a blank slate into a document.
    *
-   * Everything above deliberately does not do this — which is the whole point
+   * Everything above deliberately does not do this - which is the whole point
    * of the change. A teacher who opens the penyunting, changes their mind and
    * navigates away must leave nothing behind: no empty draft in the dashboard,
    * no orphan row for a reviewer, no queued sync. Pressing Simpan is what says
@@ -684,7 +684,7 @@ export function RphEditor({
       const draft = { ...pending, payload: payloadRef.current };
 
       // `rph_document` is keyed on teacher×class-set×subject×session×week×date
-      // — and the class half is an *overlap*: a second plan for the same slot
+      // - and the class half is an *overlap*: a second plan for the same slot
       // does not coexist only where both claim a shared class. The server
       // resolves it onto the first and the teacher's work silently becomes
       // someone else's row, with no warning anywhere.
@@ -706,7 +706,7 @@ export function RphEditor({
         .first();
 
       if (clash) {
-        // Name the shared class, not the whole label — that is the one the two
+        // Name the shared class, not the whole label - that is the one the two
         // plans are fighting over.
         const shared =
           clash.classNames[clash.classIds.findIndex((c) => draft.classIds.includes(c))] ?? "";
@@ -742,7 +742,7 @@ export function RphEditor({
    *
    * The counterpart to `savePlan`, pointed somewhere else: the payload goes to
    * `erph.rph_template`, nothing is written to Dexie and nothing is queued for
-   * sync — a template is not a plan for a week, so filing one would put a row
+   * sync - a template is not a plan for a week, so filing one would put a row
    * on the dashboard and in the compliance figures for lessons nobody taught.
    *
    * The row needs a title, and a choice about who may use it. Both are asked
@@ -763,7 +763,7 @@ export function RphEditor({
         curriculum: meta.curriculum,
         visibility: meta.visibility,
         // Blank rows are where the caret was. `normalisePayload` drops them on
-        // read anyway, and `rphPayloadSchema` requires a non-empty name — so
+        // read anyway, and `rphPayloadSchema` requires a non-empty name - so
         // a half-typed last line would 422 this save the same way an abandoned
         // "Tambah aktiviti" row used to.
         payload: {
@@ -838,7 +838,7 @@ export function RphEditor({
    * action that changes nothing.
    *
    * Shift is left alone so Ctrl+Shift+S still reaches the browser's own
-   * Save-Page-As — swallowing a keystroke a user may legitimately want is
+   * Save-Page-As - swallowing a keystroke a user may legitimately want is
    * how a shortcut becomes a trap.
    */
   React.useEffect(() => {
@@ -847,7 +847,7 @@ export function RphEditor({
       if (e.key.toLowerCase() !== "s") return;
       e.preventDefault();
       // A template has no row to fall back on, so Ctrl+S always means "file
-      // this as a template" — the same promise it makes in a document editor,
+      // this as a template" - the same promise it makes in a document editor,
       // pointed at the destination this screen is for.
       if (asTemplate) {
         setSaveOpen(true);
@@ -866,8 +866,8 @@ export function RphEditor({
   const updatePayload = React.useCallback(
     (patch: Partial<RphPayload>) => {
       const next = { ...payloadRef.current, ...patch };
-      // Update the ref *before* anything can render — `update()` reads it to
-      // build the commit — then let React render from the same value.
+      // Update the ref *before* anything can render - `update()` reads it to
+      // build the commit - then let React render from the same value.
       payloadRef.current = next;
       setDraft(next);
       void update({ payload: next });
@@ -892,7 +892,7 @@ export function RphEditor({
   }, []);
 
   // Phone width: a second open section is just more scrolling, so the
-  // accordion becomes exclusive below md. Measured after mount — using it for
+  // accordion becomes exclusive below md. Measured after mount - using it for
   // the first paint would cause a hydration mismatch for no benefit.
   React.useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
@@ -906,7 +906,7 @@ export function RphEditor({
   // it answers "where am I" without the teacher having to look up. Re-keyed on
   // the id rather than the row, or it would re-observe on every keystroke.
   React.useEffect(() => {
-    // No document yet — there is nothing to observe.
+    // No document yet - there is nothing to observe.
     if (!liveId) return;
     const els = STEPS.map((_, i) => document.getElementById(`bahagian-${i}`)).filter(
       (el): el is HTMLElement => el !== null,
@@ -970,7 +970,7 @@ export function RphEditor({
         }
       }
     } catch {
-      // corrupt or unavailable storage — fall through to the default
+      // corrupt or unavailable storage - fall through to the default
     }
     const f = stepStatus(live.payload ?? emptyPayload());
     const flags = [f.profil, f.dskp, f.pdpc, f.refleksi];
@@ -990,7 +990,7 @@ export function RphEditor({
         JSON.stringify({ active, open: [...openSet] }),
       );
     } catch {
-      // private mode or quota — losing a preference is not worth an error
+      // private mode or quota - losing a preference is not worth an error
     }
   }, [liveId, active, openSet]);
 
@@ -1000,7 +1000,7 @@ export function RphEditor({
       setOpenSet((prev) => {
         const open = prev ?? new Set<number>();
         // Phone width: a second open section is just more scrolling, so the
-        // accordion goes exclusive — tapping the only open one still closes it.
+        // accordion goes exclusive - tapping the only open one still closes it.
         if (narrow) {
           const soleOpen = open.size === 1 && open.has(i);
           return new Set(soleOpen ? [] : [i]);
@@ -1089,7 +1089,7 @@ export function RphEditor({
 
   const onSubmit = async (force: boolean) => {
     // Offline-first: never block a teacher on a network hiccup. When we ARE
-    // online and configured, the server is authoritative — `submit_rph` owns
+    // online and configured, the server is authoritative - `submit_rph` owns
     // the completeness rule (backend §3.3 decision 4) and may disagree with
     // our local meter. If it refuses, show the gate instead of submitting.
     if (supabaseConfigured && navigator.onLine) {
@@ -1109,7 +1109,7 @@ export function RphEditor({
         }
         // Genuine network/DB hiccup: fall through and submit locally.
         // sync_rph applies the same 100% gate server-side, so this cannot
-        // become a bypass — it just queues the submission for when we reconnect.
+        // become a bypass - it just queues the submission for when we reconnect.
       }
     } else if (score < 100 && !force) {
       setSubmitOpen(true);
@@ -1139,7 +1139,7 @@ export function RphEditor({
    *
    * There are two instances of the sheet: the one on screen in the dock (or
    * behind the phone's preview tab), and the one that actually goes on paper.
-   * Sharing the props is what stops them disagreeing — the preview the teacher
+   * Sharing the props is what stops them disagreeing - the preview the teacher
    * approved and the page the printer takes have to be the same document.
    */
   const sheetProps: React.ComponentProps<typeof RphPaper> = {
@@ -1147,13 +1147,13 @@ export function RphEditor({
     session,
     schoolName: school.name,
     teacherName: me.fullName,
-    // Every field the printed form has. These were missing, so the sheet —
-    // and therefore the PDF, which is a browser print of this tree — showed a
+    // Every field the printed form has. These were missing, so the sheet -
+    // and therefore the PDF, which is a browser print of this tree - showed a
     // dash for Subjek, Nama Kelas, Hari and Tarikh on every plan.
     //
     // In template mode the plan-specific ones are withheld rather than passed
     // through: a template has no class, no date and no week, so the sheet
-    // prints the form's own dashes for what it does not have — which is the
+    // prints the form's own dashes for what it does not have - which is the
     // truth, and better than borrowing this browser's date.
     planClassName: asTemplate ? undefined : live.classNames.join(", "),
     subjectName: live.subjectName,
@@ -1302,13 +1302,13 @@ export function RphEditor({
               )}
             </div>
             <div className="mt-3.5 border-t border-dashed border-border pt-3.5">
-              {/* Completeness — flat, not a box: count, meter, then the exact gaps.
+              {/* Completeness - flat, not a box: count, meter, then the exact gaps.
                 Each gap is a link to the field that fixes it (WCAG G139). */}
               <div className="mb-0">
                 <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="text-[13.5px] font-semibold">{ms.editor.completeness}</span>
                   <span className="num text-[12.5px] text-ink-3">
-                    — {doneCount} daripada 4 bahagian · {score}%
+                    - {doneCount} daripada 4 bahagian · {score}%
                   </span>
                   <HelpHint label="Kelengkapan dokumen">
                     Empat bahagian wajib mengikut borang RPH sekolah: (1) Standard Kandungan +
@@ -1392,7 +1392,7 @@ export function RphEditor({
             not, so by Bahagian 3 the "live preview" had scrolled off the top
             and the teacher was filling in a form with nothing to look at. It
             now sticks under the nav for as long as the form column is beside
-            it, with its own scrollbar for a long plan — and only while it is
+            it, with its own scrollbar for a long plan - and only while it is
             the docked column, since as a tab below `xl` it *is* the page. */}
         <div
           className={cn(
@@ -1453,12 +1453,12 @@ export function RphEditor({
             )}
           </div>
 
-          {/* The preview is a narrow column — 390px docked at xl, and the full
+          {/* The preview is a narrow column - 390px docked at xl, and the full
               width of a phone. At a fixed 20% the label cell came out at 48px
               of text space, where "Standard" needs ~54, so every label broke
               mid-word: "Standar d / Kandun gan", "NAM A". The compact variant
-              lets the table size its own columns — the same thing `/semakan`
-              does for its mobile dialog — and it is scoped to `@media screen`,
+              lets the table size its own columns - the same thing `/semakan`
+              does for its mobile dialog - and it is scoped to `@media screen`,
               so paper keeps the fixed 20% of the school's form. */}
           <RphPaper {...sheetProps} compact />
         </div>
@@ -1467,7 +1467,7 @@ export function RphEditor({
       {/* ══ Single sticky action bar ═════════════════════════════════════
           Save state lives here (not 300px up in the header) next to the one
           primary action. No Back/Next: the section nav is the navigation, and
-          no "Simpan draf" — autosave is the save. */}
+          no "Simpan draf" - autosave is the save. */}
       <div
         data-print="screen"
         className="sticky bottom-14 z-10 flex flex-wrap items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 shadow-sm lg:bottom-0"
@@ -1487,7 +1487,7 @@ export function RphEditor({
               : "Belum disimpan"}
         </span>
 
-        {/* Nothing exists to submit until Simpan creates the row — offering
+        {/* Nothing exists to submit until Simpan creates the row - offering
             "Hantar" here would send an id that is not in the database. */}
         {asTemplate ? (
           <Button className="ml-auto" onClick={() => setSaveOpen(true)}>
@@ -1537,7 +1537,7 @@ export function RphEditor({
             <dl className="text-[13.5px]">
               <Row k="Bahagian lengkap" v={`${doneCount} / 4`} />
               {/* The role, not a person. Who specifically reviews is not on
-                  this record — it depends on the supervision assignment, and
+                  this record - it depends on the supervision assignment, and
                   naming an individual here would promise the teacher a reader
                   they may not get. */}
               <Row k="Dihantar kepada" v="GPK sekolah" />
@@ -1591,8 +1591,8 @@ export function RphEditor({
         </DialogContent>
       </Dialog>
 
-      {/* The artefact. `hidden` on screen — it is not a preview, it is the
-          thing the printer takes — and `@media print` in globals.css makes it
+      {/* The artefact. `hidden` on screen - it is not a preview, it is the
+          thing the printer takes - and `@media print` in globals.css makes it
           the whole page. A second instance on purpose: the on-screen sheet
           lives inside the `data-print="screen"` dock, so it is hidden when
           printing, and the preview may not be mounted at all (dock closed, or
@@ -1610,7 +1610,7 @@ export function RphEditor({
  * One collapsible section of the RPH.
  *
  * The header always shows "Bahagian n · <name>" plus a status pill, so the
- * whole document is scannable while collapsed — a teacher should be able to
+ * whole document is scannable while collapsed - a teacher should be able to
  * read what is missing without opening anything. Content only mounts when
  * open, so a collapsed section costs nothing.
  */
@@ -1667,7 +1667,7 @@ function SectionCard({
           <Badge variant={done ? "success" : "warning"} dot={false} className="max-sm:px-1.5">
             {/* On a phone the pill drops to a dot. "Belum lengkap" is 105px of
                 the 294px the card has, which squeezed the title to "Bahagian 2
-                · …" — and the section name is the only thing saying which card
+                · …" - and the section name is the only thing saying which card
                 this is. The circle already turns green with a tick when the
                 section is complete, so an amber dot is enough to say "not
                 yet". */}
@@ -1720,7 +1720,7 @@ function Row({ k, v, tone }: { k: string; v: string; tone?: "ok" | "bad" | "warn
 /* ══ Step 1 · Profil ═══════════════════════════════════════════════════ */
 
 /**
- * Sort the class list and de-duplicate it, keeping the names parallel — the
+ * Sort the class list and de-duplicate it, keeping the names parallel - the
  * same canonical form `sync_rph` writes server-side, so a client-side overlap
  * check agrees with the server's unique index. Names come from the school's
  * live list first, falling back to the names already on the document for a
@@ -1752,7 +1752,7 @@ function StepProfil({
   onPatch: (p: Partial<RphDocument>) => void;
   onPayload: (p: Partial<RphPayload>) => void;
   /**
-   * A template has no class, no week, no date and no lesson time —
+   * A template has no class, no week, no date and no lesson time -
    * `erph.rph_template` stores none of them. Offering the controls would be a
    * form whose answers go nowhere, so they are not offered.
    */
@@ -1764,7 +1764,7 @@ function StepProfil({
   const { items: subjects } = useSchoolSubjects();
 
   // A plan written against a class or subject that has since been archived
-  // still has to render its own value — otherwise the tick list would silently
+  // still has to render its own value - otherwise the tick list would silently
   // drop a class the plan still covers, and the next save would not change
   // anything the user could see.
   const classOptions = React.useMemo(() => {
@@ -1789,14 +1789,14 @@ function StepProfil({
   /**
    * Which week this plan files under, and whether that can still be changed.
    *
-   * The week is a choice while the plan is a draft — a week missed to illness
+   * The week is a choice while the plan is a draft - a week missed to illness
    * still had lessons, and the RPH for them is still owed. Once it has been
    * sent it stops being one: the archive, the compliance figures and the
    * printed sheets all key on `week_no`, so moving it afterwards would
    * silently rewrite what a past week's totals say.
    *
    * A plan from another school year is locked too, and for a different
-   * reason — its week numbers belong to that year's calendar, and the picker
+   * reason - its week numbers belong to that year's calendar, and the picker
    * lists this one's.
    */
   const weekLocked = doc.status !== "draft" || doc.session !== currentSession();
@@ -1835,8 +1835,8 @@ function StepProfil({
             <div className="min-w-0">
               {/* A tick list, not a select: a plan is filed once for every class
                   it covers, so choosing "5 Amanah and 5 Bidara" is one document
-                  covering both, not a copy for each. One class must stay — a
-                  plan with none has no school week to file under — so the last
+                  covering both, not a copy for each. One class must stay - a
+                  plan with none has no school week to file under - so the last
                   remaining tick cannot be unticked until another is. */}
               <fieldset className="rounded-[10px] border border-border bg-surface-2/40 px-3 py-2.5">
                 <legend className="px-0 text-[12.5px] font-semibold text-ink-2">
@@ -1878,7 +1878,7 @@ function StepProfil({
                 </div>
               </fieldset>
               <p className="mt-1.5 text-[11.5px] text-ink-4">
-                Tick semua kelas yang rancangan ini dilaksanakan — satu RPH untuk beberapa
+                Tick semua kelas yang rancangan ini dilaksanakan - satu RPH untuk beberapa
                 kelas.
               </p>
             </div>
@@ -1918,7 +1918,7 @@ function StepProfil({
                 type="date"
                 className="num"
                 value={doc.planDate}
-                // Offered inside the week the plan files under — Monday to
+                // Offered inside the week the plan files under - Monday to
                 // Friday, the days the school teaches.
                 min={days[0]}
                 max={days[4]}
@@ -1957,7 +1957,7 @@ function StepProfil({
             </div>
             <div>
               {/* Masa Tamat. The printed form has it, so the plan has to carry it
-              — a single start time leaves the page to invent an end time. */}
+              - a single start time leaves the page to invent an end time. */}
               <Label htmlFor="f-masa-tamat">Masa Tamat</Label>
               <Input
                 id="f-masa-tamat"
@@ -2002,7 +2002,7 @@ function StepProfil({
 
 /**
  * The wizard's "Save As…": the plan is already written, so this asks only
- * what a template row needs and cannot be derived — a name, and who may use
+ * what a template row needs and cannot be derived - a name, and who may use
  * it.
  *
  * The curriculum is seeded from the subject the plan was written against and
@@ -2085,7 +2085,7 @@ function StepDskp({
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {/* The two standards together — they are the pair KSSR codes, and they
+      {/* The two standards together - they are the pair KSSR codes, and they
           read as one thing. */}
       <div>
         <Label required htmlFor="f-188949">
@@ -2160,7 +2160,7 @@ function StepPdPc({
   onPatch: (p: Partial<RphPayload>) => void;
 }) {
   /**
-   * One box, one line per activity — which is all the printed form has: a list
+   * One box, one line per activity - which is all the printed form has: a list
    * of names, not a row per activity with controls beside it. The shape
    * between the two lives in `aktivitiToText` / `aktivitiFromText`, where the
    * round-trip is pinned by a test.
@@ -2199,7 +2199,7 @@ function StepRefleksi({
   onPatch: (p: Partial<RphPayload>) => void;
 }) {
   // One field, not a pair. The printed form has a Refleksi row and nothing
-  // else in this section — Intervensi and EMK were on the KPM circular, not on
+  // else in this section - Intervensi and EMK were on the KPM circular, not on
   // the school's template, so requiring them meant filling in content that
   // could never appear on the page anyone reads.
   return (

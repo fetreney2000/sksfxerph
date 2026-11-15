@@ -12,7 +12,7 @@ import { type ShellUser, UserProvider } from "@/components/shell/user-context";
  * The page title for a path, or the app's name.
  *
  * Matched on the deepest known prefix so `/editor/3f2a…` reads as "Penyunting"
- * rather than falling through to a generic title — a teacher who navigates by
+ * rather than falling through to a generic title - a teacher who navigates by
  * heading should be told which screen they are on, not merely that it exists.
  */
 function titleFor(pathname: string): string {
@@ -30,7 +30,7 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
     // and it needs the role to filter its entries.
     <UserProvider user={user}>
       <div className="flex min-h-dvh">
-        {/* Skip link — WCAG 2.4.1 */}
+        {/* Skip link - WCAG 2.4.1 */}
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-200 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-white"

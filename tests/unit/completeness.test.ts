@@ -12,14 +12,14 @@ import {
 /**
  * These fixtures are the contract with the database.
  *
- * `completeness()` must agree with `rph_completeness()` in db/schema.sql —
+ * `completeness()` must agree with `rph_completeness()` in db/schema.sql -
  * the client shows the teacher a meter, the server gates submission on the
  * same number, and a disagreement would mean the editor promises something
  * `submit_rph()` then refuses.
  *
  * The four checks are the four rows the school's printed form cannot be issued
  * without, and they were redefined along with the template: Kriteria Kejayaan
- * is scored, and EMK / KBAT / Intervensi — not on the printed form at all —
+ * is scored, and EMK / KBAT / Intervensi - not on the printed form at all -
  * no longer are.
  */
 const payload = (over: Partial<RphPayload>): RphPayload => ({
@@ -27,19 +27,19 @@ const payload = (over: Partial<RphPayload>): RphPayload => ({
   ...over,
 });
 
-/** Checkpoint 1 — the two DSKP rows, and nothing else. */
+/** Checkpoint 1 - the two DSKP rows, and nothing else. */
 const DSKP = {
   standard_kandungan: "3.1 Menulis semula nombor hingga 100,000",
   standard_pembelajaran: "3.1.1 Menulis semula nombor hingga 100,000",
 };
 
-/** Checkpoint 2 — Objektif *and* Kriteria Kejayaan, together. */
+/** Checkpoint 2 - Objektif *and* Kriteria Kejayaan, together. */
 const OBJEKTIF = {
   objektif: "Murid dapat menulis semula nombor hingga 100,000.",
   kriteria_kejayaan: "Murid menulis semula nombor dengan betul.",
 };
 
-/** Checkpoint 3 — at least one activity carrying a name. */
+/** Checkpoint 3 - at least one activity carrying a name. */
 const AKTIVITI = { aktiviti: [{ nama: "Set induksi kad nilai tempat" }] };
 
 /** Checkpoint 4. */
@@ -47,7 +47,7 @@ const REFLEKSI = { refleksi: "7 daripada 28 murid keliru nilai puluhan." };
 
 const FULL = { ...DSKP, ...OBJEKTIF, ...AKTIVITI, ...REFLEKSI };
 
-describe("completeness — four 25-point checks", () => {
+describe("completeness - four 25-point checks", () => {
   it("empty payload scores 0 (all four SQL conditions false)", () => {
     expect(completeness(emptyPayload())).toBe(0);
   });
@@ -58,7 +58,7 @@ describe("completeness — four 25-point checks", () => {
 
   it("objektif without Kriteria Kejayaan does not score", () => {
     // The printed form has a Kriteria Kejayaan row. A plan without it is
-    // incomplete however good the objektif is — SQL checks both.
+    // incomplete however good the objektif is - SQL checks both.
     expect(
       completeness(
         payload({
@@ -76,7 +76,7 @@ describe("completeness — four 25-point checks", () => {
 
   it("an activity with a blank name does not score", () => {
     // SQL asks whether *any* element carries a `nama`, not whether the first
-    // does — an activity list whose first row is a blank separator still has
+    // does - an activity list whose first row is a blank separator still has
     // activities in it, and refusing to submit would be a gate that cannot be
     // satisfied by filling the form correctly.
     expect(
@@ -121,7 +121,7 @@ describe("completeness — four 25-point checks", () => {
   });
 });
 
-describe("stepStatus — drives the stepper and the reviewer checklist", () => {
+describe("stepStatus - drives the stepper and the reviewer checklist", () => {
   it("reports every section complete for a finished plan", () => {
     expect(stepStatus(payload(FULL))).toEqual({
       profil: true,
@@ -141,7 +141,7 @@ describe("stepStatus — drives the stepper and the reviewer checklist", () => {
 
   it("counts Kriteria Kejayaan as bahagian 2, with the objective", () => {
     // The printed form groups Objektif + Kriteria Kejayaan into one 25-point
-    // part, and `completeness()` scores them together — so the badge for
+    // part, and `completeness()` scores them together - so the badge for
     // bahagian 2 says so, and PdPc is satisfied by an activity alone.
     const s = stepStatus(
       payload({
@@ -167,7 +167,7 @@ describe("stepStatus — drives the stepper and the reviewer checklist", () => {
   });
 });
 
-describe("aktivitiToText / aktivitiFromText — one box, one line per activity", () => {
+describe("aktivitiToText / aktivitiFromText - one box, one line per activity", () => {
   it("renders a sub-item behind a hyphen, as the printed form does", () => {
     expect(
       aktivitiToText([
@@ -195,7 +195,7 @@ describe("aktivitiToText / aktivitiFromText — one box, one line per activity",
     expect(aktivitiFromText(aktivitiToText(rows))).toEqual(rows);
   });
 
-  it("keeps a trailing space — the caret is there", () => {
+  it("keeps a trailing space - the caret is there", () => {
     // Stripping on every keystroke would eat what was just typed, so only the
     // leading marker is consumed.
     expect(aktivitiFromText("Senamrobik ")).toEqual([{ nama: "Senamrobik ", sub: false }]);
@@ -203,7 +203,7 @@ describe("aktivitiToText / aktivitiFromText — one box, one line per activity",
   });
 
   it("treats an en dash as a name, not a marker", () => {
-    expect(aktivitiFromText("— Catur")).toEqual([{ nama: "— Catur", sub: false }]);
+    expect(aktivitiFromText("– Catur")).toEqual([{ nama: "– Catur", sub: false }]);
   });
 
   it("splits an empty box into one empty line", () => {

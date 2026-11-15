@@ -2,7 +2,7 @@
 
 The schema file is not idempotent (create type / create table / create policy),
 so an existing project cannot simply re-run it. This pulls the *definitions
-that changed* straight out of schema.sql — never hand-copied — and wraps them
+that changed* straight out of schema.sql - never hand-copied - and wraps them
 in the DDL an existing database needs.
 
     python scripts/gen-migration.py
@@ -24,7 +24,7 @@ FUNCTIONS = [
     # emitted *earlier* in the chain than its own migration call it:
     # `admin_create_member` (002) validates the office a new account is born
     # with. plpgsql resolves a call when the function runs, not when it is
-    # created — but a database that had run 002 and not yet the migration that
+    # created - but a database that had run 002 and not yet the migration that
     # introduces `erph.jawatan` would raise on the first account created. It
     # is created twice, in 001b and again in 012, which `create or replace`
     # turns into no more than a re-assertion.
@@ -32,7 +32,7 @@ FUNCTIONS = [
 ]
 
 # `admin_list_members` reads `school_member.supervisor_id`, and `language sql`
-# bodies are validated when they are created — so it cannot be born before the
+# bodies are validated when they are created - so it cannot be born before the
 # column that column does not exist yet. It therefore has no home in 001b or
 # 002 and is created by 004, immediately after the column arrives.
 LATE_FUNCTIONS = ["admin_list_members"]
@@ -49,10 +49,10 @@ RETIRED = [
 # replace` cannot handle either kind of change:
 #
 #   · a different return type raises "cannot change return type of existing
-#     function" — `admin_list_members` gained four columns;
+#     function" - `admin_list_members` gained four columns;
 #   · an added parameter makes Postgres treat it as a *different* function, so
 #     the old one lingers as an overload and `admin_set_setting(school, 5,
-#     '16:00', true)` would keep resolving to it — silently ignoring the
+#     '16:00', true)` would keep resolving to it - silently ignoring the
 #     session the caller just set.
 #
 # Dropping first is therefore not tidiness, it is the only way the new
@@ -90,8 +90,8 @@ ADMIN_FUNCTIONS = [
 # Policies that embed a role literal. After the rename the old literals do not
 # exist, so evaluating one of these would raise rather than merely deny.
 # The three scope-limited read policies are deliberately **absent**. They call
-# erph.may_supervise, which does not exist until 004 — it needs the supervision
-# column first — and `create policy` resolves its expression at creation time.
+# erph.may_supervise, which does not exist until 004 - it needs the supervision
+# column first - and `create policy` resolves its expression at creation time.
 # Emitting them here would fail, and leaving rph_document unreadable between
 # 001b and 004 is the correct fail-closed state rather than an oversight: the
 # drop list above still removes any older copies, and 004 puts the new ones in.
@@ -149,14 +149,14 @@ DIR.mkdir(parents=True, exist_ok=True)
 alter_a = DIR / "001a_alter_types.sql"
 alter_a.write_text(
     """-- ============================================================================
--- eRPH · MIGRATION 001a — role and status values (RUN ONE LINE AT A TIME)
+-- eRPH · MIGRATION 001a - role and status values (RUN ONE LINE AT A TIME)
 -- ============================================================================
 -- Run BEFORE 001b_schema_delta.sql, and run it by selecting a single line and
 -- pressing Run each time. Two Postgres rules make that unavoidable:
 --
 --   · `alter type ... rename value` refuses to run inside a transaction block,
 --     and the SQL editor wraps a pasted script in one.
---   · a value added inside a transaction cannot be used until it commits —
+--   · a value added inside a transaction cannot be used until it commits -
 --     001b defines functions that reference `pentadbir` and views that
 --     reference `forwarded`, so both must exist before it starts.
 --
@@ -176,7 +176,7 @@ alter type erph.notification_type add value if not exists 'forwarded';
 OUT = DIR / "001b_schema_delta.sql"
 
 body = f"""-- ============================================================================
--- eRPH · MIGRATION 001b — the schema delta (paste this whole file)
+-- eRPH · MIGRATION 001b - the schema delta (paste this whole file)
 -- ============================================================================
 -- Run AFTER 001a_alter_types.sql, which must be run one line at a time.
 --
@@ -223,7 +223,7 @@ end $$;
 
 alter table erph.user add column if not exists jawatan erph.jawatan;
 
--- How many RPH one teacher owes in a week — the denominator behind
+-- How many RPH one teacher owes in a week - the denominator behind
 -- "pematuhan sekolah", five for a school that runs Monday to Friday.
 alter table erph.school_setting
   add column if not exists rph_per_week smallint not null default 5;
@@ -234,7 +234,7 @@ alter table erph.school_setting add constraint school_setting_rph_per_week_check
 
 -- The classes a plan covers. Created here, ahead of the migration that
 -- backfills and renames onto it (020), because 007/016/017 re-emit
--- `erph.sync_rph` — whose body names this column — and a function body is
+-- `erph.sync_rph` - whose body names this column - and a function body is
 -- validated when the function is created, not when it runs.
 alter table erph.rph_document add column if not exists class_ids uuid[];
 
@@ -262,7 +262,7 @@ drop view if exists erph.v_school_compliance;
 {chr(10).join(view(n) + chr(10) for n in VIEWS)}
 -- ── 7 · accounts ───────────────────────────────────────────────────────────
 -- The district/state roles are gone from the app. Postgres cannot drop an enum
--- value at all, so deleting the rows is what keeps the data honest — leaving
+-- value at all, so deleting the rows is what keeps the data honest - leaving
 -- them would mean two roles nothing references.
 -- If those accounts ever produced an export, delete its export_file rows first.
 delete from erph.school_member where user_id in
@@ -291,7 +291,7 @@ print(f"{OUT.relative_to(root)} written ({len(body)} chars)")
 # A separate file rather than folded into 001b, because 001 may already have
 # been run against a live database: re-running a regenerated 001b would be
 # asking someone to apply an unknown mix of old and new. This one is safe to run
-# on its own, and idempotent — every statement is `if not exists`, `if exists`
+# on its own, and idempotent - every statement is `if not exists`, `if exists`
 # or `create or replace`.
 OUT2 = DIR / "002_admin_console.sql"
 
@@ -299,7 +299,7 @@ drops = "\n".join(f"drop function if exists erph.{sig};" for sig in CHANGED_SHAP
 fns = "\n".join("\n" + function(n) + "\n" for n in ADMIN_FUNCTIONS)
 
 body2 = f"""-- ============================================================================
--- eRPH · MIGRATION 002 — the administrator's set-up console
+-- eRPH · MIGRATION 002 - the administrator's set-up console
 -- ============================================================================
 -- Run AFTER 001a/001b. Safe to run more than once.
 --
@@ -308,7 +308,7 @@ body2 = f"""-- =================================================================
 --
 -- Two existing functions are dropped first rather than replaced: one changed
 -- its return type (which `create or replace` refuses outright) and one gained a
--- parameter (which it would otherwise leave behind as an overload — the old
+-- parameter (which it would otherwise leave behind as an overload - the old
 -- four-argument form would keep silently ignoring the new session argument).
 --
 -- Generated by scripts/gen-migration.py from db/schema.sql:
@@ -357,18 +357,18 @@ OUT3 = DIR / "003_school_identity.sql"
 SCHOOL_POLICIES = ["profile_read", "member_read", "storage_read_school_logo"]
 
 # `admin_set_school` gained a parameter when the school code became editable.
-# `create or replace` does not replace on a *signature change* — it silently
-# creates a second function — so the six-argument form has to go first,
+# `create or replace` does not replace on a *signature change* - it silently
+# creates a second function - so the six-argument form has to go first,
 # otherwise a database that already ran the earlier 003 keeps both and the RPC
 # is resolved by arity rather than by intent. No-op if it was never created.
 OLD_SET_SCHOOL = "drop function if exists erph.admin_set_school(uuid, text, text, text, text, text);"
 
 body3 = f"""-- ============================================================================
--- eRPH · MIGRATION 003 — the school's own identity
+-- eRPH · MIGRATION 003 - the school's own identity
 -- ============================================================================
 -- Run AFTER 001a/001b and 002. Safe to run more than once.
 --
---   · erph.school gains `motto` and `logo_url` — what the administrator edits
+--   · erph.school gains `motto` and `logo_url` - what the administrator edits
 --     from /pentadbiran and what the login screen, sidebar and printed RPH
 --     then show everywhere.
 --   · erph.admin_set_school writes those *and* `kod_sekolah`, which became
@@ -442,7 +442,7 @@ SCOPE_FUNCS = ["supervises", "may_supervise", "admin_set_supervisor"]
 REVIEW_FUNCS = ["sahkan_rph", "hantar_balik_rph"]
 
 body4 = f"""-- ============================================================================
--- eRPH · MIGRATION 004 — supervision scope and the signed single-stage review
+-- eRPH · MIGRATION 004 - supervision scope and the signed single-stage review
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003. Safe to run more than once.
 --
@@ -451,7 +451,7 @@ body4 = f"""-- =================================================================
 --   · erph.semak_rph and erph.lulus_rph are retired. There is no longer a
 --     GPK → Guru Besar hop: a GPK approves directly, and a Guru Besar can do
 --     everything a GPK can on any teacher's plan.
---   · erph.rph_signature is new, and only the server can write to it —
+--   · erph.rph_signature is new, and only the server can write to it -
 --     approval is impossible without a signature already on file.
 --
 -- `forwarded` stays in the rph_status enum: Postgres cannot drop a value, and
@@ -505,7 +505,7 @@ print(f"{OUT4.relative_to(root)} written ({len(body4)} chars)")
 OUT5 = DIR / "005_pantau_teachers.sql"
 
 body5 = f"""-- ============================================================================
--- eRPH · MIGRATION 005 — per-teacher monitoring for /sekolah
+-- eRPH · MIGRATION 005 - per-teacher monitoring for /sekolah
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004. Safe to run more than once.
 --
@@ -516,7 +516,7 @@ body5 = f"""-- =================================================================
 -- than in the handler that calls it. SECURITY DEFINER means the caller's RLS
 -- is not consulted at all, so a handler that fetched the roster and filtered
 -- it in JavaScript would be one careless edit away from showing a GPK their
--- whole school — and unlike a missing filter in a policy, nothing downstream
+-- whole school - and unlike a missing filter in a policy, nothing downstream
 -- would catch it.
 --
 -- Generated by scripts/gen-migration.py from db/schema.sql:
@@ -534,14 +534,14 @@ print(f"{OUT5.relative_to(root)} written ({len(body5)} chars)")
 OUT6 = DIR / "006_google_identity.sql"
 
 body6 = f"""-- ============================================================================
--- eRPH · MIGRATION 006 — sign in with a KPM Google account
+-- eRPH · MIGRATION 006 - sign in with a KPM Google account
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005. Safe to run more than once.
 --
 -- Two columns that bind an existing account to a Google identity. Nothing is
 -- populated here: linking happens on a teacher's first successful Google
 -- sign-in, and only for an account the pentadbir has already created. There is
--- deliberately no auto-provision — every teacher in the ministry has an
+-- deliberately no auto-provision - every teacher in the ministry has an
 -- @moe-dl.edu.my address, so "create one if none exists" would let any of them
 -- walk into this school's records by typing its URL.
 --
@@ -570,7 +570,7 @@ print(f"{OUT6.relative_to(root)} written ({len(body6)} chars)")
 OUT7 = DIR / "007_school_template.sql"
 
 body7 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 007 — the school's own RPH template
+-- eRPH ▸ MIGRATION 007 - the school's own RPH template
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006. Safe to run more than once.
 --
@@ -578,14 +578,14 @@ body7 = f"""-- =================================================================
 --
 --   1. `slot_time_end`. The printed form has Masa Mula *and* Masa Tamat, and a
 --      plan that carries only a start time leaves the printed page to invent an
---      end time — which is how a five-hour lesson reaches an approved document.
+--      end time - which is how a five-hour lesson reaches an approved document.
 --      Defaulted to 12:40, the school's own end time, so every existing plan
 --      prints a plausible pair rather than a dash.
 --
 --   2. `rph_completeness` redefined. Kriteria Kejayaan replaces the old
 --      Intervensi/EMK checkpoint: the printed form has a Kriteria Kejayaan row
 --      and no Intervensi or EMK row, so scoring those meant a plan could read
---      100% while missing a field the district will look for — or read less
+--      100% while missing a field the district will look for - or read less
 --      than 100% because a teacher left blank the content nobody prints.
 --
 --      Also: an activity now scores if *any* element carries a `nama`, not if
@@ -624,7 +624,7 @@ print(f"{OUT7.relative_to(root)} written ({len(body7)} chars)")
 OUT8 = DIR / "008_reminders.sql"
 
 body8 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 008 — reminders a supervisor can actually send
+-- eRPH ▸ MIGRATION 008 - reminders a supervisor can actually send
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007. Safe to run more than once.
 --
@@ -663,7 +663,7 @@ print(f"{OUT8.relative_to(root)} written ({len(body8)} chars)")
 OUT9 = DIR / "009_week_history.sql"
 
 body9 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 009 — real weekly figures for /sekolah
+-- eRPH ▸ MIGRATION 009 - real weekly figures for /sekolah
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008. Safe to run more than once.
 --
@@ -674,7 +674,7 @@ body9 = f"""-- =================================================================
 -- second question up.
 --
 -- `school_week_history` counts it instead. Same permission shape as the
--- single-week function — counts and a percentage, never a name — so a Guru
+-- single-week function - counts and a percentage, never a name - so a Guru
 -- Biasa still cannot learn who is behind a figure.
 --
 -- `expected` is active membership *now*, not per week: historical membership
@@ -702,13 +702,13 @@ print(f"{OUT9.relative_to(root)} written ({len(body9)} chars)")
 OUT10 = DIR / "010_pantau_range.sql"
 
 body10 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 010 — the roster follows the same window as the cards
+-- eRPH ▸ MIGRATION 010 - the roster follows the same window as the cards
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009. Safe to run more than
 -- once.
 --
 -- /sekolah's filter widened the window its cards describe, and the roster
--- underneath still counted a single week — so a supervisor choosing
+-- underneath still counted a single week - so a supervisor choosing
 -- "Sepanjang sesi" read a session total beside a table that disagreed with
 -- it. The table and the cards now come from the same weeks by construction:
 -- both take p_first_week/p_last_week.
@@ -743,7 +743,7 @@ print(f"{OUT10.relative_to(root)} written ({len(body10)} chars)")
 OUT11 = DIR / "011_fix_rate.sql"
 
 body11 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 011 — the fix rate, after a return
+-- eRPH ▸ MIGRATION 011 - the fix rate, after a return
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010. Safe to run more
 -- than once.
@@ -753,7 +753,7 @@ body11 = f"""-- ================================================================
 --
 -- The pair exists because neither number means much alone. A count of who is
 -- *currently* returned cannot separate a teacher who acts on feedback from
--- one who ignores it — a teacher who fixes everything and one who never does
+-- one who ignores it - a teacher who fixes everything and one who never does
 -- look identical the moment the first is caught up. Read from rph_review
 -- rather than the document, because the document carries only the latest
 -- decision, and the history of a plan that was returned and then approved is
@@ -768,7 +768,7 @@ body11 = f"""-- ================================================================
 """
 
 # Both signatures. Postgres refuses to change a return type in place
-# (42P13), so the function being widened has to go first — and the
+# (42P13), so the function being widened has to go first - and the
 # single-week overload is the one migration 010 left behind. Dropping
 # both makes this safe whether or not 010 went on ahead of it.
 body11 = body11.replace(
@@ -788,23 +788,23 @@ print(f"{OUT11.relative_to(root)} written ({len(body11)} chars)")
 OUT12 = DIR / "012_jawatan.sql"
 
 body12 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 012 — the office a person holds, printed on the cover
+-- eRPH ▸ MIGRATION 012 - the office a person holds, printed on the cover
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010/011. Safe to run more
 -- than once.
 --
 -- The JAWATAN row of the weekly cover sheet read `school_member.title`, a
--- free-text column no code path ever wrote — so every cover printed "—"
+-- free-text column no code path ever wrote - so every cover printed "-"
 -- beneath a signature the school had actually made, on a sheet whose whole
 -- point is that a district officer can tell who signed it and as what.
 --
 -- `erph.jawatan` is the office the school sets, and it is deliberately not
 -- derived from `erph.member_role`: three different Penolong Kanan offices
 -- live under the single role 'gpk', so the role cannot say which one this
--- person holds. NULL means nobody has said, and prints as "—".
+-- person holds. NULL means nobody has said, and prints as "-".
 --
 -- The backfill covers only what the role already states outright. 'gpk' does
--- not name an office, so it stays NULL rather than being given one — a cover
+-- not name an office, so it stays NULL rather than being given one - a cover
 -- sheet that invented an office the school never gave would be exactly the
 -- failure this replaces.
 --
@@ -813,7 +813,7 @@ body12 = f"""-- ================================================================
 --   · `admin_list_members` gains a column, i.e. a new *return type*, which
 --     Postgres refuses to change in place (42P13);
 --   · `admin_create_member` gains a parameter, which Postgres treats as an
---     entirely different function — without the drop the old arity lingers
+--     entirely different function - without the drop the old arity lingers
 --     beside the new one and a call that omits the jawatan keeps resolving
 --     to the version that cannot set it.
 --
@@ -828,8 +828,8 @@ body12 = f"""-- ================================================================
 --   python scripts/gen-migration.py
 --
 -- ▸ 1 ▸ the enum and the column ─────────────────────────────────────────────
--- A database built by running 001b first already has both — 001b creates them
--- so that 002 and 004 can name the type in a signature — and both statements
+-- A database built by running 001b first already has both - 001b creates them
+-- so that 002 and 004 can name the type in a signature - and both statements
 -- below then change nothing. They are here for a database that ran the
 -- original 001b, which had no idea this column was coming.
 do $$
@@ -878,7 +878,7 @@ print(f"{OUT12.relative_to(root)} written ({len(body12)} chars)")
 OUT13 = DIR / "013_week_expectation.sql"
 
 body13 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 013 — the denominator behind "pematuhan sekolah"
+-- eRPH ▸ MIGRATION 013 - the denominator behind "pematuhan sekolah"
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010/011/012. Safe to run
 -- more than once.
@@ -886,7 +886,7 @@ body13 = f"""-- ================================================================
 -- The compliance percentage divided approved *plans* by the number of
 -- *teachers*. A school that runs Monday to Friday asks each teacher for five
 -- RPH, so a teacher who finished their week put the school at 500%, and two
--- teachers with six approved plans between them read as 300% — a figure
+-- teachers with six approved plans between them read as 300% - a figure
 -- nobody at the school recognised, because it was measuring the wrong thing.
 --
 -- The denominator is now teachers × the school's own `rph_per_week` (five by
@@ -897,7 +897,7 @@ body13 = f"""-- ================================================================
 -- exactly how many plans were approved.
 --
 -- Both functions change their *return type* (a column each), which Postgres
--- refuses to change in place (42P13) — so both are dropped first, along with
+-- refuses to change in place (42P13) - so both are dropped first, along with
 -- `admin_set_setting`, which gained a parameter and would otherwise leave the
 -- old arity callable beside the new one. `v_school_compliance` reads the
 -- first of them, so it is dropped with them and rebuilt at the end.
@@ -949,21 +949,21 @@ print(f"{OUT13.relative_to(root)} written ({len(body13)} chars)")
 OUT14 = DIR / "014_compliance_truth.sql"
 
 body14 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 014 — the two places the new percentage could still lie
+-- eRPH ▸ MIGRATION 014 - the two places the new percentage could still lie
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010/011/012/013. Safe to
 -- run more than once.
 --
 -- Three leftovers from the fix, found by reading the whole surface again:
 --
---   · `least()` ignores NULL arguments, so `least(100, NULL)` is 100 — not
+--   · `least()` ignores NULL arguments, so `least(100, NULL)` is 100 - not
 --     NULL, as the SQL standard says. A school with no active Guru Biasa has
 --     no denominator, and was reporting full compliance for it. Both
 --     statistics functions now return NULL for that week, which the UI
---     renders as "—": not scored, rather than scored perfectly.
+--     renders as "-": not scored, rather than scored perfectly.
 --
 --   · `v_school_compliance` still computed approved plans divided by the
---     teacher headcount — the definition the percentage was fixed *from*, and
+--     teacher headcount - the definition the percentage was fixed *from*, and
 --     uncapped, so it could answer 300%. Nothing reads the view today, but it
 --     is exposed to the API roles and a second source that disagrees with the
 --     first is one forgotten import away from being the one that ships. It
@@ -973,7 +973,7 @@ body14 = f"""-- ================================================================
 --     route guard reads `erph.user.role` on every request. An account whose
 --     role was changed through /pentadbiran before then therefore has two
 --     roles, and the one the guard held was the stale one. The membership is
---     what the console wrote, so it wins — for a user with exactly one
+--     what the console wrote, so it wins - for a user with exactly one
 --     school. Anyone in several is left alone rather than having one picked.
 --
 -- Generated by scripts/gen-migration.py from db/schema.sql:
@@ -1012,18 +1012,18 @@ print(f"{OUT14.relative_to(root)} written ({len(body14)} chars)")
 OUT15 = DIR / "015_edit_existing.sql"
 
 body15 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 015 — edit what could only be created
+-- eRPH ▸ MIGRATION 015 - edit what could only be created
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010/011/012/013/014.
 -- Safe to run more than once.
 --
 -- Two things a school could create and never correct:
 --
---   · an account's name and email — the name printed on every RPH that person
+--   · an account's name and email - the name printed on every RPH that person
 --     writes, and the address Google sign-in links to on a first visit. A typo
 --     meant deleting the account and importing it again, taking their plans
 --     with them;
---   · a subject's name and curriculum — only Matikan/Hidupkan existed, so a
+--   · a subject's name and curriculum - only Matikan/Hidupkan existed, so a
 --     misnamed subject had to be hidden and a second one created beside it.
 --
 -- Both keep the thing that cannot be changed: the username (the sign-in
@@ -1053,7 +1053,7 @@ print(f"{OUT15.relative_to(root)} written ({len(body15)} chars)")
 OUT16 = DIR / "016_authorization_truth.sql"
 
 body16 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 016 — one model of who may do what
+-- eRPH ▸ MIGRATION 016 - one model of who may do what
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/015. Safe to run more than once.
 --
@@ -1064,7 +1064,7 @@ body16 = f"""-- ================================================================
 --     so a dismissed teacher stayed an active member with their old office:
 --     still in the monitoring roster, still inside `has_role` in the review
 --     RPCs, still reminded. The route guard read `erph.user.is_active` and
---     did refuse them — so the two models disagreed about the same person,
+--     did refuse them - so the two models disagreed about the same person,
 --     and the SQL one was the wrong one.
 --
 --   · `school_week_history` had no membership check at all, while the
@@ -1075,7 +1075,7 @@ body16 = f"""-- ================================================================
 --     long the school takes to review.
 --
 --   · `sync_rph` let the owner rewrite a plan that was already sitting in a
---     reviewer's queue — and turned an unrecognised status into 'draft',
+--     reviewer's queue - and turned an unrecognised status into 'draft',
 --     which let a client withdraw its own plan from review without going
 --     through `submit_rph` at all. The editor already locks a submitted
 --     plan; the server now says the same.
@@ -1108,7 +1108,7 @@ print(f"{OUT16.relative_to(root)} written ({len(body16)} chars)")
 OUT17 = DIR / "017_school_rules.sql"
 
 body17 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 017 — the school's own rules
+-- eRPH ▸ MIGRATION 017 - the school's own rules
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/016. Safe to run more than once.
 --
@@ -1123,7 +1123,7 @@ body17 = f"""-- ================================================================
 --   · `sahkan_rph` records a grade, and the grade is a factual claim:
 --     Lampiran 7 grades a plan 1 = lengkap, 0 = tidak lengkap. Recording 1
 --     for a plan that is missing sections puts a false statement into a
---     statutory record — and the school's compliance figures are built from
+--     statutory record - and the school's compliance figures are built from
 --     the grade, so a false grade is a false figure. An approval now needs
 --     the same completeness the school asked for at submission.
 --
@@ -1131,12 +1131,12 @@ body17 = f"""-- ================================================================
 --     aborted the other twenty-four and took the teacher's work with it. Each
 --     op is now applied inside its own block: a failure is reported for that
 --     op and the rest go through. The block is a subtransaction, so the claim
---     on a failed op's id is rolled back with it — the op id is still free and
+--     on a failed op's id is rolled back with it - the op id is still free and
 --     the client can retry the very same op rather than losing the edit.
 --
 --   · `erph.user` had one UPDATE policy allowing any column of one's own row.
 --     It was harmless only because the whole table is revoked from the API
---     roles at the end of the schema — a single statement, in a 2,300-line
+--     roles at the end of the schema - a single statement, in a 2,300-line
 --     file. The column grant below says which columns are writable, so a
 --     lost revoke cannot let a teacher write their own role.
 --
@@ -1165,13 +1165,13 @@ print(f"{OUT17.relative_to(root)} written ({len(body17)} chars)")
 OUT18 = DIR / "018_school_figures_for_supervisors.sql"
 
 body18 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 018 — the school's figures are a supervisor's question
+-- eRPH ▸ MIGRATION 018 - the school's figures are a supervisor's question
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/017. Safe to run more than once.
 --
 -- `school_week_stats` and `school_week_history` accepted any member of the
--- school. That was deliberate — they return counts and a percentage and never
--- a name — and it was the wrong question. A Guru Biasa's dashboard is about
+-- school. That was deliberate - they return counts and a percentage and never
+-- a name - and it was the wrong question. A Guru Biasa's dashboard is about
 -- their own week: four cards and nothing about anyone else's. A school's
 -- compliance percentage beside them is an answer to a question they are no
 -- more able to act on than a colleague's roster, which `/api/pantau/teachers`
@@ -1179,7 +1179,7 @@ body18 = f"""-- ================================================================
 --
 -- So the dashboard hid the card while the endpoint served it, and both had to
 -- be told the same thing. `/api/stats` asks for `pantau` now, and these two
--- check for a supervisor — or the school's own Administrator, who already
+-- check for a supervisor - or the school's own Administrator, who already
 -- answers for the school's figures on `/utama` and whose view
 -- (`v_school_compliance`) is `security_invoker`, so leaving them out would
 -- make a table they hold error rather than quietly show less.
@@ -1203,14 +1203,14 @@ print(f"{OUT18.relative_to(root)} written ({len(body18)} chars)")
 OUT19 = DIR / "019_week_numbering.sql"
 
 body19 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 019 — the administrator decides which week a date range is
+-- eRPH ▸ MIGRATION 019 - the administrator decides which week a date range is
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/018. Safe to run more than once.
 
 -- The week number was arithmetic: seven-day blocks from Monday 16 March 2026,
 -- the same for every school and every term. Right until a school's own calendar
--- disagrees with it — a term that began a fortnight earlier, a break the grid
--- did not know about — and then every figure on the dashboard, every deadline
+-- disagrees with it - a term that began a fortnight earlier, a break the grid
+-- did not know about - and then every figure on the dashboard, every deadline
 -- and every printed sheet is confidently wrong in the same direction.
 --
 -- `erph.academic_calendar` already existed for exactly this and was read by
@@ -1230,7 +1230,7 @@ body19 = f"""-- ================================================================
 -- date.
 --
 -- The week number itself is still computed in TypeScript (lib/config.ts) and
--- SQL never derives one from a date — it filters on what the client sends, as
+-- SQL never derives one from a date - it filters on what the client sends, as
 -- it always has. These functions only keep the table honest.
 --
 -- Generated by scripts/gen-migration.py from db/schema.sql:
@@ -1253,7 +1253,7 @@ print(f"{OUT19.relative_to(root)} written ({len(body19)} chars)")
 # migration is wide rather than narrow:
 #
 #   · `rph_document.class_id` becomes `class_ids uuid[]`. A plan written for
-#     5 Amanah and taught the same way to 5 Bidara is one document, not two —
+#     5 Amanah and taught the same way to 5 Bidara is one document, not two -
 #     the teacher ticks both classes in the wizard's step 1 and one review,
 #     one approval and one sheet cover the pair. There is no FK: a foreign
 #     key cannot span array elements, so the tenant check moves into
@@ -1264,12 +1264,12 @@ print(f"{OUT19.relative_to(root)} written ({len(body19)} chars)")
 #     same subject on the same day collide only when they claim a shared
 #     class; disjoint sets are two different lessons and may coexist. The
 #     unique index keeps array equality, which works only because sync_rph
-#     writes the list canonically — sorted and de-duplicated — so the btree
+#     writes the list canonically - sorted and de-duplicated - so the btree
 #     compares equal sets as equal.
 #
 #   · The class list itself merges by how the row was resolved: an op that
-#     named its own row (by id) sets the list — the editor's "untick a class"
-#     must work — while an op resolved by key unions its classes in, because
+#     named its own row (by id) sets the list - the editor's "untick a class"
+#     must work - while an op resolved by key unions its classes in, because
 #     two devices that split one lesson's classes between them must lose
 #     nothing when they finally reach the server.
 #
@@ -1282,7 +1282,7 @@ print(f"{OUT19.relative_to(root)} written ({len(body19)} chars)")
 #   python scripts/gen-migration.py
 #
 body20 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 020 — one plan may cover several classes
+-- eRPH ▸ MIGRATION 020 - one plan may cover several classes
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/019. Safe to run more than once.
 --
@@ -1342,7 +1342,7 @@ print(f"{OUT20.relative_to(root)} written ({len(body20)} chars)")
 # `create table if not exists` plus the policies and indexes, all guarded, is
 # the whole migration. The definitions are pulled from db/schema.sql rather
 # than hand-copied, so the migration cannot drift from the schema it migrates
-# towards — the same rule every generator block above follows.
+# towards - the same rule every generator block above follows.
 #
 # Generated by scripts/gen-migration.py from db/schema.sql:
 #
@@ -1368,7 +1368,7 @@ def table(name: str) -> str:
 
 
 body21 = f"""-- ============================================================================
--- eRPH ▸ MIGRATION 021 — teachers attach their RPT (Google Drive links)
+-- eRPH ▸ MIGRATION 021 - teachers attach their RPT (Google Drive links)
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/020. Safe to run more than once.
 --

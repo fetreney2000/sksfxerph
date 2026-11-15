@@ -11,8 +11,8 @@ const mintId = () => (canUseCrypto ? crypto.randomUUID() : `local-${Date.now()}`
 /**
  * Take a plan out of the archive.
  *
- * Synced: a **soft** delete. `deleted_at` keeps the row — under Peraturan 8 a
- * plan is a statutory record — and every view reads `deleted_at is null`, so it
+ * Synced: a **soft** delete. `deleted_at` keeps the row - under Peraturan 8 a
+ * plan is a statutory record - and every view reads `deleted_at is null`, so it
  * disappears from the app while staying in the database until the retention
  * purge takes it five years later.
  *
@@ -38,7 +38,7 @@ export async function removePlan(id: string): Promise<void> {
 }
 
 /**
- * "Guna semula minggu lepas" — the single biggest time saving in the product.
+ * "Guna semula minggu lepas" - the single biggest time saving in the product.
  *
  * Clones last week's payloads into this week's empty slots, skipping anything
  * that already has a plan. Teachers write the differences, not the document.
@@ -50,7 +50,7 @@ export async function reuseLastWeek(
 ): Promise<number> {
   const session = currentSession();
   // Whose last week this is. Dexie is shared by every account on the browser,
-  // so "reuse last week" must read the signed-in teacher's plans — never the
+  // so "reuse last week" must read the signed-in teacher's plans - never the
   // last account that happened to sign in here.
   const owner = ownerId();
   const source = await db.documents

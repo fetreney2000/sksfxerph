@@ -6,20 +6,20 @@ import type { adminDb } from "@/lib/server/db";
 import { toClientError } from "@/lib/server/http/errors";
 
 /**
- * GET / POST / PATCH /api/classes — the school's classes for one session.
+ * GET / POST / PATCH /api/classes - the school's classes for one session.
  *
  * Two callers with different rights:
  *
- *   • any member (GET) — the editor, the dashboard's "RPH baharu" and the
+ *   • any member (GET) - the editor, the dashboard's "RPH baharu" and the
  *     command palette all need the list before a plan can exist. Local mode
  *     never calls this: `lib/demo/seed.ts` supplies the fixtures instead.
- *   • the administrator (POST/PATCH) — `erph.admin_set_class` re-checks
+ *   • the administrator (POST/PATCH) - `erph.admin_set_class` re-checks
  *     `has_role(..., 'pentadbir')` inside the function, because this handler
  *     holds the secret key and RLS would not stop it.
  *
  * This endpoint is what makes class management real. The editor previously read
  * `CLASSES` from the demo seed even in synced mode, so a plan created against
- * `c-5a` reached `sync_rph` and was rejected — that id is not a UUID.
+ * `c-5a` reached `sync_rph` and was rejected - that id is not a UUID.
  */
 
 const createSchema = z.object({
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) return NextResponse.json({ items: [], session: SESSION });
 
-  // The session has to be read *before* the class query — they were once issued
+  // The session has to be read *before* the class query - they were once issued
   // in the same Promise.all, which made the filter read a variable that had not
   // resolved yet and quietly fall back to the build-time constant.
   const { data: setting } = await gate.db

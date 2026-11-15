@@ -3,14 +3,14 @@ import { requireDbUser } from "@/lib/server/auth/guard";
 import { isUuid, toClientError } from "@/lib/server/http/errors";
 
 /**
- * POST /api/rpc/submit — server-gated submission (`erph.submit_rph`).
+ * POST /api/rpc/submit - server-gated submission (`erph.submit_rph`).
  *
  * Moved out of the browser: with no Supabase JWT on the client, the RPC has to
  * be invoked by a handler that has already authenticated the session cookie.
  * The handler passes its user id as `X-Erph-User`, which `erph.actor()` inside
  * the RPC only honours because the secret key proved `service_role`.
  *
- * Returns the authoritative verdict — the server may disagree with the editor's
+ * Returns the authoritative verdict - the server may disagree with the editor's
  * local completeness meter, and the server wins.
  */
 export async function POST(request: NextRequest) {

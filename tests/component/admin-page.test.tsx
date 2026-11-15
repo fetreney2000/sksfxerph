@@ -10,8 +10,8 @@ import type { Member } from "@/lib/client/admin";
  *
  * The console cannot be reached by e2e: local mode stops at "Papan pemuka
  * pentadbir memerlukan mod disegerakkan" by design, and the synced deployment
- * this is built against has no usable service key in CI. So the five tabs —
- * which are the entire deliverable — would otherwise ship with no test ever
+ * this is built against has no usable service key in CI. So the five tabs -
+ * which are the entire deliverable - would otherwise ship with no test ever
  * having drawn them. These assert the things a regression would silently break: that each
  * tab exists, that the rows actually arrive, that the session and the school
  * code are *editable* (both were read-only for the whole life of this page),
@@ -44,15 +44,15 @@ const ME: Member = {
 
 const MEMBERS: Member[] = [
   // Deliberately not in alphabetical order. An assertion of A→Z against a
-  // fixture that is already A→Z tests nothing — the sort has to have
+  // fixture that is already A→Z tests nothing - the sort has to have
   // something to move.
   {
     user_id: "00000000-0000-4000-8000-000000000004",
     username: "zulkifli.rahman",
     full_name: "Zulkifli bin Rahman",
     email: null,
-    // The Guru Besar. Their own card has nobody above them — the school has
-    // one — so it must say that rather than offer an empty menu.
+    // The Guru Besar. Their own card has nobody above them - the school has
+    // one - so it must say that rather than offer an empty menu.
     role: "guru_besar",
     jawatan: "guru_besar",
     is_active: true,
@@ -70,7 +70,7 @@ const MEMBERS: Member[] = [
     full_name: "Ramlan bin Yusof",
     email: null,
     role: "gpk",
-    // One of the three Penolong Kanan offices — a GPK's role cannot say which.
+    // One of the three Penolong Kanan offices - a GPK's role cannot say which.
     jawatan: "pk_hem",
     is_active: true,
     last_login_at: null,
@@ -87,7 +87,7 @@ const MEMBERS: Member[] = [
     full_name: "Siti Rahmah binti Ali",
     email: null,
     role: "guru_biasa",
-    // Nobody has set an office yet — a real state, not a missing field.
+    // Nobody has set an office yet - a real state, not a missing field.
     jawatan: null,
     is_active: true,
     last_login_at: null,
@@ -209,7 +209,7 @@ afterEach(() => {
   calls.length = 0;
 });
 
-/** Mount the page with a fresh QueryClient — each test gets an empty cache. */
+/** Mount the page with a fresh QueryClient - each test gets an empty cache. */
 async function mount() {
   const { AdminConsole } = await import("@/components/admin/admin-console");
   return render(
@@ -243,7 +243,7 @@ async function mountHome() {
 
 /**
  * Radix's TabsTrigger activates on `mousedown` (so a drag away does not commit),
- * which `fireEvent.click` alone never delivers — the tab would silently not
+ * which `fireEvent.click` alone never delivers - the tab would silently not
  * switch and every assertion after it would look for content on the wrong pane.
  */
 function clickTab(name: string) {
@@ -255,7 +255,7 @@ function clickTab(name: string) {
 /**
  * Click the first of several same-named buttons.
  *
- * `getAllByRole(...)[0]` needs a guard under `noUncheckedIndexedAccess` — and
+ * `getAllByRole(...)[0]` needs a guard under `noUncheckedIndexedAccess` - and
  * a guard that reads as the test's intent ("there is at least one") beats a
  * `!` that asserts it silently.
  */
@@ -310,7 +310,7 @@ describe("pentadbiran", () => {
     await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
 
     // A future `locked_until` must read as a lock with its own remedy, not
-    // collapse into "inactive" — the two need different buttons.
+    // collapse into "inactive" - the two need different buttons.
     expect(screen.getByText("Dikunci")).toBeTruthy();
     expect(screen.getByText("5 percubaan gagal")).toBeTruthy();
     expect(screen.getByText("Buka kunci")).toBeTruthy();
@@ -329,7 +329,7 @@ describe("pentadbiran", () => {
 
     await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
 
-    // Three of the four rows get a picker — the two teachers and the GPK.
+    // Three of the four rows get a picker - the two teachers and the GPK.
     // The Guru Besar's own row has nobody above it in a school with one, and
     // says so instead of offering an empty menu.
     expect(screen.getAllByLabelText(/^Penyelia /)).toHaveLength(3);
@@ -337,16 +337,16 @@ describe("pentadbiran", () => {
     expect(screen.queryByLabelText("Penyelia Zulkifli bin Rahman")).toBeNull();
 
     // A GPK's own RPH is reviewed by the Guru Besar, so that is the whole of
-    // their list — a peer GPK may not review it.
+    // their list - a peer GPK may not review it.
     const gpk = screen.getByLabelText("Penyelia Ramlan bin Yusof") as HTMLSelectElement;
     expect(Array.from(gpk.options).map((o) => o.textContent)).toEqual([
-      "— belum ditetapkan —",
+      "- belum ditetapkan -",
       "Zulkifli bin Rahman · Guru Besar",
     ]);
 
     // Unassigned is a real state, not a missing value, so it reads as blank.
     // (`toHaveValue` is jest-dom's; this project registers no setup file, so
-    // the matcher simply is not there — plain assertions instead.)
+    // the matcher simply is not there - plain assertions instead.)
     expect(
       (screen.getByLabelText("Penyelia Nurul Aisyah binti Rahim") as HTMLSelectElement).value,
     ).toBe("");
@@ -355,7 +355,7 @@ describe("pentadbiran", () => {
     ).toBe("00000000-0000-4000-8000-000000000002");
 
     // Only the level above may supervise, so a Guru Besar is offered
-    // everywhere — teachers and the GPK — while a Guru Biasa is never
+    // everywhere - teachers and the GPK - while a Guru Biasa is never
     // offered to anyone.
     const offered = screen.getAllByRole("option", {
       name: /Ramlan bin Yusof · Guru Penolong Kanan/,
@@ -374,7 +374,7 @@ describe("pentadbiran", () => {
 
     await waitFor(() => expect(screen.getByText("Nurul Aisyah binti Rahim")).toBeTruthy());
 
-    // One picker per row — and none for a role with no office to hold, which
+    // One picker per row - and none for a role with no office to hold, which
     // this roster happens not to contain (the pentadbir's row is a dash).
     expect(screen.getAllByLabelText(/^Jawatan /)).toHaveLength(4);
 
@@ -383,7 +383,7 @@ describe("pentadbiran", () => {
     const gpkSelect = screen.getByLabelText("Jawatan Ramlan bin Yusof") as HTMLSelectElement;
     expect(gpkSelect.value).toBe("pk_hem");
     expect(Array.from(gpkSelect.options).map((o) => o.textContent)).toEqual([
-      "— belum ditetapkan —",
+      "- belum ditetapkan -",
       "Penolong Kanan Pentadbiran",
       "Penolong Kanan HEM",
       "Penolong Kanan Kokum",
@@ -440,7 +440,7 @@ describe("pentadbiran", () => {
 
     await waitFor(() => expect(screen.getByText("Ramlan bin Yusof")).toBeTruthy());
 
-    // 1. The reset-password dialog still opens from a card's footer — this is
+    // 1. The reset-password dialog still opens from a card's footer - this is
     //    the control that exists only on an account row.
     clickFirst(screen.getAllByRole("button", { name: /Tetap semula kata laluan/ }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
@@ -499,8 +499,8 @@ describe("pentadbiran", () => {
       expect(sent?.body).toContain("email");
     });
 
-    // 2. A subject: the code is shown but not offered — every plan written
-    //    against it points there — and the new name goes out.
+    // 2. A subject: the code is shown but not offered - every plan written
+    //    against it points there - and the new name goes out.
     clickTab("Mata pelajaran");
     await waitFor(() => expect(screen.getByText("Bahasa Inggeris")).toBeTruthy());
     clickFirst(screen.getAllByRole("button", { name: /Sunting/ }));
@@ -528,7 +528,7 @@ describe("pentadbiran", () => {
 
     await waitFor(() => expect(screen.getByText("5 Amanah")).toBeTruthy());
     expect(screen.getByText("12 rancangan")).toBeTruthy();
-    // Archived rows belong here — this is the administrator's view, not the
+    // Archived rows belong here - this is the administrator's view, not the
     // editor's. The whole point of `doc_count` is that archiving shows what it
     // touches.
     expect(screen.getByText("Diarkibkan")).toBeTruthy();
@@ -559,7 +559,7 @@ describe("pentadbiran", () => {
     expect(screen.getByText(/Tiada data dipadam/)).toBeTruthy();
   });
 
-  it("makes the school code editable — and actually sends it", async () => {
+  it("makes the school code editable - and actually sends it", async () => {
     vi.stubGlobal("fetch", fakeFetch);
     await mount();
 
@@ -591,7 +591,7 @@ describe("pentadbiran", () => {
     fireEvent.change(code, { target: { value: "bad code!" } });
     fireEvent.click(screen.getByRole("button", { name: /Simpan maklumat sekolah/ }));
 
-    // Same sentence the SQL function would raise — and no round trip to learn it.
+    // Same sentence the SQL function would raise - and no round trip to learn it.
     await screen.findByText(/3-24 aksara/);
     expect(lastPatch).toBeNull();
   });

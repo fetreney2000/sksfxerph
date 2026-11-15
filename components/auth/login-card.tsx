@@ -20,12 +20,12 @@ import { LOCAL_ACCOUNT, LOCAL_DEMO_PASSWORD } from "@/lib/server/auth/local";
 /**
  * Email + password sign-in against `erph.user`.
  *
- * Supabase Auth (Google OAuth / GoTrue) is deliberately not used — credentials
+ * Supabase Auth (Google OAuth / GoTrue) is deliberately not used - credentials
  * live in our own table and are verified by scrypt in `/api/auth/login`. The
  * response sets an httpOnly cookie; nothing token-shaped ever reaches JS.
  *
  * One field serves both doors: teachers type their school email, the
- * pentadbir their username — the route routes on the identifier's shape, so
+ * pentadbir their username - the route routes on the identifier's shape, so
  * the form does not need a mode switch.
  */
 export function LoginCard() {
@@ -59,11 +59,11 @@ export function LoginCard() {
 
       // Full navigation rather than a client-side push: the (app) layout reads
       // the cookie server-side, so the server must render the authenticated
-      // shell — a soft navigation would show it stale.
+      // shell - a soft navigation would show it stale.
       //
       // Destination follows the role. A literal "/minggu" would land the
-      // Administrator on a page that gates on `rph` — a permission they hold
-      // precisely because they do not teach — and bounce them straight back.
+      // Administrator on a page that gates on `rph` - a permission they hold
+      // precisely because they do not teach - and bounce them straight back.
       window.location.assign(homeFor(body?.role ?? null));
     } catch {
       setError("Rangkaian bermasalah. Cuba lagi.");
@@ -134,7 +134,7 @@ export function LoginCard() {
           </p>
         )}
         {/* Below the form, deliberately: password is the fallback that always
-            works — offline, in local mode, and for anyone without an MOE
+            works - offline, in local mode, and for anyone without an MOE
             account (the pentadbir has none). Google is the convenience for
             teachers, not the only door. */}
         <GoogleSignIn onError={setError} />
@@ -143,7 +143,7 @@ export function LoginCard() {
       <CardFooter className="flex-col items-start gap-1.5 text-[11.5px] text-ink-4">
         <span className="flex items-center gap-1.5">
           <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-          Kata laluan disimpan dalam bentuk scrypt — ia tidak pernah disimpan dalam bentuk teks
+          Kata laluan disimpan dalam bentuk scrypt - ia tidak pernah disimpan dalam bentuk teks
           biasa.
         </span>
         <span>

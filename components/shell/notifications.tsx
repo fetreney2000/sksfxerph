@@ -39,7 +39,7 @@ export function NotificationBell() {
     if (window.location.pathname !== href) router.push(href);
   };
 
-  // Close on outside click or Escape — a menu that can only be closed by
+  // Close on outside click or Escape - a menu that can only be closed by
   // clicking it again is a keyboard trap.
   React.useEffect(() => {
     if (!open) return;

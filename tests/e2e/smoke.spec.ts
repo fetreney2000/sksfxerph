@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 /**
- * E2E smoke tests — the critical paths unit tests can't reach.
+ * E2E smoke tests - the critical paths unit tests can't reach.
  *
  * IndexedDB seeding, hydration, the offline queue, client routing and now the
  * session gate only exist in a real browser, so this is what proves the app
@@ -10,18 +10,18 @@ import { expect, type Page, test } from "@playwright/test";
  * Local mode credentials are the documented demo pair (see
  * lib/server/auth/local.ts); the login route takes the same scrypt path as a
  * real `erph.user` row would. Teachers sign in by email; the pentadbir has no
- * school email and signs in by username — the split `/api/auth/login` applies
+ * school email and signs in by username - the split `/api/auth/login` applies
  * on a real deployment.
  */
 const DEMO_EMAIL = "gpk@sktamanharmoni.local";
 const DEMO_PASS = "gpk123";
-/** Local-mode Guru Besar — reviews but teaches no class, so holds no plans. */
+/** Local-mode Guru Besar - reviews but teaches no class, so holds no plans. */
 const GURU_BESAR_EMAIL = "nurul@sktamanharmoni.local";
 const GURU_BESAR_PASS = "cikgu123";
 /** Local-mode account with no supervisory permission (lib/server/auth/local.ts). */
 const GURU_BIASA_EMAIL = "suhaila@sktamanharmoni.local";
 const GURU_BIASA_PASS = "biasa123";
-/** Local-mode Administrator — the only role that may open /pentadbiran. */
+/** Local-mode Administrator - the only role that may open /pentadbiran. */
 const PENTADBIR_USER = "pentadbir";
 const PENTADBIR_PASS = "pentadbir123";
 
@@ -55,8 +55,8 @@ async function login(page: Page, identifier = DEMO_EMAIL, password = DEMO_PASS):
   await page.getByLabel(/Kata laluan/).fill(password);
   await page.getByRole("button", { name: "Log masuk" }).click();
   // Either home, per `homeFor`: every teaching role lands on /minggu, the
-  // Guru Besar — who holds no plans — on /semakan, and the Administrator —
-  // who holds no `rph` — on /utama.
+  // Guru Besar - who holds no plans - on /semakan, and the Administrator -
+  // who holds no `rph` - on /utama.
   await page.waitForURL(/\/(minggu|semakan|utama)/, { timeout: 15_000 });
 }
 
@@ -88,7 +88,7 @@ test.describe("authentication", () => {
     const errors = collectErrors(page);
     await login(page, GURU_BIASA_EMAIL, GURU_BIASA_PASS);
 
-    // 1. The navigation must not offer what the role cannot reach — this is
+    // 1. The navigation must not offer what the role cannot reach - this is
     //    the "clear UI separation" requirement, checked on all three surfaces.
     await expect(page.getByRole("link", { name: /Semakan RPH/ })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Paparan Sekolah/ })).toHaveCount(0);
@@ -104,7 +104,7 @@ test.describe("authentication", () => {
       await expect(page).toHaveURL(/\/minggu/, { timeout: 15_000 });
     }
 
-    // 3. Their own surfaces still work — and it is *only* their own. The
+    // 3. Their own surfaces still work - and it is *only* their own. The
     //    school's totals used to sit on this dashboard under the same heading
     //    as the teacher's own week; they are a supervisor's question now, and
     //    a role that cannot act on them no longer sees them.
@@ -124,7 +124,7 @@ test.describe("authentication", () => {
   });
 
   test("the consolidated admin home is the Administrator's alone", async ({ page }) => {
-    // A Guru Besar supervises but does not run the app — answer to "does the
+    // A Guru Besar supervises but does not run the app - answer to "does the
     // Guru Besar get the setup page" was none.
     const errors = collectErrors(page);
     await login(page);
@@ -142,7 +142,7 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
     await expect(page.getByRole("link", { name: "Papan Pemuka" })).toHaveCount(1);
 
-    // A teacher's screens must refuse them — they hold no plans to show.
+    // A teacher's screens must refuse them - they hold no plans to show.
     await page.goto("/minggu");
     await expect(page).toHaveURL(/\/utama/, { timeout: 15_000 });
     await page.goto("/editor");
@@ -165,12 +165,12 @@ test.describe("authentication", () => {
     // Identity comes from the cookie, resolved server-side in the layout.
     await expect(page.getByRole("heading", { name: GREETING })).toBeVisible();
     // The demo account is a GPK: their own teaching week plus the review queue
-    // above it — the home answers "what needs my decision?" without taking
+    // above it - the home answers "what needs my decision?" without taking
     // the week away.
     await expect(page.getByRole("link", { name: /RPH menunggu semakan/ })).toBeVisible();
     // Scoped to the sidebar on purpose. The teacher's name also prints on the
-    // weekly sheets waiting in the hidden print container — one row per plan
-    // — so an unscoped query is ambiguous by design, not by accident.
+    // weekly sheets waiting in the hidden print container - one row per plan
+    // - so an unscoped query is ambiguous by design, not by accident.
     await expect(
       page.getByRole("complementary", { name: "Navigasi utama" }).getByText("Rizal"),
     ).toBeVisible();
@@ -193,7 +193,7 @@ test.describe("authentication", () => {
     await page.goto("/arkib");
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
 
-    // No `rph` means no RPT either — there is nothing of theirs to attach.
+    // No `rph` means no RPT either - there is nothing of theirs to attach.
     await expect(page.getByRole("link", { name: /RPT Tahunan/ })).toHaveCount(0);
     await page.goto("/rpt");
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
@@ -261,7 +261,7 @@ test.describe("authentication", () => {
     await page.waitForURL(/\/login/, { timeout: 15_000 });
 
     // 3. A colleague signs in on the same browser. Their dashboard must be
-    //    their own — previously every plan in the store was filed under one
+    //    their own - previously every plan in the store was filed under one
     //    shared owner, so the previous teacher's week rendered as theirs.
     await login(page, GURU_BIASA_EMAIL, GURU_BIASA_PASS);
     await expect(page.getByText(/5 Amanah/)).toHaveCount(0);
@@ -272,7 +272,7 @@ test.describe("authentication", () => {
         .first(),
     ).toBeVisible({ timeout: 15_000 });
 
-    // 4. And the first teacher gets theirs back — the cache was scoped, not
+    // 4. And the first teacher gets theirs back - the cache was scoped, not
     //    emptied.
     await page.getByRole("button", { name: "Log keluar" }).click();
     await page.waitForURL(/\/login/, { timeout: 15_000 });
@@ -345,7 +345,7 @@ test.describe("eRPH smoke", () => {
       .click();
     await expect(page.getByText(/Bahagian 4/).first()).toBeVisible();
 
-    // Bahagian 2 is Objektif + Kriteria Kejayaan — the printed form's
+    // Bahagian 2 is Objektif + Kriteria Kejayaan - the printed form's
     // grouping, and what `completeness()` scores. The penyunting used to
     // contradict it by rendering the criterion in Bahagian 3.
     await page.getByRole("button", { name: /Bahagian 2 · DSKP/ }).click();
@@ -370,7 +370,7 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("review queue decides with the keyboard — sahkan or kembalikan", async ({ page }) => {
+  test("review queue decides with the keyboard - sahkan or kembalikan", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/semakan");
 
@@ -379,7 +379,7 @@ test.describe("eRPH smoke", () => {
 
     // `1` = sahkan. There is no longer a Guru Besar to forward to: a GPK
     // approves here, and the Guru Besar does exactly the same thing on any
-    // teacher's plan. Local mode skips the signature — there is no database
+    // teacher's plan. Local mode skips the signature - there is no database
     // to file it against; synced mode signs first and /api/rpc/review
     // verifies before it will append anything.
     await page.keyboard.press("1");
@@ -437,7 +437,7 @@ test.describe("eRPH smoke", () => {
     const box = page.getByLabel(/Refleksi/);
     await expect(box).toBeVisible();
 
-    // 2. Cut the network — the whole point of the local-first design. The UI
+    // 2. Cut the network - the whole point of the local-first design. The UI
     //    no longer says so anywhere; what proves it is that the next steps
     //    work with the network down.
     await context.setOffline(true);
@@ -447,7 +447,7 @@ test.describe("eRPH smoke", () => {
     await box.fill(marker);
     await expect(box).toHaveValue(marker);
 
-    // 4. Reload (network restored) — the value must come back from IndexedDB.
+    // 4. Reload (network restored) - the value must come back from IndexedDB.
     await context.setOffline(false);
     await page.reload();
     await page
@@ -465,7 +465,7 @@ test.describe("eRPH smoke", () => {
     const errors = collectErrors(page);
 
     // The tile that used to sit here claimed "Cipta templat" and opened a
-    // dialog that collected a title and three dropdowns — an empty template,
+    // dialog that collected a title and three dropdowns - an empty template,
     // with nothing in it to start from.
     await page.goto("/templat");
     // Local mode has no database to write a template to, so the button says
@@ -474,14 +474,14 @@ test.describe("eRPH smoke", () => {
 
     await page.goto("/templat/baru");
     await expect(page).toHaveURL(/\/templat\/baru/, { timeout: 15_000 });
-    // The profil section's own subtitle — it says what a template keeps, and
+    // The profil section's own subtitle - it says what a template keeps, and
     // the plan penyunting's says "Kelas · tarikh · masa · tema".
     await expect(page.getByText("Subjek · tema · bidang · tajuk")).toBeVisible({
       timeout: 15_000,
     });
 
     // A template stores no class, no week, no date and no lesson time, so the
-    // penyunting does not offer them — a field whose answer goes nowhere.
+    // penyunting does not offer them - a field whose answer goes nowhere.
     // Kelas is a tick group, not a labelled select, so it is looked up by role.
     await expect(page.getByRole("group", { name: "Kelas" })).toHaveCount(0);
     await expect(page.getByLabel("Tarikh")).toHaveCount(0);
@@ -565,7 +565,7 @@ test.describe("eRPH smoke", () => {
     // With nothing to submit yet, the action bar offers the save instead.
     await expect(page.getByRole("button", { name: /Simpan rancangan/ })).toBeVisible();
 
-    // Walking away must still have created nothing — no draft on the dashboard.
+    // Walking away must still have created nothing - no draft on the dashboard.
     await page.goto("/minggu");
     await expect(page).toHaveURL(/\/minggu/);
     await page
@@ -586,7 +586,7 @@ test.describe("eRPH smoke", () => {
     await page.goto("/arkib");
 
     // Every week that has happened is listed, not only the weeks with plans
-    // in them — a week with nothing filed under it used not to appear here at
+    // in them - a week with nothing filed under it used not to appear here at
     // all, which hid exactly the week a teacher needed to see.
     const add = page.getByRole("button", { name: /Tambah RPH/ });
     await expect(add.first()).toBeVisible({ timeout: 15_000 });
@@ -636,7 +636,7 @@ test.describe("eRPH smoke", () => {
     const marker = `SK salin ${Date.now()}`;
     await skInput.fill(marker);
 
-    // 3. Copy it from the archive. Nothing is written yet — the copy opens as
+    // 3. Copy it from the archive. Nothing is written yet - the copy opens as
     //    an unsaved draft the teacher can discard.
     await page.goto("/arkib");
     const source = page.getByRole("row").filter({ hasText: marker });
@@ -659,7 +659,7 @@ test.describe("eRPH smoke", () => {
     // 4. File it on the seed week's free day so the two plans do not collide
     //    on their natural key, then the archive holds both. Bahagian 1 holds
     //    the date, and the copy opens on its first incomplete section, which
-    //    is Bahagian 2 — so Profil is opened here the same way.
+    //    is Bahagian 2 - so Profil is opened here the same way.
     const profilToggle = page.getByRole("button", { name: /Bahagian 1 · Profil/ });
     const tarikh = page.getByLabel("Tarikh", { exact: true });
     await expect(async () => {

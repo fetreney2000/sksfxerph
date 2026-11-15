@@ -27,12 +27,12 @@ import { supabaseConfigured } from "@/lib/config";
 import { useSession } from "@/lib/hooks/use-session";
 
 /**
- * RPT Tahunan — the teacher's yearly plans, linked rather than stored.
+ * RPT Tahunan - the teacher's yearly plans, linked rather than stored.
  *
  * The file bytes never enter this app: an RPT lives in the teacher's own
  * Google Drive and only the link is kept here, titled per subject, so a GPK
  * or Guru Besar can open it from /sekolah. Server-only like the template
- * library — no Dexie store, because a Drive link is only usable online anyway.
+ * library - no Dexie store, because a Drive link is only usable online anyway.
  */
 export default function RptPage() {
   const session = useSession();
@@ -70,7 +70,7 @@ export default function RptPage() {
         toast.error(body?.error ?? "Gagal menyimpan pautan.");
         return;
       }
-      // Same title, new link: the row is updated, not duplicated — say so, or
+      // Same title, new link: the row is updated, not duplicated - say so, or
       // the teacher reads one form and two possible outcomes.
       toast.success("Pautan RPT disimpan.");
       setTitle("");
@@ -111,7 +111,7 @@ export default function RptPage() {
       {!supabaseConfigured ? (
         <Card>
           <CardContent className="py-10 text-center text-[13px] text-ink-4">
-            Pautan RPT memerlukan mod disegerakkan — tiada pangkalan data ditetapkan.
+            Pautan RPT memerlukan mod disegerakkan - tiada pangkalan data ditetapkan.
           </CardContent>
         </Card>
       ) : (
@@ -171,13 +171,13 @@ export default function RptPage() {
             <CardContent className="grid gap-2">
               {items.length === 0 && (
                 <p className="py-6 text-center text-[13px] text-ink-4">
-                  Tampal pautan RPT anda di sebelah — GPK dan Guru Besar akan melihatnya di
+                  Tampal pautan RPT anda di sebelah - GPK dan Guru Besar akan melihatnya di
                   Paparan Sekolah.
                 </p>
               )}
               {items.map((link) => (
                 // `min-w-0`: this row is a grid item, and grid items default
-                // to `min-width: auto` — without it the track sizes to the
+                // to `min-width: auto` - without it the track sizes to the
                 // full unbroken URL and the whole card scrolls sideways,
                 // no matter how well the text inside truncates.
                 <div
@@ -226,7 +226,7 @@ export default function RptPage() {
           </DialogHeader>
           <DialogBody>
             <p className="text-[13px] text-ink-2">
-              Fail dalam Google Drive anda tidak terjejas — yang dipadam hanya pautan di sini.
+              Fail dalam Google Drive anda tidak terjejas - yang dipadam hanya pautan di sini.
             </p>
           </DialogBody>
           <DialogFooter>

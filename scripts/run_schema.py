@@ -7,12 +7,12 @@ this is now the authoritative gate.
 
 Covers three layers:
 
-  1. DDL execution — statement by statement, with the source line number of
+  1. DDL execution - statement by statement, with the source line number of
      any failure (Supabase stops at the first error; here we see all of them).
-  2. Object inventory — tables/enums/policies/functions/indexes actually exist
+  2. Object inventory - tables/enums/policies/functions/indexes actually exist
      with the expected names and, for enums, the expected *values* (a value
      that silently became 'erph.school' passes parsing but breaks the app).
-  3. Behavioural smoke tests — inserts through the real tables, the
+  3. Behavioural smoke tests - inserts through the real tables, the
      completeness function, the review-state trigger, and the authorization
      guards (a NULL actor must be refused, not silently allowed).
 
@@ -72,7 +72,7 @@ def split_statements(sql: str):
     """Split on semicolons, ignoring those inside strings, $$ bodies and comments.
 
     Block comments matter as much as line comments: `--` ends at the newline,
-    but `/* … */` can span lines and carry an apostrophe — a doc comment
+    but `/* … */` can span lines and carry an apostrophe - a doc comment
     saying "the school's directory" would open a phantom string, swallow the
     next dozen statements into one, and report the first `create type` after it
     as a syntax error. That is not a hypothetical: migration 015's comment
@@ -236,7 +236,7 @@ def main() -> int:
 
     if env_limited:
         print(
-            f"  (skipped {env_limited} statement(s) needing pg_trgm — "
+            f"  (skipped {env_limited} statement(s) needing pg_trgm - "
             "unavailable in this server; Supabase provides it)"
         )
 
@@ -271,14 +271,14 @@ def main() -> int:
            join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'erph' and p.proname not in ('foldername')"""
     )[0]
-    # Bump when adding a function — this count is a guard against one being
+    # Bump when adding a function - this count is a guard against one being
     # lost, not a formality. 012 added `jawatan_for` and `admin_set_jawatan`;
     # 015 added `admin_set_profile` and `admin_edit_subject`; 019 added
     # `admin_set_calendar_week` and `admin_clear_calendar_week`; 020 added
     # `classes_in_school` and `teaches_classes`.
     check("43 functions in erph", n_funcs == 43, f"found {n_funcs}")
 
-    # NOTE: group into lists — a dict keyed by type name would keep only the
+    # NOTE: group into lists - a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
     rows = r.q(
         """select t.typname, e.enumlabel
@@ -346,7 +346,7 @@ def main() -> int:
 
     # The one column grant on erph.user: a signed-in teacher may correct their
     # own name and address, and nothing else on their own row. `role` is the
-    # one that matters — the route guards read `erph.user.role`, so a teacher
+    # one that matters - the route guards read `erph.user.role`, so a teacher
     # who could write it could make themselves an Administrator.
     for column, expected in (("full_name", True), ("email", True), ("role", False)):
         allowed = r.one(
@@ -363,7 +363,7 @@ def main() -> int:
 
     print("\nobject inventory:")
     for label, ok, detail in checks:
-        print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" — {detail}" if not ok else ""))
+        print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" - {detail}" if not ok else ""))
         errors += 0 if ok else 1
 
     # ── layer 3: behavioural smoke tests ───────────────────────────────────
@@ -436,7 +436,7 @@ def main() -> int:
         print("  [OK ] guard_review_fields blocks direct status change")
 
     # authorization: with no actor resolvable (plain SQL, no JWT, no header),
-    # submit_rph must refuse — this is the NULL-actor bypass regression test.
+    # submit_rph must refuse - this is the NULL-actor bypass regression test.
     try:
         r.q(
             """select erph.submit_rph(
@@ -469,10 +469,10 @@ def main() -> int:
     # ── two-stage chain: Guru Biasa → GPK semak → Guru Besar lulus ────────
     # Each rung may only move a plan out of the stage it owns, so this asserts
     # the refusals as well as the happy path. `actor()` is fed through
-    # `request.jwt.claims` — the unprivileged path it trusts.
+    # `request.jwt.claims` - the unprivileged path it trusts.
     # Resolved once to the row's **id**, not to a subquery on `kod_sekolah`.
-    # The school-identity test below deliberately changes that code — which is
-    # the whole point of the feature — and everything after it has to keep
+    # The school-identity test below deliberately changes that code - which is
+    # the whole point of the feature - and everything after it has to keep
     # finding this same row: the restore, the policy checks, and the DELETE
     # that reaps the fixture. Keying on a value the test is allowed to move is
     # how a single failed assertion turned into leaked fixtures and three
@@ -481,7 +481,7 @@ def main() -> int:
     SK = f"'{fixture_school_id}'"
     # Pinned to the first week, not to "the only document": the fixture creates
     # more than one (an incomplete plan, for the approval rule below), and a
-    # scalar subquery over two rows raises "more than one row returned" — an
+    # scalar subquery over two rows raises "more than one row returned" - an
     # error that has nothing to do with the rule under test.
     DOC = f"(select id from erph.rph_document where school_id = {SK} and week_no = 1)"
 
@@ -506,7 +506,7 @@ def main() -> int:
         """Row count a browser would actually see.
 
         This connection owns the tables and owners bypass RLS entirely, so a
-        plain SELECT here proves nothing but our own privilege — the same
+        plain SELECT here proves nothing but our own privilege - the same
         mistake that made the pentadbir-profile check vacuous. `SET ROLE` is
         reverted by ROLLBACK but *not* by COMMIT, so it is reset explicitly.
         """
@@ -544,7 +544,7 @@ def main() -> int:
 
         # ── a GPK must first *have* teachers assigned to them ───────────────
         # Scope is checked before the signature or the state machine, so the
-        # first thing a GPK without any teachers meets is a refusal — not a
+        # first thing a GPK without any teachers meets is a refusal - not a
         # glimpse of a plan they are not allowed to open.
         act_as("gpk.uji")
         msg = refused(f"select erph.sahkan_rph({DOC})")
@@ -584,11 +584,11 @@ def main() -> int:
         stage.append(("Guru Besar is in scope without an assignment", scoped is True))
 
         # Reporting uses the same predicate, so a GPK's table is their own
-        # teachers — not the whole school. `uji` is supervised by gpk.uji, and
+        # teachers - not the whole school. `uji` is supervised by gpk.uji, and
         # gpk.uji counts as supervising themselves.
         #
         # `1::smallint`: an unadorned literal is `integer`, and int4→int2 is an
-        # assignment cast, so the call would not resolve at all — it fails with
+        # assignment cast, so the call would not resolve at all - it fails with
         # "function does not exist" rather than anything that names the problem.
         act_as("gpk.uji")
         seen = [row[0] for row in r.q(f"select full_name from erph.pantau_teachers({SK}, '2026/2027', 1::smallint, 1::smallint)")]
@@ -602,7 +602,7 @@ def main() -> int:
             ("a Guru Besar's lists the whole school", seen == ["GB Ujian", "GPK Ujian", "Guru Ujian"], str(seen))
         )
 
-        # Reassigned away, the same GPK loses them again — forward scope, not a
+        # Reassigned away, the same GPK loses them again - forward scope, not a
         # rewrite of anything already signed.
         r.q(
             f"""
@@ -617,7 +617,7 @@ def main() -> int:
         stage.append(
             ("and loses them when reassigned away", seen == ["GPK Ujian"], str(seen))
         )
-        # Put it back — the rest of the fixture assumes the assignment exists.
+        # Put it back - the rest of the fixture assumes the assignment exists.
         r.q(
             f"""
             update erph.school_member
@@ -641,7 +641,7 @@ def main() -> int:
             ("a GPK's reminder reaches their own teacher", reached == 1, f"got {reached}")
         )
         # Asked for by id, an out-of-scope target still does not match. The
-        # pentadbir shares the school but is not supervised by this GPK — and
+        # pentadbir shares the school but is not supervised by this GPK - and
         # the id is inlined rather than selected, because `authenticated` is
         # denied SELECT on erph.user by design.
         act_as("gpk.uji")
@@ -682,7 +682,7 @@ def main() -> int:
         # to Friday owes five RPH a week. The percentage used to divide
         # approved *plans* by *teachers*, so a teacher who finished their week
         # put the school at 500% and two teachers with six plans between them
-        # read as 300% — a figure nobody at the school recognised.
+        # read as 300% - a figure nobody at the school recognised.
         n_teachers = read_as_authenticated(
             f"select teachers from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
         )
@@ -698,7 +698,7 @@ def main() -> int:
         )
         # And the school's own rule, rather than a constant: move it and the
         # expectation must move with it. Written straight to the row because
-        # the gate on `admin_set_setting` belongs to the admin section below —
+        # the gate on `admin_set_setting` belongs to the admin section below -
         # here only the arithmetic is under test.
         r.q(f"update erph.school_setting set rph_per_week = 4 where school_id = {SK}")
         conn.commit()
@@ -732,7 +732,7 @@ def main() -> int:
 
         def sign_as(username: str) -> None:
             """Stand in for /api/rpc/review, which is the only thing that
-            writes this table — it verifies the ECDSA signature first."""
+            writes this table - it verifies the ECDSA signature first."""
             r.q(
                 f"""
                 insert into erph.rph_signature (document_id, document_version, signer_id,
@@ -773,7 +773,7 @@ def main() -> int:
         # Lampiran 7 grades a plan 1 = lengkap, 0 = tidak lengkap. Recording
         # 1 for a plan that is missing sections puts a false statement into a
         # statutory record, and the school's compliance figures are built from
-        # the grade — so a false grade is a false figure.
+        # the grade - so a false grade is a false figure.
         r.q(
             f"""
             insert into erph.rph_document (school_id, owner_id, class_ids, subject_code,
@@ -825,7 +825,7 @@ def main() -> int:
         conn.commit()
 
         # One approved plan out of the five this school owes in week 1: 20%.
-        # Not 100%, and not 20% *of a headcount* — the number only means
+        # Not 100%, and not 20% *of a headcount* - the number only means
         # something beside the expectation it is measured against.
         pct = read_as_authenticated(
             f"select compliance from erph.school_week_stats({SK}::uuid, '2026/2027'::text, 1::smallint)"
@@ -839,8 +839,8 @@ def main() -> int:
         )
 
         # A school with no active Guru Biasa owes nothing, so there is no rate
-        # to give. Postgres's `least()` ignores NULLs — `least(100, NULL)` is
-        # 100 — so without the explicit guard this reports full compliance for
+        # to give. Postgres's `least()` ignores NULLs - `least(100, NULL)` is
+        # 100 - so without the explicit guard this reports full compliance for
         # a school that has not been scored at all. Only the teacher is
         # deactivated: the caller has to stay a member or the function refuses
         # to answer at all, which is a different check passing.
@@ -874,7 +874,7 @@ def main() -> int:
             # below shows them, which is why a failing assertion in this stage
             # reported nothing but its own name.
             detail = item[2] if len(item) > 2 else ""
-            print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" — {detail}" if detail else ""))
+            print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" - {detail}" if detail else ""))
             errors += 0 if ok else 1
     except Exception as e:  # noqa: BLE001
         conn.rollback()
@@ -940,7 +940,7 @@ def main() -> int:
         )[0]
         admin.append(("new account is enrolled in the school", enrolled == 1))
 
-        # Duplicate usernames must be refused, on the lowercased name — `Admin`
+        # Duplicate usernames must be refused, on the lowercased name - `Admin`
         # and `admin` are the same person to a case-insensitive login.
         msg = refused(
             f"select erph.admin_create_member({SK}, 'GURU.BARU', 'Seorang Lagi', "
@@ -993,7 +993,7 @@ def main() -> int:
         # ── the school's own week numbering ──────────────────────────────
         # A declared week cascades forward, so what these write paths are
         # really guarding is two rows that individually look fine but
-        # contradict each other — the pair that makes numbering run backwards.
+        # contradict each other - the pair that makes numbering run backwards.
         act_as("uji")
         msg = refused(
             f"select erph.admin_set_calendar_week({SK}, '2026/2027', 34::smallint, "
@@ -1043,7 +1043,7 @@ def main() -> int:
         )
         conn.commit()
 
-        # Too low a number on a later date — 36 is what 2 Nov owes 26 Oct, so
+        # Too low a number on a later date - 36 is what 2 Nov owes 26 Oct, so
         # declaring 33 would make numbering run backwards across the pair.
         msg = refused(
             f"select erph.admin_set_calendar_week({SK}, '2026/2027', 33::smallint, "
@@ -1084,7 +1084,7 @@ def main() -> int:
             )
         )
 
-        # Handing a week back to the grid is a delete and nothing else — no
+        # Handing a week back to the grid is a delete and nothing else - no
         # copy of the override lives anywhere else in the system.
         r.q(f"select erph.admin_clear_calendar_week({SK}, '2026/2027', 34::smallint)")
         r.q(f"select erph.admin_clear_calendar_week({SK}, '2026/2027', 36::smallint)")
@@ -1106,7 +1106,7 @@ def main() -> int:
         admin.append(("malformed logo URL refused", "URL" in msg))
 
         # The code is checked before anything is written, so a malformed one
-        # changes nothing at all — and the message is a sentence a person can
+        # changes nothing at all - and the message is a sentence a person can
         # act on rather than Postgres naming a constraint.
         msg = refused(
             f"select erph.admin_set_school({SK}, 'bad code!', 'X', null, null, null, '/logo.png')"
@@ -1119,7 +1119,7 @@ def main() -> int:
             )
         )
 
-        # The code is a label, not a foreign key — nothing joins on it — so
+        # The code is a label, not a foreign key - nothing joins on it - so
         # changing it has to be possible for a pentadbir. It is changed here
         # and put straight back: every fixture below resolves this school
         # through `kod_sekolah='SKTEST'`, so leaving it as SK9999 would make
@@ -1147,7 +1147,7 @@ def main() -> int:
             )
         )
 
-        # Restore the fixture's own code — `SK` is a subquery on it, and so is
+        # Restore the fixture's own code - `SK` is a subquery on it, and so is
         # the DELETE that reaps this fixture.
         r.q(
             f"select erph.admin_set_school({SK}, 'SKTEST', 'Sekolah Ujian Baharu', 'PPD Ujian', "
@@ -1174,7 +1174,7 @@ def main() -> int:
         )
         admin.append(("nobody supervises themselves", "diri sendiri" in msg))
 
-        # A Guru Biasa is not a valid supervisor — assigning one would quietly
+        # A Guru Biasa is not a valid supervisor - assigning one would quietly
         # hand them read access to every plan belonging to the person they
         # "supervise", which is precisely the access the scope check denies.
         msg = refused(
@@ -1250,7 +1250,7 @@ def main() -> int:
         # `school_week_history` is SECURITY DEFINER, so the caller's own RLS is
         # never consulted: the check inside it is the only thing between a
         # stranger and a school's year. It had none, and its single-week
-        # sibling accepted any member — so a Guru Biasa was the one role that
+        # sibling accepted any member - so a Guru Biasa was the one role that
         # could still see the school from a dashboard which hid the card.
         act_as("gpk.uji")
         own_history = r.one(
@@ -1294,7 +1294,7 @@ def main() -> int:
         # ── a plan under review is not rewritten by its owner ─────────────
         # The editor locks a plan once it has been submitted, and the server
         # now says the same. A client that bypassed the editor used to be able
-        # to change the content of a plan sitting in a reviewer's queue — and
+        # to change the content of a plan sitting in a reviewer's queue - and
         # the version moved under the signature that reviewer was about to make.
         r.q(
             """
@@ -1366,11 +1366,11 @@ def main() -> int:
         # 020 widened `class_id` to `class_ids`: the wizard ticks classes, so a
         # plan filed for two classes is one document with both. The op's set is
         # canonicalised server-side, an overlap with an existing plan merges
-        # onto it, and a lone `class_id` — what the first release sent — is
+        # onto it, and a lone `class_id` - what the first release sent - is
         # still honoured as a one-element set, because an installed PWA keeps
         # running the app shell it precached.
         #
-        # '6 Ujian' already exists — the admin console test above created it.
+        # '6 Ujian' already exists - the admin console test above created it.
         class_id2 = r.one("select id from erph.class where nama='6 Ujian'")[0]
 
         act_as("uji")
@@ -1468,7 +1468,7 @@ def main() -> int:
         errors += 1
 
     # ── clean up EVERYTHING the behaviour tests created, before seeding ────
-    # Order matters: rph_document.school_id has no ON DELETE (deliberate — a
+    # Order matters: rph_document.school_id has no ON DELETE (deliberate - a
     # statutory record must not vanish with its school), so the document has to
     # go first or the school delete fails and every later count is polluted by
     # fixture rows (this is exactly how the seed assertions first "failed").
@@ -1496,7 +1496,7 @@ def main() -> int:
     # that never landed, would only surface as "why can't I log in?".
     seed_file = ROOT / "db" / "seed.sql"
     if not seed_file.exists():
-        print("\nseed: db/seed.sql not found — skipped")
+        print("\nseed: db/seed.sql not found - skipped")
     else:
         print("\nseed:")
         seed_sql = seed_file.read_text(encoding="utf-8")
@@ -1575,7 +1575,7 @@ def main() -> int:
             for label, ok, detail in seed_checks:
                 print(
                     f"  [{'OK ' if ok else 'FAIL'}] {label}"
-                    + (f" — {detail}" if not ok else "")
+                    + (f" - {detail}" if not ok else "")
                 )
                 if not ok:
                     errors += 1

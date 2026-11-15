@@ -9,7 +9,7 @@ import type { RphDocument, RphStatus } from "@/lib/types";
  * A week as the school files it: the cover sheet, then one page per plan.
  *
  * The cover is first because that is what a district reads first, and because
- * it is the only page that carries the week's approval — the six behind it
+ * it is the only page that carries the week's approval - the six behind it
  * carry the teaching, not the decision.
  */
 export interface WeekSheetsProps {
@@ -29,7 +29,7 @@ export interface WeekSheetsProps {
  * Deliberately pessimistic. A week is only "lengkap" when every plan in it is:
  * a teacher who has had five of six approved and left one as a draft should
  * see the cover say so, not read "Lengkap", staple the stack and discover the
- * gap at the district office. Returned beats submitted for the same reason —
+ * gap at the district office. Returned beats submitted for the same reason -
  * it is the thing that needs doing.
  */
 function rollup(documents: RphDocument[]): RphStatus {
@@ -67,7 +67,7 @@ export function WeekSheets({
   signatureState = "none",
   schoolName = currentSchool().name,
 }: WeekSheetsProps) {
-  // The school week's own order, Monday to Friday — the order the district
+  // The school week's own order, Monday to Friday - the order the district
   // reads them in, and not the order a query happens to return them.
   const ordered = [...documents].sort((a, b) => a.planDate.localeCompare(b.planDate));
 

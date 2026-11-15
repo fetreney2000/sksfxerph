@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
  * Route-level error boundary (Next.js `error.tsx` contract).
  *
  * Backend §11 (observability): a render failure must surface to the user in
- * Malay with a recovery path — not a blank page. Errors are logged so an
+ * Malay with a recovery path - not a blank page. Errors are logged so an
  * error tracker can be attached later without changing this file.
  */
 export default function RouteError({
@@ -30,7 +30,7 @@ export default function RouteError({
         </div>
         <h1 className="mb-2 text-lg font-bold">Ralat semasa memuatkan halaman</h1>
         <p className="mb-1 text-[13px] text-ink-3">
-          Kerja anda tidak hilang — RPH disimpan pada peranti ini.
+          Kerja anda tidak hilang - RPH disimpan pada peranti ini.
         </p>
         {error.digest && (
           <p className="mb-4 font-mono text-[11px] text-ink-4">Rujukan: {error.digest}</p>

@@ -5,7 +5,7 @@ import { invalidateCalendarCache } from "@/lib/server/calendar";
 import { toClientError } from "@/lib/server/http/errors";
 
 /**
- * GET / PATCH /api/admin/settings — the school's term and submission rule.
+ * GET / PATCH /api/admin/settings - the school's term and submission rule.
  *
  * Reading is an ordinary member-scoped query (`setting_read` lets any member
  * see the school's own settings); writing goes through
@@ -26,8 +26,8 @@ const patchSchema = z.object({
     .regex(/^\d{4}\/\d{4}$/, "Sesi mesti dalam bentuk TTTT/TTTT")
     .optional(),
   /**
-   * RPH per teacher per week. The denominator behind "pematuhan sekolah" —
-   * five for a school that runs Monday to Friday — so it is asked for rather
+   * RPH per teacher per week. The denominator behind "pematuhan sekolah" -
+   * five for a school that runs Monday to Friday - so it is asked for rather
    * than assumed, and bounded like the CHECK that stores it.
    */
   rphPerWeek: z.number().int().min(1, "Bilangan RPH: antara 1 dan 7").max(7),

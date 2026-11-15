@@ -11,7 +11,7 @@
  * 1. **`hd` must be present and must match.** Google's own documentation: the
  *    domain of the `email` claim is *insufficient* to show the account is
  *    managed by an organisation. `hd` is only issued for Google Workspace
- *    accounts, and **its absence means the account is not one** — so a missing
+ *    accounts, and **its absence means the account is not one** - so a missing
  *    `hd` is a rejection, not a "skip the check". That is the difference
  *    between "teachers at this school" and "anyone with a Gmail address".
  *
@@ -20,8 +20,8 @@
  *    to whoever controls it.
  *
  * 3. **`sub` is the key, not the email.** Google states email can change; `sub`
- *    cannot. Email is used exactly once — to find the row to link on the first
- *    sign-in — and never again.
+ *    cannot. Email is used exactly once - to find the row to link on the first
+ *    sign-in - and never again.
  *
  * The signature itself is *not* checked here. That is the caller's job with
  * Google's own library: hand-rolling JWKS rotation is a known source of
@@ -56,7 +56,7 @@ export type Checked =
 /**
  * Malay, for the two a teacher can act on.
  *
- * The rest are deliberately unmapped — "wrong issuer" and "expired" are not
+ * The rest are deliberately unmapped - "wrong issuer" and "expired" are not
  * things anyone at a school can fix, and saying so would only add noise to a
  * message that already tells them what to do.
  */
@@ -75,7 +75,7 @@ export const REJECTION_TEXT: Record<Rejection, string> = {
 /**
  * Structural checks on an ID token whose signature has already been verified.
  *
- * `aud` is not re-checked here — `verifyIdToken` takes the audience and rejects
+ * `aud` is not re-checked here - `verifyIdToken` takes the audience and rejects
  * a token minted for a different client before it returns anything.
  */
 export function checkGoogleClaims(
@@ -117,9 +117,9 @@ export interface AccountRow {
 }
 
 export type Resolution =
-  /** Already linked to this Google identity — sign in. */
+  /** Already linked to this Google identity - sign in. */
   | { kind: "registered"; row: AccountRow }
-  /** Email matches an account nobody has linked yet — pin `sub` and sign in. */
+  /** Email matches an account nobody has linked yet - pin `sub` and sign in. */
   | { kind: "link"; row: AccountRow }
   /** No matching account, or one already tied to a *different* identity. */
   | { kind: "not-registered" };

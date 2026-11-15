@@ -28,12 +28,12 @@ import { DB_SCHEMA } from "@/lib/supabase/schema";
  * Deliberately pure-JS (`docx`): headless Chrome does not fit the Vercel free
  * tier (erph-backend-research.md §2.1), and this route must stay inside the
  * 300 s Hobby budget with room to spare. The browser print path is the other
- * supported route — same JSON in, same layout out.
+ * supported route - same JSON in, same layout out.
  *
  * POSTs the payload rather than reading by id because in local mode the
  * document only exists in the teacher's IndexedDB, not in Postgres. Works in
  * both modes; when a `document_id` is supplied *and* Supabase is configured,
- * the export is written to `erph.export_file` — RPH is a statutory record
+ * the export is written to `erph.export_file` - RPH is a statutory record
  * (backend §10), so who produced a copy must be answerable.
  */
 const bodySchema = z.object({
@@ -45,7 +45,7 @@ const bodySchema = z.object({
   // stranger, and the route already refuses to export a document that is not
   // the caller's. It used to be accepted from the body *and* never sent, so
   // every exported DOCX printed a dash in the NAMA row and "Guru: undefined"
-  // above it — a blank cell is honest, but this one was avoidable.
+  // above it - a blank cell is honest, but this one was avoidable.
   //
   // Every free-text field is bounded. These are the teacher's own words, and
   // some of them end up in a header and a database column: an unbounded one is
@@ -53,12 +53,12 @@ const bodySchema = z.object({
   // header parameter early.
   schoolName: z.string().max(120).optional(),
   planDate: z.string().max(20).optional(),
-  // Up to 30 classes joined with ", " — the joined label of a multi-class
+  // Up to 30 classes joined with ", " - the joined label of a multi-class
   // plan, not one name. Class names are short (school registers), but the
   // bound has to survive thirty of them, not one long one.
   className: z.string().max(600).optional(),
   subjectName: z.string().max(120).optional(),
-  /** Masa Mula / Masa Tamat — both are printed, so both are carried through. */
+  /** Masa Mula / Masa Tamat - both are printed, so both are carried through. */
   slotTime: z.string().max(10).optional(),
   slotTimeEnd: z.string().max(10).optional(),
   /**
@@ -67,7 +67,7 @@ const bodySchema = z.object({
    * Sent by a client that has already verified it in the browser, so the
    * export is a rendering of a checked signature rather than a claim. An
    * export with no signature simply prints the blank reviewer line it always
-   * did — an unapproved plan must not look sealed.
+   * did - an unapproved plan must not look sealed.
    */
   signerName: z.string().max(120).optional(),
   /**
@@ -115,7 +115,7 @@ async function supabaseAdmin() {
   });
 }
 
-/** The server key `supabaseAdmin()` needs — absent in local mode and in a deployment that set the URL but no secret. */
+/** The server key `supabaseAdmin()` needs - absent in local mode and in a deployment that set the URL but no secret. */
 function hasServerKey(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -136,7 +136,7 @@ const LABEL_FILL = "D9EAD3";
  * The private bucket the exported copies are kept in.
  *
  * The same name as the bucket db/schema.sql creates, so the path recorded in
- * `erph.export_file` names an object that exists in a bucket that exists —
+ * `erph.export_file` names an object that exists in a bucket that exists -
  * rather than a place where a file might be.
  */
 const EXPORT_BUCKET = "rph-exports";
@@ -145,7 +145,7 @@ function cell(text: string, opts: { bold?: boolean; width?: number; label?: bool
   return new TableCell({
     width: opts.width ? { size: opts.width, type: WidthType.PERCENTAGE } : undefined,
     // The label cells, not the values. Shading the whole table would leave the
-    // reader with no way to tell a field's name from its content — which is
+    // reader with no way to tell a field's name from its content - which is
     // the one distinction the printed form's green carries.
     shading: opts.label
       ? { fill: LABEL_FILL, type: ShadingType.CLEAR, color: "auto" }
@@ -167,7 +167,7 @@ function section(title: string, body: string, done: boolean) {
       spacing: { before: 200 },
     }),
     new Paragraph({
-      children: [new TextRun({ text: body || "—", size: 20 })],
+      children: [new TextRun({ text: body || "-", size: 20 })],
       spacing: { after: 120 },
     }),
   ];
@@ -226,21 +226,21 @@ export async function POST(request: NextRequest) {
   const slotTime = parsed.data.slotTime ?? "07:30";
   const slotTimeEnd = parsed.data.slotTimeEnd ?? "12:40";
   // The school's name on a printed RPH comes from the row the administrator
-  // edits, not from the build — otherwise the document and the screen it was
+  // edits, not from the build - otherwise the document and the screen it was
   // previewed on could name different schools. Resolved here rather than as a
   // zod default because a default has to be a constant.
   const school = await resolveSchool();
   const schoolName = parsed.data.schoolName ?? school.school.name;
 
   // `document_id` is a claim by the caller, and it is stamped into the
-  // statutory export log below. The *payload* is whatever was sent — that is
-  // fine, it is this caller's own draft — but recording a colleague's plan as
+  // statutory export log below. The *payload* is whatever was sent - that is
+  // fine, it is this caller's own draft - but recording a colleague's plan as
   // the document this copy came from would falsify the audit trail, so the id
   // has to belong to the person asking.
   if (supabaseConfigured && parsed.data.document_id && "user" in gate) {
     if (!hasServerKey()) {
       return NextResponse.json(
-        { error: "Eksport arkib tidak tersedia — kunci pelayan tiada." },
+        { error: "Eksport arkib tidak tersedia - kunci pelayan tiada." },
         { status: 503 },
       );
     }
@@ -295,36 +295,36 @@ export async function POST(request: NextRequest) {
               new TableRow({
                 children: [
                   cell("Subjek", { bold: true, width: 22, label: true }),
-                  cell(subjectName || "—", { width: 28 }),
+                  cell(subjectName || "-", { width: 28 }),
                   cell("Nama Kelas", { bold: true, width: 22, label: true }),
-                  cell(className || "—", { width: 28 }),
+                  cell(className || "-", { width: 28 }),
                 ],
               }),
               new TableRow({
                 children: [
                   cell("Hari", { bold: true, width: 22, label: true }),
                   cell(
-                    planDate ? `${printedDayNumber(planDate)}. ${hariName(planDate)}` : "—",
+                    planDate ? `${printedDayNumber(planDate)}. ${hariName(planDate)}` : "-",
                     {
                       width: 28,
                     },
                   ),
                   cell("Tarikh", { bold: true, width: 22, label: true }),
-                  cell(planDate || "—", { width: 28 }),
+                  cell(planDate || "-", { width: 28 }),
                 ],
               }),
               new TableRow({
                 children: [
                   cell("Masa Mula", { bold: true, width: 22, label: true }),
-                  cell(slotTime || "—", { width: 28 }),
+                  cell(slotTime || "-", { width: 28 }),
                   cell("Masa Tamat", { bold: true, width: 22, label: true }),
-                  cell(slotTimeEnd || "—", { width: 28 }),
+                  cell(slotTimeEnd || "-", { width: 28 }),
                 ],
               }),
               new TableRow({
                 children: [
                   cell("Tema / Bidang / Tajuk", { bold: true, width: 22, label: true }),
-                  cell(temaLengkap(payload) || "—", { width: 78 }),
+                  cell(temaLengkap(payload) || "-", { width: 78 }),
                 ],
               }),
             ],
@@ -347,7 +347,7 @@ export async function POST(request: NextRequest) {
             nonEmpty(payload.kriteria_kejayaan),
           ),
 
-          // A list of names, as the paper form prints it — not a timed table.
+          // A list of names, as the paper form prints it - not a timed table.
           // The school's activities are ordered items, some indented beneath a
           // heading, and rendering them as a three-column grid would invent
           // columns the submitted document does not have.
@@ -366,21 +366,21 @@ export async function POST(request: NextRequest) {
                 ),
               })
             : new Paragraph({
-                children: [new TextRun({ text: "— belum diisi —", size: 20 })],
+                children: [new TextRun({ text: "- belum diisi -", size: 20 })],
               }),
 
           ...section("Refleksi", payload.refleksi, nonEmpty(payload.refleksi)),
 
           // The reviewer's line is a blank to sign when nothing has been sealed.
           // Once something has, the seal takes its place and carries the name,
-          // the moment and the material needed to check it — because a document
+          // the moment and the material needed to check it - because a document
           // that prints "Semakan Pentadbir: ____________" over an approval that
           // already happened is a document that understates what was done.
           ...(parsed.data.signerName
             ? [
                 // A signature block, laid out the way the paper form has one:
                 // the seal, a rule to rest a pen on, the name under it, the
-                // office under that, the moment — and the technical proof on
+                // office under that, the moment - and the technical proof on
                 // a quiet line of its own rather than shouting in the middle
                 // of the document.
                 new Paragraph({
@@ -489,8 +489,8 @@ export async function POST(request: NextRequest) {
             upsert: true,
           });
         if (upErr) {
-          // The download below still works — the copy is streamed to the caller
-          // either way — so a storage failure must not fail the export. It is
+          // The download below still works - the copy is streamed to the caller
+          // either way - so a storage failure must not fail the export. It is
           // logged, because the row that follows will name a path with nothing
           // at it, and that gap should be visible.
           console.error("[export] could not store the copy:", upErr.message);

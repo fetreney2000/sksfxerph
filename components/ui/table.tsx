@@ -1,7 +1,7 @@
 import type * as React from "react";
 import { cn } from "@/lib/cn";
 
-/** Overflow wrapper — every table in the app is horizontally scrollable on a phone. */
+/** Overflow wrapper - every table in the app is horizontally scrollable on a phone. */
 export function TableContainer({ className, ...props }: React.ComponentPropsWithoutRef<"div">) {
   return <div className={cn("w-full overflow-x-auto", className)} {...props} />;
 }

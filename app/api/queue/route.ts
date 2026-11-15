@@ -6,13 +6,13 @@ import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
 import { resolveSession } from "@/lib/server/session";
 
 /**
- * GET /api/queue — plans awaiting a grade.
+ * GET /api/queue - plans awaiting a grade.
  *
  * Replaces the browser's direct `from("rph_document")` query: the handler is
  * authenticated by cookie, then scopes the query to the caller's own school.
  * A teacher who forges this request gets 403 before any row is read.
  *
- * The session comes from `school_setting`, not from `lib/config` — the same
+ * The session comes from `school_setting`, not from `lib/config` - the same
  * value the dashboard's client-side queries use, so the queue and the teacher's
  * own list cannot drift into counting different school years.
  */
@@ -26,7 +26,7 @@ import { resolveSession } from "@/lib/server/session";
  * like an age and was not one.
  *
  * A plan with no recorded submission is said to be unrecorded rather than
- * given an age — guessing one would put a number in front of a reviewer that
+ * given an age - guessing one would put a number in front of a reviewer that
  * nobody measured.
  */
 function waitingLabel(submittedAt: string | null): string {
@@ -36,7 +36,7 @@ function waitingLabel(submittedAt: string | null): string {
   if (Date.now() < since) return "Baru sahaja";
 
   // Whole school days, not elapsed hours. "Hari ini" is a claim about the
-  // calendar — a plan submitted at eight last night was not submitted today,
+  // calendar - a plan submitted at eight last night was not submitted today,
   // however less than twenty-four hours ago that was. Both days are read in
   // MYT, so a reviewer abroad counts the same day as one at the school.
   const from = mytFields(since);
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // ── Week mode (`?week=N`) ────────────────────────────────────────────────
   // Without it the queue is the pending submissions, as it always was. With
-  // it, the call browses *every* plan of that school week, any status — which
+  // it, the call browses *every* plan of that school week, any status - which
   // is how a reviewer reaches a backdated RPH: one the teacher wrote for a
   // past week and never submitted (a draft the reviewer may submit on their
   // behalf), or one already decided, which is listed so the week can be read
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .eq("session", session)
     // A plan removed through the app is a soft-deleted record, not a queue
     // entry. The pending queue never filtered it because a deleted plan could
-    // not be `submitted` — its status moves with the delete — but week mode
+    // not be `submitted` - its status moves with the delete - but week mode
     // lists drafts too, and a deleted draft would have walked straight back in.
     .is("deleted_at", null);
   if (week === null) {
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // Scope. RLS on rph_document enforces this too, but this handler holds the
-  // secret key and therefore bypasses it — a filter the database would have
+  // secret key and therefore bypasses it - a filter the database would have
   // applied is not applied unless it is written here. A Guru Besar takes the
   // whole school; a GPK takes only the teachers assigned to them, which is
   // exactly what `supervisor_id` says and nothing else.
@@ -133,8 +133,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // through. Week mode: by the day the lesson was taught, so the week reads
     // as a timetable rather than a backlog.
     .order(week === null ? "submitted_at" : "plan_date", { ascending: true })
-    // A week of a whole school can be a hundred plans — teachers ×
-    // rph_per_week — so the browse cap is higher than the queue's.
+    // A week of a whole school can be a hundred plans - teachers ×
+    // rph_per_week - so the browse cap is higher than the queue's.
     .limit(week === null ? 50 : 200);
 
   if (error) {
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // No generated Database types, so supabase-js cannot infer the embedded
-  // relations — shape the rows explicitly rather than trusting `any`.
+  // relations - shape the rows explicitly rather than trusting `any`.
   interface QueueRow {
     id: string;
     /** Carried through because signing needs it: the server refuses a
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // `class_ids` is an array with no FK to embed through, so the names are
   // resolved here: one read of the school's class list, then a map. Archived
-  // rows are included — a plan naming an archived class still prints its name.
+  // rows are included - a plan naming an archived class still prints its name.
   const { data: classes, error: classErr } = await gate.db
     .from("class")
     .select("id, nama")
@@ -194,8 +194,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         (row.class_ids ?? [])
           .map((id) => classNames.get(id) ?? "")
           .filter(Boolean)
-          .join(", ") || "—",
-      subjectName: row.subject?.nama ?? "—",
+          .join(", ") || "-",
+      subjectName: row.subject?.nama ?? "-",
       planDate: row.plan_date,
       slotTime: row.slot_time ?? "07:30",
       status: row.status,

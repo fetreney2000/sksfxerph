@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 016 — one model of who may do what
+-- eRPH ▸ MIGRATION 016 - one model of who may do what
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/015. Safe to run more than once.
 --
@@ -10,7 +10,7 @@
 --     so a dismissed teacher stayed an active member with their old office:
 --     still in the monitoring roster, still inside `has_role` in the review
 --     RPCs, still reminded. The route guard read `erph.user.is_active` and
---     did refuse them — so the two models disagreed about the same person,
+--     did refuse them - so the two models disagreed about the same person,
 --     and the SQL one was the wrong one.
 --
 --   · `school_week_history` had no membership check at all, while the
@@ -21,7 +21,7 @@
 --     long the school takes to review.
 --
 --   · `sync_rph` let the owner rewrite a plan that was already sitting in a
---     reviewer's queue — and turned an unrecognised status into 'draft',
+--     reviewer's queue - and turned an unrecognised status into 'draft',
 --     which let a client withdraw its own plan from review without going
 --     through `submit_rph` at all. The editor already locks a submitted
 --     plan; the server now says the same.
@@ -85,7 +85,7 @@ begin
   -- is to say: a supervisor, or the school's own Administrator.
   --
   -- Both checks were missing here and `is_member` elsewhere, so the school's
-  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- figures were the one screen a Guru Biasa could still see the school on -
   -- the dashboard hid the card while the endpoint served it. Being SECURITY
   -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
   -- the only thing standing between a stranger and a school's year: headcount,
@@ -164,7 +164,7 @@ begin
     -- rather than raised.
     --
     -- `retryable` is the distinction the client acts on. A rejection the
-    -- server decided on — a class that is not in this school — will be
+    -- server decided on - a class that is not in this school - will be
     -- rejected forever, so the client drops the op and tells the teacher. A
     -- failure the server did not expect may well succeed next time, so the
     -- client keeps the op and tries again, which is only possible because the
@@ -190,7 +190,7 @@ begin
         continue;
       end if;
 
-      -- 2) the classes this op writes to. `class_ids` is the wire format now —
+      -- 2) the classes this op writes to. `class_ids` is the wire format now -
       -- one plan may cover several classes. A lone `class_id` is what the first
       -- release sent, and is still honoured as a one-element set: an installed
       -- PWA keeps running the app shell it precached, and refusing it would
@@ -242,7 +242,7 @@ begin
       --
       -- Which branch resolved the row decides how the class list merges below.
       -- An op that names its own row (by id) is authoritative and the list may
-      -- shrink — that is the editor's "untick a class" doing its job. An op
+      -- shrink - that is the editor's "untick a class" doing its job. An op
       -- resolved by key is an offline duplicate, and its classes union *in*
       -- rather than overwriting, so two devices that split the classes of one
       -- lesson between them lose nothing when they finally reach the server.
@@ -285,7 +285,7 @@ begin
                -- server now says the same: only a draft, or a returned plan the
                -- teacher is fixing, may be rewritten. Without this a client that
                -- bypassed the editor could change the content of a plan sitting
-               -- in a reviewer's queue — and the version would move under the
+               -- in a reviewer's queue - and the version would move under the
                -- signature that reviewer is about to make.
                payload = case when status in ('draft','returned')
                               then v_op->'payload' else payload end,
@@ -324,7 +324,7 @@ begin
         returning version, status into v_ver, v_status;
         exception when unique_violation then
           -- The by-id rewrite claimed a class set that collides with another
-          -- live plan on the same subject, week and date — a teacher unticking
+          -- live plan on the same subject, week and date - a teacher unticking
           -- one class while a second plan still claims another. Refusing would
           -- leave the op retryable and the queue stuck behind it, so instead
           -- the lists union and the teacher resolves the overlap in the editor.
@@ -422,8 +422,8 @@ begin
         'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
         'version', v_ver, 'status', v_status, 'completeness', v_pct));
     exception when others then
-      -- The block is a subtransaction, so everything this op did — the claim on
-      -- its op id included — has been rolled back by the time the handler
+      -- The block is a subtransaction, so everything this op did - the claim on
+      -- its op id included - has been rolled back by the time the handler
       -- runs. The op id is therefore still free and the client can retry the
       -- very same op. Burnt, it would come back as 'duplicate' and the
       -- client's queue would drop it: the teacher's edit, gone, because the

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- eRPH · Supabase / PostgreSQL 15 schema  ·  v2 (refined)
--- Sistem Rancangan Pengajaran Harian — single school, Supabase free tier
+-- Sistem Rancangan Pengajaran Harian - single school, Supabase free tier
 --
 -- Conventions
 --   * snake_case, uuid PKs (client pre-generates ids for offline sync)
@@ -68,7 +68,7 @@ create type erph.member_role as enum (
 --     sheet, which is why one role maps to several jawatan (the three
 --     Penolong Kanan offices) and why it has to be chosen rather than derived.
 --
--- NULL means "not set yet" and prints as "—". It is never guessed: a cover
+-- NULL means "not set yet" and prints as "-". It is never guessed: a cover
 -- sheet that names an office nobody set would be a claim the school never
 -- made, which is the failure this column exists to replace.
 create type erph.jawatan as enum (
@@ -132,7 +132,7 @@ end $$;
 -- Completeness per KPM FAQ (profil SK/SP, objektif, aktiviti, refleksi, intervensi)
 -- Completeness per the school's submitted form, not the KPM circular: the four
 -- things it cannot be issued without. MUST match `completeness()` in
--- lib/schemas/rph.ts byte for byte — tests/unit/completeness.test.ts runs the
+-- lib/schemas/rph.ts byte for byte - tests/unit/completeness.test.ts runs the
 -- same fixtures through both so the editor's meter and `submit_rph`'s gate can
 -- never disagree.
 -- returns 0..100 → drives the editor progress meter and the submit gate
@@ -186,7 +186,7 @@ end $$;
 -- The header is only honoured when the caller has already proven it holds the
 -- secret key (`role = 'service_role'`, or `current_user` where the claims GUC
 -- is absent). That proof comes from the key's signature, which is never
--- exposed to a browser — so a publishable-key caller cannot send
+-- exposed to a browser - so a publishable-key caller cannot send
 -- `X-Erph-User: <someone-else>` and impersonate them.
 create or replace function erph.actor()
 returns uuid
@@ -258,7 +258,7 @@ create table erph.user (
   password_hash text not null,                        -- PHC-style scrypt string
   role          erph.member_role not null default 'guru_biasa',
   -- The office held at the school, for the JAWATAN row of the cover sheet.
-  -- NULL until an administrator sets it — see erph.jawatan above.
+  -- NULL until an administrator sets it - see erph.jawatan above.
   jawatan       erph.jawatan,
   is_active     boolean not null default true,
   failed_logins int not null default 0,               -- brute-force lockout
@@ -267,7 +267,7 @@ create table erph.user (
   last_login_at timestamptz,
 
   -- Sign-in with a KPM Google account (DELIMa, @moe-dl.edu.my). NULL means
-  -- "not linked yet", and password login keeps working whatever this says —
+  -- "not linked yet", and password login keeps working whatever this says -
   -- the pentadbir has no MOE account at all.
   --
   -- `google_sub` is the identity. Google's `sub` is stable for the life of an
@@ -276,7 +276,7 @@ create table erph.user (
   -- that first link, and deliberately not consulted again: an address handed to
   -- someone else must not become a way into the previous holder's account.
   --
-  -- The UNIQUE index is doing more than tidiness — it is what makes linking
+  -- The UNIQUE index is doing more than tidiness - it is what makes linking
   -- idempotent under concurrent first sign-ins, since the loser of that race
   -- gets a constraint violation rather than two claims on one identity.
   google_sub    text unique,
@@ -305,7 +305,7 @@ create table erph.school_member (
   -- Free text, never written by any code path, and NOT what the cover sheet
   -- prints: the JAWATAN row reads erph.user.jawatan. This column being all
   -- NULL while still being the one the signature route consulted is exactly
-  -- why every cover printed "—" beneath the signer's name.
+  -- why every cover printed "-" beneath the signer's name.
   title      text,
   -- Who supervises this member's plans. NULL means *nobody*, and that is the
   -- deliberate default: a teacher with no supervisor is visible only to a Guru
@@ -337,7 +337,7 @@ create table erph.school_setting (
   require_complete boolean not null default true,      -- block submit below 100%
   -- How many RPH one teacher owes in a week: the school runs Monday to
   -- Friday, so five. It is a *setting* because it is the denominator behind
-  -- "pematuhan sekolah" — hardcoded it would be one school's rule baked into
+  -- "pematuhan sekolah" - hardcoded it would be one school's rule baked into
   -- every deployment, and absent the percentage had no denominator at all
   -- and divided approved plans by the teacher headcount, which is how two
   -- teachers with six approved plans between them read as 300%.
@@ -438,10 +438,10 @@ create table erph.rph_document (
   week_no          smallint not null check (week_no between 1 and 52),
   plan_date        date not null,
   -- Lesson slot. Part of the document's identity (editor step 1), shown in the
-  -- review queue, and edited offline — so it belongs beside plan_date rather
+  -- review queue, and edited offline - so it belongs beside plan_date rather
   -- than inside the free-form payload.
   slot_time        time not null default '07:30',
-  -- Masa Tamat. The school's form prints both times, so both are stored — one
+  -- Masa Tamat. The school's form prints both times, so both are stored - one
   -- start time leaves the printed page to invent an end time, and that is how
   -- a five-hour lesson ends up on an approved document.
   slot_time_end    time not null default '12:40',
@@ -489,8 +489,8 @@ create table erph.rph_document (
   updated_at timestamptz not null default now()
 );
 -- Idempotency key: one live plan per teacher×class-set×subject×week×date.
--- `class_ids` is stored canonically — sorted and de-duplicated, which sync_rph
--- does before it writes — so array equality under the btree is deterministic
+-- `class_ids` is stored canonically - sorted and de-duplicated, which sync_rph
+-- does before it writes - so array equality under the btree is deterministic
 -- and an exact-duplicate race (the same plan flushed twice from two tabs)
 -- still collides here and merges, exactly as the single-class key did.
 create unique index rph_document_uniq
@@ -540,7 +540,7 @@ create index rph_review_reviewer_idx on erph.rph_review (reviewer_id, created_at
 -- pgcrypto's own documentation says "No support for signing", so a
 -- `verify_signature()` RPC is not something this schema can offer. Rather than
 -- pretend otherwise, the guarantee is built from what the database *can*
--- enforce — who may write:
+-- enforce - who may write:
 --
 --   1. This table has NO insert or update policy. Only `service_role` can
 --      append, and `service_role` is only ever our server code.
@@ -553,7 +553,7 @@ create index rph_review_reviewer_idx on erph.rph_review (reviewer_id, created_at
 -- `envelope` is jsonb rather than the signed bytes on purpose: jsonb does not
 -- preserve byte order, so it is re-canonicalised (RFC 8785) on every
 -- verification. Canonicalisation is a function of the *data model*, so the
--- bytes come out identical — which is the whole reason the signature covers
+-- bytes come out identical - which is the whole reason the signature covers
 -- canonical JSON instead of a serialisation.
 --
 -- The public key is repeated on every row rather than read from a registry:
@@ -692,7 +692,7 @@ $$;
 -- ── Supervision scope ────────────────────────────────────────────────────────
 -- The role check used to be the whole test: `has_role(school, ['gpk'])` meant
 -- "may read every plan in this school". Per-supervisor assignment turns that
--- into a *relationship*, so the role alone proves nothing — a GPK is now
+-- into a *relationship*, so the role alone proves nothing - a GPK is now
 -- defined by which teachers point at them.
 --
 -- Both functions are SECURITY DEFINER because they read school_member through
@@ -716,11 +716,11 @@ $$;
 --
 --   • everyone on their own plans (the owner path already exists separately,
 --     but a policy written in terms of this must not lose it);
---   • a Guru Besar on the whole school — "guru besar will have access to all
+--   • a Guru Besar on the whole school - "guru besar will have access to all
 --     teacher's rph", so no assignment is needed for them and none is asked;
 --   • a GPK only on the teachers assigned to them.
 --
--- A teacher whose supervisor_id is NULL therefore reaches no GPK at all —
+-- A teacher whose supervisor_id is NULL therefore reaches no GPK at all -
 -- which is the safe default, not an oversight.
 create or replace function erph.may_supervise(p_school uuid, p_owner uuid)
 returns boolean language sql stable security definer set search_path = erph, public as $$
@@ -760,7 +760,7 @@ begin
 
   -- Reassigning a supervisor orphans nothing, but a teacher moved from one GPK
   -- to another must not leave the previous GPK holding a plan they can no
-  -- longer open. Nothing is rewritten — plans keep who signed them — only the
+  -- longer open. Nothing is rewritten - plans keep who signed them - only the
   -- *forward* scope changes, which is exactly what the UPDATE above does.
 end $$;
 
@@ -769,7 +769,7 @@ end $$;
 -- Counts, never content: what a supervisor is accountable for is whether a
 -- teacher is submitting, not what they wrote. This is the one place the app
 -- names individuals, so it is also the one place where `may_supervise` has to
--- be applied *inside* the function — SECURITY DEFINER means the caller's RLS
+-- be applied *inside* the function - SECURITY DEFINER means the caller's RLS
 -- is not consulted, and a handler that fetched school_member and then filtered
 -- in JavaScript would be one careless edit away from showing a GPK their whole
 -- school.
@@ -796,7 +796,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- ignores every return look identical once the first is caught up.
          --
          -- Read from rph_review rather than the document, because the document
-         -- only ever carries the latest decision — the history of a plan that
+         -- only ever carries the latest decision - the history of a plan that
          -- was returned and then approved is exactly what makes it "fixed".
          (select count(*) from erph.rph_document d2
            where d2.owner_id = m.user_id and d2.school_id = p_school
@@ -814,7 +814,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- Classes per teacher, as a self-contained subquery rather than a
          -- join: a plan now covers several classes, so joining class onto the
          -- document would multiply every row of it and inflate the counts
-         -- above — and the function body is SQL with a GROUP BY on the
+         -- above - and the function body is SQL with a GROUP BY on the
          -- teacher, which an outer reference to d.class_ids cannot survive.
          (select string_agg(distinct c.nama, ', ' order by c.nama)
             from erph.rph_document d2
@@ -920,13 +920,13 @@ end $$;
 -- Per-week figures across a range, for the trend and the sparkline.
 --
 -- `school_week_stats` answers "how is this week doing"; this answers "how has
--- it been going". Same permission and same reasoning — counts and a
+-- it been going". Same permission and same reasoning - counts and a
 -- percentage, never a name, so any member may see the school's shape without
 -- seeing who is behind it.
 --
--- `expected` is the number of RPH the school owes in that week — the active
+-- `expected` is the number of RPH the school owes in that week - the active
 -- guru_biasa headcount times the school's own `rph_per_week` (five for a
--- school that runs Monday to Friday) — and `teachers` is the headcount
+-- school that runs Monday to Friday) - and `teachers` is the headcount
 -- itself, which the roster beside this chart needs. They were one number
 -- until the denominator was fixed: dividing approved *plans* by *teachers*
 -- is what made a five-plan week read as 500%.
@@ -952,7 +952,7 @@ begin
   -- is to say: a supervisor, or the school's own Administrator.
   --
   -- Both checks were missing here and `is_member` elsewhere, so the school's
-  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- figures were the one screen a Guru Biasa could still see the school on -
   -- the dashboard hid the card while the endpoint served it. Being SECURITY
   -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
   -- the only thing standing between a stranger and a school's year: headcount,
@@ -1057,7 +1057,7 @@ $$;
 -- Array forms for rph_document.class_ids: one plan may cover several classes,
 -- and every one of them must pass the same test the single-class version
 -- applied. Expressed as "no element fails" rather than "some element passes",
--- so an empty or all-NULL list can never sneak through — unnest of an empty
+-- so an empty or all-NULL list can never sneak through - unnest of an empty
 -- array yields no rows, which makes these vacuously true, and the table's
 -- cardinality check is what refuses that case.
 create or replace function erph.classes_in_school(p_ids uuid[], p_school uuid)
@@ -1092,7 +1092,7 @@ begin
   -- NULL-actor guard, matching sync_rph's.
   --
   -- This is load-bearing: `owner_id <> erph.actor()` evaluates to NULL when no
-  -- actor can be resolved, and PL/pgSQL treats NULL in IF as false — so the
+  -- actor can be resolved, and PL/pgSQL treats NULL in IF as false - so the
   -- "Tidak dibenarkan" branch would be skipped and ANY caller (including one with
   -- just the publishable key, for whom actor() is always null) could submit
   -- another teacher's plan. `IS DISTINCT FROM` never yields NULL.
@@ -1116,7 +1116,7 @@ begin
   -- /pentadbiran → Sesi & tarikh akhir ("Halang penghantaran sehingga
   -- kelengkapan 100%"). It used to be written by `admin_set_setting` and read
   -- by *nothing*: the gate below was hard-coded to 100%, so the switch in the
-  -- console did nothing at all — a setting that looked like a control and was
+  -- console did nothing at all - a setting that looked like a control and was
   -- not one.
   --
   -- `p_force` is the teacher's acknowledged escape hatch, not a bypass: it is
@@ -1131,7 +1131,7 @@ begin
 
   if v_pct < 100 and v_require and not p_force then
     return jsonb_build_object('ok', false, 'completeness', v_pct,
-      'error', 'RPH belum lengkap — lengkapkan setiap seksyen wajib');
+      'error', 'RPH belum lengkap - lengkapkan setiap seksyen wajib');
   end if;
 
   update erph.rph_document
@@ -1216,7 +1216,7 @@ begin
   --
   -- So an approval needs the same completeness the school asked for at
   -- submission. A school that has turned the requirement off may still approve
-  -- an incomplete plan — that is its own policy, set by the administrator who
+  -- an incomplete plan - that is its own policy, set by the administrator who
   -- answers for it.
   v_pct := erph.rph_completeness(v_doc.payload);
   select coalesce(
@@ -1225,7 +1225,7 @@ begin
            true)
     into v_require;
   if v_pct < 100 and v_require then
-    raise exception 'RPH belum lengkap untuk disahkan — kembalikan kepada guru';
+    raise exception 'RPH belum lengkap untuk disahkan - kembalikan kepada guru';
   end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
@@ -1328,7 +1328,7 @@ begin
     -- rather than raised.
     --
     -- `retryable` is the distinction the client acts on. A rejection the
-    -- server decided on — a class that is not in this school — will be
+    -- server decided on - a class that is not in this school - will be
     -- rejected forever, so the client drops the op and tells the teacher. A
     -- failure the server did not expect may well succeed next time, so the
     -- client keeps the op and tries again, which is only possible because the
@@ -1354,7 +1354,7 @@ begin
         continue;
       end if;
 
-      -- 2) the classes this op writes to. `class_ids` is the wire format now —
+      -- 2) the classes this op writes to. `class_ids` is the wire format now -
       -- one plan may cover several classes. A lone `class_id` is what the first
       -- release sent, and is still honoured as a one-element set: an installed
       -- PWA keeps running the app shell it precached, and refusing it would
@@ -1406,7 +1406,7 @@ begin
       --
       -- Which branch resolved the row decides how the class list merges below.
       -- An op that names its own row (by id) is authoritative and the list may
-      -- shrink — that is the editor's "untick a class" doing its job. An op
+      -- shrink - that is the editor's "untick a class" doing its job. An op
       -- resolved by key is an offline duplicate, and its classes union *in*
       -- rather than overwriting, so two devices that split the classes of one
       -- lesson between them lose nothing when they finally reach the server.
@@ -1449,7 +1449,7 @@ begin
                -- server now says the same: only a draft, or a returned plan the
                -- teacher is fixing, may be rewritten. Without this a client that
                -- bypassed the editor could change the content of a plan sitting
-               -- in a reviewer's queue — and the version would move under the
+               -- in a reviewer's queue - and the version would move under the
                -- signature that reviewer is about to make.
                payload = case when status in ('draft','returned')
                               then v_op->'payload' else payload end,
@@ -1488,7 +1488,7 @@ begin
         returning version, status into v_ver, v_status;
         exception when unique_violation then
           -- The by-id rewrite claimed a class set that collides with another
-          -- live plan on the same subject, week and date — a teacher unticking
+          -- live plan on the same subject, week and date - a teacher unticking
           -- one class while a second plan still claims another. Refusing would
           -- leave the op retryable and the queue stuck behind it, so instead
           -- the lists union and the teacher resolves the overlap in the editor.
@@ -1586,8 +1586,8 @@ begin
         'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
         'version', v_ver, 'status', v_status, 'completeness', v_pct));
     exception when others then
-      -- The block is a subtransaction, so everything this op did — the claim on
-      -- its op id included — has been rolled back by the time the handler
+      -- The block is a subtransaction, so everything this op did - the claim on
+      -- its op id included - has been rolled back by the time the handler
       -- runs. The op id is therefore still free and the client can retry the
       -- very same op. Burnt, it would come back as 'duplicate' and the
       -- client's queue would drop it: the teacher's edit, gone, because the
@@ -1605,14 +1605,14 @@ end $$;
 -- School compliance for one week (drives the admin dashboard in one round-trip)
 --
 -- `teachers` is the headcount and `expected` is how many RPH the school owes
--- that week — teachers × the school's own `rph_per_week`, which is five for a
+-- that week - teachers × the school's own `rph_per_week`, which is five for a
 -- school that runs Monday to Friday. The two used to be the same number, so
 -- the percentage divided approved *plans* by *teachers*: a teacher who
 -- finished their five put the school at 500%, and two teachers with six
 -- approved plans between them read as 300%.
 --
 -- `compliance` is capped at 100. A school that submits more than the week
--- requires — one plan per class, say — has met its requirement rather than
+-- requires - one plan per class, say - has met its requirement rather than
 -- exceeded it, and the counts beside it still say exactly how many were
 -- approved.
 create or replace function erph.school_week_stats(p_school uuid, p_session text, p_week smallint)
@@ -1626,14 +1626,14 @@ begin
   -- Whole-school figures are a supervisor's question, not a teacher's.
   --
   -- The check was `is_member`, which made this the one thing a Guru Biasa
-  -- could still see the school through — the dashboard hid the card but the
+  -- could still see the school through - the dashboard hid the card but the
   -- route served it. Now it is the same rule as `/api/stats`: a teacher's
   -- dashboard is about their own week, and the school's compliance percentage
   -- beside it is an answer to a question they are not the one to answer.
   --
   -- The Administrator keeps it: they already answer for the school's figures
   -- on `/utama` through `admin_list_overview`, and `v_school_compliance` is
-  -- `security_invoker` — a check that ignored them would make a table they
+  -- `security_invoker` - a check that ignored them would make a table they
   -- already hold error rather than quietly show less.
   if not erph.is_staff(p_school)
      and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
@@ -1663,7 +1663,7 @@ begin
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 — a school
+    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 - a school
     -- with no active Guru Biasa would report full compliance instead of no
     -- figure at all. The zero denominator is therefore handled here and
     -- returns NULL: not scored, rather than scored zero or scored perfectly.
@@ -1683,7 +1683,7 @@ end $$;
 -- these functions still yields no way back to what a teacher typed.
 
 -- Does this office belong to that role? Returns the jawatan when it does and
--- NULL when it does not — one answer both callers need: `admin_set_member`
+-- NULL when it does not - one answer both callers need: `admin_set_member`
 -- uses it to clear an office a new role cannot hold, and `admin_set_jawatan`
 -- uses the same expression to refuse one that was never valid.
 --
@@ -1726,7 +1726,7 @@ language sql stable security definer set search_path = erph, public as $$
 $$;
 
 -- Create an account and enrol it in the school in one step. Splitting the two
--- would leave a window where a user exists with no school — unable to sync,
+-- would leave a window where a user exists with no school - unable to sync,
 -- review or report, and invisible to the very list that would fix it.
 create or replace function erph.admin_create_member(p_school uuid, p_username text,
                                                     p_full_name text,
@@ -1755,7 +1755,7 @@ begin
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
   end if;
-  -- The office may be left for later — but if it is given here it has to fit
+  -- The office may be left for later - but if it is given here it has to fit
   -- the role, or a GPK account could be born already printed as "Guru Besar".
   if p_jawatan is not null and erph.jawatan_for(p_role, p_jawatan) is distinct from p_jawatan then
     raise exception 'Jawatan tidak sepadan dengan peranan akaun';
@@ -1783,7 +1783,7 @@ end $$;
 -- Reset a forgotten password AND lock every session that still holds one:
 -- `toUser` rejects a cookie issued before `password_changed_at`, so this is
 -- "log out all devices" as a side effect rather than a separate step.
--- The lockout counters clear with it — otherwise a teacher who forgot their
+-- The lockout counters clear with it - otherwise a teacher who forgot their
 -- password stays locked out of the new one.
 create or replace function erph.admin_reset_password(p_school uuid, p_user uuid,
                                                      p_password_hash text)
@@ -1828,7 +1828,7 @@ end $$;
 -- the role: `erph.user` (what the route guard and the session read) and
 -- `erph.school_member` (what every SQL policy reads). Nothing else keeps them
 -- in step, so writing one alone would let a demoted account keep its
--- privileges through whichever layer it reached next — and would make the
+-- privileges through whichever layer it reached next - and would make the
 -- "peranan dikemas kini" toast a description of half a change.
 create or replace function erph.admin_set_member(p_school uuid, p_user uuid,
                                                  p_role erph.member_role,
@@ -1867,8 +1867,8 @@ begin
 end $$;
 
 -- Sets the office printed on the cover sheet, or clears it. Separate from
--- `admin_set_member` because it is a different question — "what may this
--- account do" versus "what is this person called on paper" — and folding it
+-- `admin_set_member` because it is a different question - "what may this
+-- account do" versus "what is this person called on paper" - and folding it
 -- into the role write would mean every role change silently had to re-decide
 -- an office nobody was asking about.
 --
@@ -1897,8 +1897,8 @@ begin
 end $$;
 
 -- The session and the weekly rule are real settings, not build constants:
--- turning the school year over — or saying how many RPH one teacher owes a
--- week — is the administrator's job, and it has to take effect for everyone
+-- turning the school year over - or saying how many RPH one teacher owes a
+-- week - is the administrator's job, and it has to take effect for everyone
 -- at once. Validated here because the CHECKs on `school_setting` would
 -- otherwise surface to the UI as a raw Postgres error.
 --
@@ -1935,7 +1935,7 @@ end $$;
 -- `rph_document.class_ids` is NOT NULL and `sync_rph` refuses a class outside
 -- the caller's school and session, so a class list the administrator cannot
 -- edit means a class list nobody can ever plan against. This is the source the
--- editor reads — the demo fixtures in `lib/demo/seed.ts` are local-mode only
+-- editor reads - the demo fixtures in `lib/demo/seed.ts` are local-mode only
 -- and their ids (`c-5a`) are not even valid UUIDs, so they must never reach sync.
 
 create or replace function erph.admin_list_classes(p_school uuid, p_session text)
@@ -2060,7 +2060,7 @@ end $$;
  * Both were frozen at creation: the name printed on every RPH the person
  * writes, and the address Google sign-in links to on a first visit. A typo or
  * a name change could only be fixed by deleting the account and importing it
- * again — taking that teacher's plans with them, which is not a fix, it is a
+ * again - taking that teacher's plans with them, which is not a fix, it is a
  * different way of losing them.
  *
  * The *username* is deliberately not offered. It is what the app signs a
@@ -2082,7 +2082,7 @@ begin
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
   end if;
-  -- Optional — an account with no address is allowed — but a value that is
+  -- Optional - an account with no address is allowed - but a value that is
   -- present has to be an address. `email` is what `resolveAccount` matches on
   -- the first time someone signs in with Google, so a malformed one would
   -- quietly deny them rather than fail anywhere they could see.
@@ -2124,7 +2124,7 @@ begin
    where code = p_code;
 end $$;
 
--- The school's own identity — code, name, district/state, motto, logo.
+-- The school's own identity - code, name, district/state, motto, logo.
 --
 -- `kod_sekolah` travels with the rest of the identity rather than being locked
 -- to the build. It used to be excluded on the grounds that it had to match
@@ -2195,7 +2195,7 @@ end $$;
 -- The administrator's answer to "which week is this date?".
 --
 -- These are writers only: the week number itself is computed in TypeScript
--- (lib/config.ts) and SQL never derives one from a date — it filters on the
+-- (lib/config.ts) and SQL never derives one from a date - it filters on the
 -- `week_no` the client sends. So the job here is purely to keep the table
 -- honest, which is more than a plain INSERT policy can do, because a declared
 -- week **cascades**: setting 19–23 Oct to week 34 makes 26 Oct 35 and 2 Nov
@@ -2278,7 +2278,7 @@ begin
 
   -- Both bounds are *stated*, not described. "The previous week plus the
   -- distance between the dates" is a correct account of a constraint and a
-  -- useless answer to someone who has to pick a number — the message is the
+  -- useless answer to someone who has to pick a number - the message is the
   -- one thing the person at the form can act on.
   if v_prev_week is not null then
     v_min_week := v_prev_week + ((p_start_date - v_prev_start) / 7);
@@ -2355,7 +2355,7 @@ create trigger tr_audit_appendonly    before update or delete on erph.audit_log
 -- SELECT policies that call SECURITY DEFINER helpers (never inline subqueries
 -- on the same table → recursion), writes only via owner policy or RPC.
 --
--- Identity in every policy comes from `erph.actor()`, not `auth.uid()` — see
+-- Identity in every policy comes from `erph.actor()`, not `auth.uid()` - see
 -- §3b. With no Supabase Auth in play, a direct PostgREST call resolves actor
 -- to NULL and is denied outright; our own traffic arrives through route
 -- handlers that authenticate first.
@@ -2390,7 +2390,7 @@ create policy setting_read on erph.school_setting
 -- The Administrator's account belongs to them, not to the staff who work
 -- alongside them. Without the second condition a GPK or Guru Besar can read a
 -- pentadbir's membership and profile through `shares_school_with` / `is_staff`
--- — which is how "the pentadbir is visible only to a pentadbir" is enforced at
+-- - which is how "the pentadbir is visible only to a pentadbir" is enforced at
 -- the row level rather than only in the tables a developer remembered to hide
 -- them from. `admin_list_members` is SECURITY DEFINER, so the pentadbir's own
 -- view of the roster is unaffected.
@@ -2402,7 +2402,7 @@ create policy profile_read on erph.user
 create policy profile_self_update on erph.user
   for update using (id = erph.actor()) with check (id = erph.actor());
 
--- Staff may read the roster to monitor it — except the Administrator's own row,
+-- Staff may read the roster to monitor it - except the Administrator's own row,
 -- for the same reason as `profile_read` below. A Guru Biasa never sees anyone
 -- but themselves either way, since `is_staff` is false for them.
 create policy member_read on erph.school_member
@@ -2427,7 +2427,7 @@ create policy assignment_read on erph.teaching_assignment
                  and erph.is_staff(c.school_id))
   );
 
--- core document: owner may select/insert/update payload only — deliberately NO
+-- core document: owner may select/insert/update payload only - deliberately NO
 -- delete policy (soft delete goes through server code), and status changes are
 -- blocked by guard_review_fields even for the owner
 create policy rph_owner_select on erph.rph_document
@@ -2449,17 +2449,17 @@ create policy rph_owner_update on erph.rph_document
 -- A GPK reads only the plans of the teachers assigned to them; a Guru Besar
 -- reads the whole school, and everyone reads their own.
 --
--- This used to be `has_role(school, ['gpk'])` alone — which meant *every plan
+-- This used to be `has_role(school, ['gpk'])` alone - which meant *every plan
 -- in the school*. `may_supervise` subsumes the role test entirely: it grants a
 -- Guru Besar school-wide, grants a GPK through `supervises`, and grants the
--- owner their own row. Note what falls out for free — the Administrator, who
+-- owner their own row. Note what falls out for free - the Administrator, who
 -- holds no `rph`, gets nothing here either.
 create policy rph_reviewer_read on erph.rph_document
   for select using (deleted_at is null and erph.may_supervise(school_id, owner_id));
 
 -- history tables: SELECT only → writes happen inside SECURITY DEFINER RPCs
 -- Scope follows the plan it belongs to, so a GPK who is moved off a teacher
--- stops seeing that teacher's revision history too — not just new decisions.
+-- stops seeing that teacher's revision history too - not just new decisions.
 create policy rph_revision_read on erph.rph_revision
   for select using (exists (select 1 from erph.rph_document d
                             where d.id = erph.rph_revision.document_id
@@ -2470,7 +2470,7 @@ create policy rph_review_read on erph.rph_review
                               and erph.may_supervise(d.school_id, d.owner_id)));
 
 -- Signatures are readable by everyone who can read the plan, so a client can
--- verify one itself rather than taking the server's word for it — and by the
+-- verify one itself rather than taking the server's word for it - and by the
 -- owner, so a teacher can see who sealed their RPH. There is deliberately no
 -- INSERT or UPDATE policy: see erph.rph_signature above.
 create policy rph_signature_read on erph.rph_signature
@@ -2490,7 +2490,7 @@ create policy template_update on erph.rph_template
   for update using (owner_id = erph.actor()) with check (owner_id = erph.actor());
 
 -- A teacher's RPT links: the owner manages their own, and whoever may
--- supervise the teacher may open them — a GPK their supervised teachers, a
+-- supervise the teacher may open them - a GPK their supervised teachers, a
 -- Guru Besar the whole school. No separate reviewer policy needed:
 -- `may_supervise` already grants the owner their own row too.
 create policy rpt_owner_write on erph.rpt_link
@@ -2530,18 +2530,18 @@ on conflict (id) do nothing;
 --                  attachments/<user_id>/<file>
 --                  school-assets/<school_id>/logo.<ext>
 --
--- KNOWN DORMANT STATE — read before using these buckets.
+-- KNOWN DORMANT STATE - read before using these buckets.
 -- These policies call erph.has_role() → erph.actor(), and erph.actor() only
 -- honours a caller-supplied identity for `service_role`. Storage requests do
 -- not arrive through PostgREST with our X-Erph-User header, so as written
 -- every check resolves to NULL and every read is DENIED. That is the correct
 -- default (fail closed) and costs nothing today because no code path touches
--- Storage — exports stream straight from /api/export.
+-- Storage - exports stream straight from /api/export.
 --
 -- Before enabling uploads/downloads: either proxy Storage through a route
 -- handler (same pattern as every other DB access), or extend erph.actor() with
 -- a Storage-specific identity source. Do not simply relax the policy to
--- `using (true)` — the buckets would then be readable by anyone holding the
+-- `using (true)` - the buckets would then be readable by anyone holding the
 -- publishable key.
 create policy storage_read on storage.objects
   for select to authenticated using (
@@ -2564,7 +2564,7 @@ create policy storage_upload_attachments on storage.objects
 -- `storage_read`.
 --
 -- Dropped first because unlike its neighbours it depends on no `erph.*`
--- function, so `drop schema erph cascade` does not take it with them — a
+-- function, so `drop schema erph cascade` does not take it with them - a
 -- second run over the same database would otherwise collide with itself.
 drop policy if exists storage_read_school_logo on storage.objects;
 create policy storage_read_school_logo on storage.objects
@@ -2587,7 +2587,7 @@ group by 1,2,3,4;
 
 -- The same figures as `school_week_stats`, grouped over a whole session.
 --
--- It used to compute `approved / count(distinct owner_id)` — the definition
+-- It used to compute `approved / count(distinct owner_id)` - the definition
 -- the percentage was fixed *from*: plans divided by the teacher headcount, so
 -- a finished week read as 500% and nothing capped it. It now asks the same
 -- function the dashboard asks, so the two cannot drift apart; the counts stay
@@ -2635,7 +2635,7 @@ select docs.school_id, docs.session, docs.week_no,
 --   delete from erph.rph_document where deleted_at < now() - interval '5 years';
 -- $$);
 --
--- NOTE (free tier): pg_cron runs inside Supabase — any cadence is free.
+-- NOTE (free tier): pg_cron runs inside Supabase - any cadence is free.
 -- The KEEP-AWAKE heartbeat must come from OUTSIDE (Vercel daily cron →
 -- GET /api/heartbeat → trivial query), because a paused project stops pg_cron too.
 
@@ -2660,7 +2660,7 @@ alter default privileges for role postgres in schema erph
 alter default privileges for role postgres in schema erph
   grant all on sequences to anon, authenticated, service_role;
 
--- NOTE: granting broadly is correct here because RLS is the real guard — the
+-- NOTE: granting broadly is correct here because RLS is the real guard - the
 -- same model Supabase itself uses for `public`. Every table in this schema has
 -- RLS enabled (see §11), and writes go through SECURITY DEFINER RPCs.
 --
@@ -2673,13 +2673,13 @@ revoke all on erph.user from anon, authenticated;
 
 -- The one exception, and it is narrow: a signed-in teacher may correct their
 -- own name and address. `profile_self_update` below is the row-level rule for
--- it — and a row-level rule cannot say *which* columns, so the column grant
+-- it - and a row-level rule cannot say *which* columns, so the column grant
 -- has to say it here.
 --
 -- This is the defence that survives a mistake elsewhere. With the whole table
 -- revoked, nothing can be updated through PostgREST at all; but the revoke is
 -- a single statement at the end of a 2,300-line file, and if it were ever
--- lost — a regenerated grant, a hand-edited deployment — the policy alone
+-- lost - a regenerated grant, a hand-edited deployment - the policy alone
 -- would permit updating `role`, `is_active` and `password_hash` on one's own
 -- row. `role` alone would be enough: the route guards read `erph.user.role`,
 -- so a `guru_biasa` who could write it could make themselves a `pentadbir`.

@@ -4,17 +4,17 @@ import { requireDbUser, requirePermission, schoolIdFor } from "@/lib/server/auth
 import { resolveSession } from "@/lib/server/session";
 
 /**
- * GET / POST / DELETE /api/rpt — a teacher's RPT links.
+ * GET / POST / DELETE /api/rpt - a teacher's RPT links.
  *
  * The file bytes never touch this database: an RPT lives in the teacher's own
  * Google Drive and only the link is stored here, titled per subject, so a GPK
- * or Guru Besar can open and check it. Server-only like `/api/templates` —
+ * or Guru Besar can open and check it. Server-only like `/api/templates` -
  * there is no Dexie store and no sync op, because a link to Drive is only
  * usable online anyway, and in local mode there are no reviewers to show it
  * to.
  *
  * Writes are gated on `rph`: a Guru Besar teaches no class and holds no plans,
- * so they have nothing to attach — reviewers read through
+ * so they have nothing to attach - reviewers read through
  * `/api/pantau/teachers`, which is already scoped to the teachers they may
  * see. Every handler holds the secret key and bypasses RLS, so the ownership
  * rule is spelled out here too rather than trusted to the policy.
@@ -27,7 +27,7 @@ export interface RptLink {
   updatedAt: string;
 }
 
-/** Hosts a teacher may link to — Drive files and folders, Docs/Sheets/Slides. */
+/** Hosts a teacher may link to - Drive files and folders, Docs/Sheets/Slides. */
 const DRIVE_HOSTS = new Set(["drive.google.com", "docs.google.com"]);
 
 /** Literal match through `ilike`: a title of `%` must name itself, not every row. */
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // One row per (teacher, session, title): re-attaching the same subject's
   // RPT updates the link rather than stacking a second row for the reviewer
   // to guess between. An explicit update-or-insert rather than `upsert`,
-  // because the uniqueness is on `lower(title)` — an expression index PostgREST
+  // because the uniqueness is on `lower(title)` - an expression index PostgREST
   // cannot name as an upsert arbiter.
   const { data: existing, error: readErr } = await gate.db
     .from("rpt_link")
@@ -174,7 +174,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
   // Ownership checked explicitly: this handler holds the secret key and
   // bypasses RLS, so a bare `.eq("id", id)` delete would remove a colleague's
-  // link. 404 for "not yours" and "gone" alike — naming a stranger's row
+  // link. 404 for "not yours" and "gone" alike - naming a stranger's row
   // reveals more than refusing to does.
   const { error } = await gate.db
     .from("rpt_link")

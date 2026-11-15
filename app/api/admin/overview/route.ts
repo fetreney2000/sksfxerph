@@ -5,7 +5,7 @@ import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { resolveSession } from "@/lib/server/session";
 
 /**
- * GET /api/admin/overview — what an administrator is accountable for.
+ * GET /api/admin/overview - what an administrator is accountable for.
  *
  * One request rather than four, because this is a dashboard's first paint: the
  * counts are cheap individually but a card that pops in one at a time reads as
@@ -15,7 +15,7 @@ import { resolveSession } from "@/lib/server/session";
  * `has_role(..., 'pentadbir')` inside SQL) rather than a raw read of
  * `school_member`, so this endpoint inherits the same guarantee as the accounts
  * table it summarises. The week figures come from `school_week_stats`, the same
- * aggregate `/api/stats` serves — deliberately counts and a percentage, never a
+ * aggregate `/api/stats` serves - deliberately counts and a percentage, never a
  * name, so nothing here can become a back door around `/sekolah`.
  */
 export interface Overview {

@@ -1,21 +1,21 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 012 — the office a person holds, printed on the cover
+-- eRPH ▸ MIGRATION 012 - the office a person holds, printed on the cover
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010/011. Safe to run more
 -- than once.
 --
 -- The JAWATAN row of the weekly cover sheet read `school_member.title`, a
--- free-text column no code path ever wrote — so every cover printed "—"
+-- free-text column no code path ever wrote - so every cover printed "-"
 -- beneath a signature the school had actually made, on a sheet whose whole
 -- point is that a district officer can tell who signed it and as what.
 --
 -- `erph.jawatan` is the office the school sets, and it is deliberately not
 -- derived from `erph.member_role`: three different Penolong Kanan offices
 -- live under the single role 'gpk', so the role cannot say which one this
--- person holds. NULL means nobody has said, and prints as "—".
+-- person holds. NULL means nobody has said, and prints as "-".
 --
 -- The backfill covers only what the role already states outright. 'gpk' does
--- not name an office, so it stays NULL rather than being given one — a cover
+-- not name an office, so it stays NULL rather than being given one - a cover
 -- sheet that invented an office the school never gave would be exactly the
 -- failure this replaces.
 --
@@ -24,7 +24,7 @@
 --   · `admin_list_members` gains a column, i.e. a new *return type*, which
 --     Postgres refuses to change in place (42P13);
 --   · `admin_create_member` gains a parameter, which Postgres treats as an
---     entirely different function — without the drop the old arity lingers
+--     entirely different function - without the drop the old arity lingers
 --     beside the new one and a call that omits the jawatan keeps resolving
 --     to the version that cannot set it.
 --
@@ -39,8 +39,8 @@
 --   python scripts/gen-migration.py
 --
 -- ▸ 1 ▸ the enum and the column ─────────────────────────────────────────────
--- A database built by running 001b first already has both — 001b creates them
--- so that 002 and 004 can name the type in a signature — and both statements
+-- A database built by running 001b first already has both - 001b creates them
+-- so that 002 and 004 can name the type in a signature - and both statements
 -- below then change nothing. They are here for a database that ran the
 -- original 001b, which had no idea this column was coming.
 do $$
@@ -126,7 +126,7 @@ begin
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
   end if;
-  -- The office may be left for later — but if it is given here it has to fit
+  -- The office may be left for later - but if it is given here it has to fit
   -- the role, or a GPK account could be born already printed as "Guru Besar".
   if p_jawatan is not null and erph.jawatan_for(p_role, p_jawatan) is distinct from p_jawatan then
     raise exception 'Jawatan tidak sepadan dengan peranan akaun';

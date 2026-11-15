@@ -6,7 +6,7 @@ import { GET } from "@/app/api/heartbeat/route";
  * The heartbeat, as an anonymous caller sees it.
  *
  * The endpoint exists to keep the Supabase project awake, so the probe has to
- * run for everyone — but what it *reports* does not. `db`, `actor`, `mode` and
+ * run for everyone - but what it *reports* does not. `db`, `actor`, `mode` and
  * `latency_ms` tell an attacker whether a deployment is live, whether it has
  * a database, and whether the secret key is wired up. That is reconnaissance
  * for the next attempt, not an answer to any question a caller should be

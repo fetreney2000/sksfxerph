@@ -8,7 +8,7 @@ import { emptyPayload, normalisePayload, temaLengkap } from "@/lib/schemas/rph";
  * The bug this guards against: opening one from the archive crashed the
  * editor on `payload.kriteria_kejayaan.trim()`, because a key that only
  * exists from payload v2 onwards was read as though it always had. zod's
- * defaults never applied — they only apply if something *parses*, and a
+ * defaults never applied - they only apply if something *parses*, and a
  * document read straight out of Dexie or a JSONB column never does.
  */
 const V1 = {
@@ -37,7 +37,7 @@ const V1 = {
   intervensi: "Intervensi kumpulan kecil Khamis.",
 };
 
-describe("normalisePayload — reading a document written before the reshape", () => {
+describe("normalisePayload - reading a document written before the reshape", () => {
   it("fills every field the current shape expects", () => {
     const p = normalisePayload(V1);
     // The crash: undefined has no .trim().
@@ -49,7 +49,7 @@ describe("normalisePayload — reading a document written before the reshape", (
 
   it("keeps the old plan's activities rather than emptying the page", () => {
     // v1 put the content in `aktiviti_guru`. Dropping it would turn a filled
-    // page into a blank one the next time it printed — worse than the crash,
+    // page into a blank one the next time it printed - worse than the crash,
     // because it would look like the teacher had never written anything.
     const p = normalisePayload(V1);
     expect(p.aktiviti.map((a) => a.nama)).toEqual([

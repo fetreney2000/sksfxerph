@@ -45,7 +45,7 @@ describe("checkGoogleClaims", () => {
   });
 
   // The single most important rule in the file. Google issues `hd` only to
-  // Workspace accounts, so its absence is not "skip the check" — it is a
+  // Workspace accounts, so its absence is not "skip the check" - it is a
   // consumer Gmail account wearing a plausible address.
   it("rejects a token with no hd, which is a consumer account however it looks", () => {
     const { hd: _omitted, ...consumer } = base;
@@ -62,7 +62,7 @@ describe("checkGoogleClaims", () => {
     });
   });
 
-  it("rejects an unverified email — a claim, not a fact", () => {
+  it("rejects an unverified email - a claim, not a fact", () => {
     expect(checkGoogleClaims({ ...base, email_verified: false }, opts)).toEqual({
       ok: false,
       reason: "unverified-email",
@@ -139,7 +139,7 @@ describe("resolveAccount", () => {
 
   it("refuses an address already bound to a *different* Google identity", () => {
     // The address has been reassigned. Resolving it as a sign-in would be
-    // account takeover by inheritance — the new holder would inherit the old
+    // account takeover by inheritance - the new holder would inherit the old
     // holder's plans, supervision scope and review history.
     const reassigned = { id: "u-3", email: "nurul.aisyah@moe-dl.edu.my", google_sub: "000" };
     expect(

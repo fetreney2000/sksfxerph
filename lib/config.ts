@@ -10,7 +10,7 @@
  *                 the `sync_rph` RPC.
  *
  * This is what makes the free tier safe: the product never *depends* on the
- * remote being reachable (backend §2.2 — a paused free project would otherwise
+ * remote being reachable (backend §2.2 - a paused free project would otherwise
  * be a Monday-morning outage for the whole school).
  */
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,7 +25,7 @@ export const supabaseConfigured =
 /**
  * The school code this deployment was *built* with.
  *
- * A label, not a key — and it is worth being explicit about why, because it
+ * A label, not a key - and it is worth being explicit about why, because it
  * looks like it should be an identifier. Nothing joins on it: every table
  * references `school(id)`, `schoolIdFor()` walks `school_member`, `sync_rph`
  * derives the school from `school_member` too, and `resolveSchool()` reads the
@@ -39,14 +39,14 @@ export const supabaseConfigured =
 export const schoolCode = process.env.NEXT_PUBLIC_SCHOOL_CODE ?? "SK0000";
 
 /**
- * Google sign-in — opt-in, and entirely optional.
+ * Google sign-in - opt-in, and entirely optional.
  *
  * All four are `NEXT_PUBLIC_` because the button has to be rendered by the
  * browser; none of them is a secret. `GOOGLE_CLIENT_SECRET` is not in this
- * file at all — it exists only in `.env` and is read by `/api/auth/google`.
+ * file at all - it exists only in `.env` and is read by `/api/auth/google`.
  *
  * Unset, and nothing is rendered: no button, no script, no request. That is
- * the local-mode story too, where there is no network to reach Google with —
+ * the local-mode story too, where there is no network to reach Google with -
  * password login stays the only route, exactly as it is today.
  */
 export const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
@@ -61,7 +61,7 @@ export const googleAuthConfigured = googleClientId.length > 0;
  *
  * One constant rather than a string in six files: the crest is the login
  * screen, the sidebar and the browser tab, and the name has to match what
- * prints on the RPH itself — or a teacher signs into one school and hands in
+ * prints on the RPH itself - or a teacher signs into one school and hands in
  * a document for another.
  */
 export const SCHOOL = {
@@ -71,11 +71,11 @@ export const SCHOOL = {
   logo: "/logo.png",
 } as const;
 
-/** School session + week — single source of truth for the whole UI. */
+/** School session + week - single source of truth for the whole UI. */
 export const SESSION = "2026/2027";
 
 /**
- * The account local mode's demo plans are filed under — `gpk`, the demo GPK
+ * The account local mode's demo plans are filed under - `gpk`, the demo GPK
  * in `lib/server/auth/local.ts` (a Guru Besar holds no plans of their own).
  *
  * One constant, here rather than beside the seed, because it is also the
@@ -90,7 +90,7 @@ export const DEMO_OWNER_ID = "00000000-0000-4000-8000-000000000001";
  * Term 1 of the 2026/2027 session starts **Monday 16 March 2026**; weeks run
  * Monday→Friday.
  *
- * `TERM_START` is the *fallback* — what the app says when the school has not
+ * `TERM_START` is the *fallback* - what the app says when the school has not
  * told it otherwise, which is every case in local mode and the default on a
  * fresh deployment. An administrator may declare the truth instead by writing
  * `academic_calendar` rows (db/schema.sql:381) from the Kalendar minggu tab,
@@ -107,7 +107,7 @@ export const DEMO_OWNER_ID = "00000000-0000-4000-8000-000000000001";
  *
  * The earlier version deducted mid-term-break weeks in `currentWeek()` while
  * `schoolDays()` did not, which silently shifted every deadline a month into
- * the past. One offset, applied once, in one place — or none at all.
+ * the past. One offset, applied once, in one place - or none at all.
  *
  * With an empty anchor list every one of these functions returns exactly what
  * it always has, which is what keeps local mode and the calendar unit tests
@@ -119,7 +119,7 @@ const MYT_OFFSET = 8 * 3_600_000; // Asia/Kuala_Lumpur is UTC+8 with no DST
 /**
  * ── Calendar-day tokens ────────────────────────────────────────────────────
  *
- * Every date here is a **token**: `Date.UTC(y, m, d)` — a plain calendar day
+ * Every date here is a **token**: `Date.UTC(y, m, d)` - a plain calendar day
  * at 00:00 UTC with no meaning as an instant. Day arithmetic happens only on
  * tokens; exactly one function (`weekDeadline`) converts a token into a real
  * instant for display.
@@ -146,7 +146,7 @@ function mondayToken(weekNo: number): number {
 export interface CalendarAnchor {
   /** The week number this Monday belongs to. */
   weekNo: number;
-  /** `yyyy-mm-dd`, and always a Monday — `admin_set_calendar_week` refuses otherwise. */
+  /** `yyyy-mm-dd`, and always a Monday - `admin_set_calendar_week` refuses otherwise. */
   startDate: string;
   /** Optional printed name, e.g. `Minggu PTS`. */
   label?: string | null;
@@ -182,7 +182,7 @@ function parseAnchors(rows: readonly CalendarAnchor[]): ResolvedAnchor[] {
       (r) =>
         Number.isFinite(r.startToken) &&
         // A Monday, or the whole 7-day step is measured from the wrong day and
-        // `weekExists` reports the declared week as having no dates at all —
+        // `weekExists` reports the declared week as having no dates at all -
         // it disappears from every picker while `currentWeek` can still return
         // it. `admin_set_calendar_week` refuses a Tuesday at the door; this is
         // for a row that arrived some other way.
@@ -220,7 +220,7 @@ const listeners = new Set<() => void>();
 let SNAPSHOT: readonly CalendarAnchor[] = EMPTY_ANCHORS;
 
 /**
- * Whether the calendar has been fetched at all — deliberately separate from
+ * Whether the calendar has been fetched at all - deliberately separate from
  * "the list is empty".
  *
  * Both a school that has declared nothing and a browser that has not asked yet
@@ -235,7 +235,7 @@ function notify(): void {
 }
 
 /**
- * Replace the school's declared weeks — and mark the calendar as fetched.
+ * Replace the school's declared weeks - and mark the calendar as fetched.
  *
  * One call, so no caller can remember half of it. `[]` is a complete and normal
  * answer: local mode, a fresh deployment, and every unit test that does not opt
@@ -251,12 +251,12 @@ export function setCalendarAnchors(rows: readonly CalendarAnchor[]): void {
   notify();
 }
 
-/** False until the first `setCalendarAnchors` — i.e. until someone has asked. */
+/** False until the first `setCalendarAnchors` - i.e. until someone has asked. */
 export function isCalendarLoaded(): boolean {
   return loaded;
 }
 
-/** The current anchors — the `getSnapshot` for `subscribeCalendarAnchors`. */
+/** The current anchors - the `getSnapshot` for `subscribeCalendarAnchors`. */
 export function getCalendarAnchors(): readonly CalendarAnchor[] {
   return SNAPSHOT;
 }
@@ -268,7 +268,7 @@ export function subscribeCalendarAnchors(listener: () => void): () => void {
 }
 
 /**
- * The administrator's name for a week — `Minggu PTS` — or null.
+ * The administrator's name for a week - `Minggu PTS` - or null.
  *
  * Null for a week nobody declared *and* for one declared without a name, so a
  * reader never prints an empty separator.
@@ -320,7 +320,7 @@ export function weekMondayIso(
 }
 
 /**
- * The school week containing a `yyyy-mm-dd` day — the other half of the pair.
+ * The school week containing a `yyyy-mm-dd` day - the other half of the pair.
  *
  * Needed the moment the week became a choice: a teacher who back-dates a plan
  * to last Tuesday must have it filed under last Tuesday's week, or the printed
@@ -339,7 +339,7 @@ export function weekOfIso(iso: string, anchors: readonly CalendarAnchor[] = SNAP
  *
  * A declaration leaves numbers behind that nobody owns. The grid calls 19
  * October week 32 and the school's declaration calls it week 34, so weeks 32
- * and 33 describe dates that resolve to a *different* week — offering one would
+ * and 33 describe dates that resolve to a *different* week - offering one would
  * file a plan whose `week_no` and `plan_date` disagree, which is exactly the
  * thing `weekOfIso` and `currentWeek` exist to keep apart.
  *
@@ -358,7 +358,7 @@ export function weekExists(
  * Current school week (1-based).
  *
  * Saturday and Sunday belong to the school week that starts the *following*
- * Monday — on a Sunday evening a teacher is planning the week ahead, so the
+ * Monday - on a Sunday evening a teacher is planning the week ahead, so the
  * dashboard must show next week's deadline, not last week's.
  *
  * The second argument defaults to the loaded calendar, which is why the ~18
@@ -377,7 +377,7 @@ export function currentWeek(
 
   const hit = anchorForToken(parseAnchors(anchors), monday);
   if (hit) {
-    // Both endpoints are Mondays, so the difference is whole weeks — this is
+    // Both endpoints are Mondays, so the difference is whole weeks - this is
     // the forward cascade, the same arithmetic `weekMondayToken` runs backwards.
     const weeks = Math.floor((monday - hit.startToken) / (7 * DAY_MS));
     return Math.max(1, hit.weekNo + weeks);
@@ -388,13 +388,13 @@ export function currentWeek(
 }
 
 /**
- * Friday 16:00 MYT of the given school week — the submission deadline.
+ * Friday 16:00 MYT of the given school week - the submission deadline.
  *
  * The only place a token becomes a real instant: a token `D` denotes the MYT
  * calendar day `D`, and 16:00 MYT on that day is `D − 8h + 16h` = `D + 8h`
  * as a UTC instant.
  *
- * Deliberately derived from `weekMondayToken`, not the raw grid — a deadline
+ * Deliberately derived from `weekMondayToken`, not the raw grid - a deadline
  * that used the automatic Monday while the dashboard showed the declared one
  * would put every due date a fortnight away, which is the bug this calendar
  * has had once already.

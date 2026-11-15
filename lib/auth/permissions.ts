@@ -1,12 +1,12 @@
 import type { MemberRole } from "@/lib/types";
 
 /**
- * What a role may *do* — in exactly one place.
+ * What a role may *do* - in exactly one place.
  *
  * Permissions name a capability, not a page: the nav (`components/shell/nav`),
  * the page gates under `app/(app)/` and the route guards under `app/api/` all
  * ask this module, so a role can never be hidden in one layer and reachable in
- * another. That is the bug this file replaces — `nav.ts` used to declare a
+ * another. That is the bug this file replaces - `nav.ts` used to declare a
  * `scope` field that nothing ever read.
  *
  * `db/schema.sql` mirrors this table (`is_staff`, `has_role(...)`, the RLS
@@ -17,17 +17,17 @@ import type { MemberRole } from "@/lib/types";
 export type Permission =
   /** Write and submit one's own plans. */
   | "rph"
-  /** Grade plans — the review queue. */
+  /** Grade plans - the review queue. */
   | "semak"
   /**
-   * Whole-school monitoring — the `/sekolah` page: per-teacher rows, reminders,
+   * Whole-school monitoring - the `/sekolah` page: per-teacher rows, reminders,
    * exports, and the school's own compliance figures.
    *
    * Those figures used to be open to every member "because they name nobody".
    * They do name nobody, and that was never the question: a Guru Biasa's
    * dashboard is about their own week, and a school's percentage beside it is
    * an answer they are no more able to act on than a colleague's roster. So it
-   * is behind this now, and `/api/stats` asks for it too — the card and the
+   * is behind this now, and `/api/stats` asks for it too - the card and the
    * endpoint can no longer disagree about who may look.
    */
   | "pantau"
@@ -36,7 +36,7 @@ export type Permission =
   /** Read the audit log. */
   | "audit"
   /**
-   * The template library — reading, and for the school's own templates,
+   * The template library - reading, and for the school's own templates,
    * writing them.
    *
    * Split from `rph` because the Administrator needs it without needing `rph`.
@@ -52,17 +52,17 @@ export type Permission =
 const MATRIX: Record<MemberRole, readonly Permission[]> = {
   // Guru Mata Pelajaran (KPM HR12–HR21): their own RPH and nothing else.
   guru_biasa: ["rph", "templat"],
-  // GPK Pentadbiran (KPM HR02) — "menyelia dan menilai pengajaran" — so it
+  // GPK Pentadbiran (KPM HR02) - "menyelia dan menilai pengajaran" - so it
   // supervises: grade, monitor, report, and see who reviewed what. A GPK still
   // teaches, so they keep `rph` for their own classes.
   gpk: ["rph", "semak", "pantau", "laporan", "audit", "templat"],
   // PGB (KPM HR01) supervises the whole school but teaches no class: no `rph`,
-  // so no /minggu, /arkib or /editor — only the supervision screens above.
+  // so no /minggu, /arkib or /editor - only the supervision screens above.
   // They stay a reviewer (`semak`) with school-wide scope, which is what
   // `erph.may_supervise` checks independently of this table.
   guru_besar: ["semak", "pantau", "laporan", "audit", "templat"],
   // Administrator sets the app up. Deliberately outside `is_staff` in SQL, so
-  // it can never grade a plan, read whole-school compliance or open the log —
+  // it can never grade a plan, read whole-school compliance or open the log -
   // and deliberately *without* `rph`: they do not teach, so they have no plans
   // of their own to write, submit or be graded on. `templat` is what they do
   // administer.
@@ -80,7 +80,7 @@ export function permissionsFor(role: string | null | undefined): readonly Permis
   return MATRIX[role as MemberRole] ?? [];
 }
 
-/** Roles allowed to grade — SQL mirrors this as `erph.is_staff`. */
+/** Roles allowed to grade - SQL mirrors this as `erph.is_staff`. */
 export const REVIEWER_ROLES: readonly MemberRole[] = ["gpk", "guru_besar"];
 
 /**
@@ -88,7 +88,7 @@ export const REVIEWER_ROLES: readonly MemberRole[] = ["gpk", "guru_besar"];
  * screen it may not have.
  *
  * Derived rather than configured: the Administrator has no `rph`, so sending
- * them to `/minggu` — a page gated on `rph` — would bounce them straight back
+ * them to `/minggu` - a page gated on `rph` - would bounce them straight back
  * and produce a redirect loop. The Guru Besar is the same shape with a
  * different job: no `rph` either, but a review queue to work through, so they
  * land on `/semakan` rather than the admin console. One rule, used by `/`,
@@ -105,7 +105,7 @@ export function homeFor(role: string | null | undefined): string {
  *
  * There is no chain to climb any more. A GPK reviews and then either **sahkan**
  * (approve, signed) or **hantar balik** (return to the teacher), and a Guru
- * Besar can do everything a GPK can — on any teacher's plan in the school, not
+ * Besar can do everything a GPK can - on any teacher's plan in the school, not
  * only the ones assigned to them. Both roles therefore share this table and the
  * difference lives in `erph.may_supervise`, which SQL checks independently of
  * the role.
@@ -118,7 +118,7 @@ export interface ReviewStage {
   status: "submitted";
   /** Approve. The plan must already carry a verified signature. */
   approveRpc: "sahkan_rph";
-  /** Return to the teacher, with a reason. No signature — nothing was approved. */
+  /** Return to the teacher, with a reason. No signature - nothing was approved. */
   returnRpc: "hantar_balik_rph";
 }
 

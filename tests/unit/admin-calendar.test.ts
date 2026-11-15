@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
 
 /**
- * /api/admin/calendar — who may declare which week a date range is.
+ * /api/admin/calendar - who may declare which week a date range is.
  *
  * This write constrains every teacher's dashboard, not just the caller's: the
  * breadcrumb, the week picker and the deadline all read the number it sets. So
  * the first thing worth proving is the gate, and the second is that the session
- * is read from the school's own setting rather than from the request — `session`
+ * is read from the school's own setting rather than from the request - `session`
  * is half the table's primary key, and a caller who chose it could file
  * declarations into a year the school is not running.
  */
@@ -58,7 +58,7 @@ vi.mock("@/lib/server/db", () => ({
       }
       chain.maybeSingle = async () => ({ data: answer, error: null });
       chain.single = async () => ({ data: answer, error: null });
-      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose — every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
+      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose - every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
       chain.then = (onOk: unknown, onErr: unknown) =>
         Promise.resolve({ data: answer, error: null }).then(
           onOk as (v: unknown) => unknown,
@@ -155,7 +155,7 @@ describe("PATCH /api/admin/calendar", () => {
         weekNo: 34,
         startDate: "2026-10-19",
         endDate: "2026-10-23",
-        // Half the primary key. The schema has no such field, so zod drops it —
+        // Half the primary key. The schema has no such field, so zod drops it -
         // the assertion is that `p_session` is still the school's own.
         session: "1999/2000",
       }),
@@ -185,7 +185,7 @@ describe("PATCH /api/admin/calendar", () => {
 
   it("refuses to pull numbering back below what the grid already calls that date", async () => {
     // The SQL checks a new anchor only against its neighbours, and the *first*
-    // anchor has none — so a declaration whose number is lower than the term
+    // anchor has none - so a declaration whose number is lower than the term
     // start's answer is the one thing it cannot see. `TERM_START` lives in
     // TypeScript, so this is the only place that can: 6 April 2026 is grid week
     // 4 (term starts 16 March), and calling it week 1 would leave week 2

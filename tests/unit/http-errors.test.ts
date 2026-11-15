@@ -5,7 +5,7 @@ import { isUuid, toClientError } from "@/lib/server/http/errors";
  * The central error sanitizer.
  *
  * `error.message` straight from the database names constraints, tables and
- * SQLSTATEs — a schema map handed to whoever triggers it. The rule: an
+ * SQLSTATEs - a schema map handed to whoever triggers it. The rule: an
  * authored plpgsql raise (P0001) is a sentence written for the person at the
  * form and passes through; everything else is infrastructure and gets the
  * generic line, with the full text in the server log.

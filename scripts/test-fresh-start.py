@@ -1,8 +1,8 @@
 """Prove db/ops/fresh-start.sql does what it claims.
 
 The fresh-start script is destructive and irreversible, so it is not allowed to
-be something nobody has run. This harness builds the shape the seed creates —
-five accounts, classes, subjects, an eRPH with revisions and a review — sets
+be something nobody has run. This harness builds the shape the seed creates -
+five accounts, classes, subjects, an eRPH with revisions and a review - sets
 school identity values worth protecting, and then
 
   1. confirms the append-only guard actually blocks a bare delete, and that
@@ -29,7 +29,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 FAILS = 0
 
 # Values set on the school before the wipe, chosen to be nothing like the seed
-# defaults — if the script touched this row, these are what would go missing.
+# defaults - if the script touched this row, these are what would go missing.
 KEPT_SCHOOL = {
     "kod_sekolah": "XCA1043",
     "nama": "SK St. Francis Xavier Keningau",
@@ -43,7 +43,7 @@ KEPT_SETTING = {"current_session": "2031/2032", "submit_time": "15:30:00"}
 
 def check(label, ok, detail=""):
     global FAILS
-    print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" — {detail}" if detail else ""))
+    print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" - {detail}" if detail else ""))
     if not ok:
         FAILS += 1
 
@@ -207,7 +207,7 @@ def main() -> int:
     for k, v in after.items():
         print(f"  {k:22} {v}")
 
-    print("\nassertions — cleared:")
+    print("\nassertions - cleared:")
     check("exactly one account remains", after["user"] == 1, f"{after['user']}")
     for t in CLEARED:
         check(f"{t} emptied", after[t] == 0, f"{before[t]} -> {after[t]}")
@@ -220,12 +220,12 @@ def main() -> int:
         f"{before['school_member']} -> {after['school_member']}",
     )
 
-    print("\nassertions — the account you keep:")
+    print("\nassertions - the account you keep:")
     row = r.q("select username, role, is_active from erph.user")[0]
     check("renamed to pentadbir", row[0] == "pentadbir", str(row))
     check("still the pentadbir role", row[1] == "pentadbir", str(row[1]))
     check("still active", row[2] is True, str(row[2]))
-    # The password is untouched — this is a rename, not a replacement.
+    # The password is untouched - this is a rename, not a replacement.
     same = r.q(
         "select count(*) from erph.user where username = 'pentadbir' "
         "and password_hash is not null and length(password_hash) > 10"
@@ -240,7 +240,7 @@ def main() -> int:
         == 1,
     )
 
-    print("\nassertions — school info kept:")
+    print("\nassertions - school info kept:")
     school = dict(
         zip(
             KEPT_SCHOOL,
@@ -250,14 +250,14 @@ def main() -> int:
         )
     )
     check("school row untouched", school == KEPT_SCHOOL, str(school))
-    # `submit_time` comes back as datetime.time, not text — compare as text so
+    # `submit_time` comes back as datetime.time, not text - compare as text so
     # the check is about the value, not the driver's type mapping.
     session_value = r.q("select current_session from erph.school_setting")[0][0]
     submit_value = str(r.q("select submit_time from erph.school_setting")[0][0])
     setting = {"current_session": session_value, "submit_time": submit_value}
     check("school_setting untouched", setting == KEPT_SETTING, str(setting))
 
-    print("\nassertions — hygiene:")
+    print("\nassertions - hygiene:")
     check(
         "app.purge switched back off",
         r.q("select coalesce(current_setting('app.purge', true), 'unset')")[0][0] == "0",

@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
 
 /**
- * GET /api/queue — the week mode (`?week=N`) behind the reviewer's backdated
+ * GET /api/queue - the week mode (`?week=N`) behind the reviewer's backdated
  * RPH browser.
  *
  * The pending queue filters by status, so a plan a teacher never submitted was
  * invisible to the one person who may need to reach it. Week mode asks for a
- * whole school week instead — every status — while keeping exactly the same
+ * whole school week instead - every status - while keeping exactly the same
  * scope rules (whole school for the Guru Besar, supervised teachers for a GPK)
  * and the same soft-delete exclusion. What must never change silently is the
  * default mode: the ordinary queue keeps its `status` filter, its ordering and
@@ -16,7 +16,7 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
  */
 
 // The session cookie cannot be minted without the secret once Supabase counts
-// as configured — the same gate every other route test trips over.
+// as configured - the same gate every other route test trips over.
 vi.hoisted(() => {
   process.env.SESSION_SECRET =
     process.env.SESSION_SECRET ?? "unit-test-secret-0123456789abcdef0123456789abcdef";
@@ -80,7 +80,7 @@ vi.mock("@/lib/server/db", () => ({
         }
         return { data: null, error: null };
       };
-      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose — every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
+      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose - every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
       chain.then = (onOk: unknown, onErr: unknown) => {
         state.calls.push({ table, method: "then", args: [] });
         const answer =
@@ -158,7 +158,7 @@ beforeEach(() => {
   ];
 });
 
-describe("GET /api/queue — default mode", () => {
+describe("GET /api/queue - default mode", () => {
   it("keeps the pending queue exactly as it was: status filter, submission order, cap of 50", async () => {
     const res = await GET(get());
 
@@ -179,14 +179,14 @@ describe("GET /api/queue — default mode", () => {
   });
 });
 
-describe("GET /api/queue — week mode", () => {
+describe("GET /api/queue - week mode", () => {
   it("browses the whole week: every status, by plan date, with a higher cap", async () => {
     const res = await GET(get("?week=2"));
 
     expect(res.status).toBe(200);
     const filters = docCalls().filter((c) => !c.startsWith("select("));
     expect(filters).toContain('eq(["week_no",2])');
-    // No status filter — a draft and an approved plan both belong to the week.
+    // No status filter - a draft and an approved plan both belong to the week.
     expect(filters.some((c) => c.startsWith('eq(["status"'))).toBe(false);
     expect(filters).toContain('order(["plan_date",{"ascending":true}])');
     expect(filters).toContain("limit([200])");
@@ -217,7 +217,7 @@ describe("GET /api/queue — week mode", () => {
   });
 });
 
-describe("GET /api/queue — who may ask, and for whom", () => {
+describe("GET /api/queue - who may ask, and for whom", () => {
   it("refuses a Guru Biasa before reading anything", async () => {
     state.role = "guru_biasa";
 
@@ -234,7 +234,7 @@ describe("GET /api/queue — who may ask, and for whom", () => {
     expect(scope).toBe('in(["owner_id",["00000000-0000-4000-8000-000000000002"]])');
   });
 
-  it("does not scope the Guru Besar — the whole school's week", async () => {
+  it("does not scope the Guru Besar - the whole school's week", async () => {
     state.role = "guru_besar";
 
     await GET(get("?week=2"));
@@ -243,7 +243,7 @@ describe("GET /api/queue — who may ask, and for whom", () => {
   });
 });
 
-describe("GET /api/queue — row shaping", () => {
+describe("GET /api/queue - row shaping", () => {
   it("joins every class of a plan into one label, dropping unknown class ids", async () => {
     const res = await GET(get("?week=2"));
 
@@ -253,7 +253,7 @@ describe("GET /api/queue — row shaping", () => {
     expect(body.items.find((i) => i.id === "doc-approved")?.className).toBe(
       "1 Bestari, 2 Bestari",
     );
-    // Status travels through untouched — the page needs it to know which rows
+    // Status travels through untouched - the page needs it to know which rows
     // are decidable and which are view-only.
     expect(body.items.find((i) => i.id === "doc-draft")?.status).toBe("draft");
   });

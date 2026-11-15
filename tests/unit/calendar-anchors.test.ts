@@ -33,7 +33,7 @@ afterEach(() => {
   setCalendarAnchors([]);
 });
 
-describe("declared weeks — the pentadbir's override", () => {
+describe("declared weeks - the pentadbir's override", () => {
   it("agrees with the automatic grid when nothing is declared", () => {
     // The whole point of the default: local mode, a fresh deployment and
     // every test that does not opt in must be byte-identical to before.
@@ -47,7 +47,7 @@ describe("declared weeks — the pentadbir's override", () => {
     expect(currentWeek(mytDate(2026, 10, 19))).toBe(34);
     expect(weekOfIso("2026-10-19")).toBe(34);
     // Through the store, because schoolDays()/weekRangeLabel() take a Monday
-    // rather than a calendar — they reach the declaration the same way a page
+    // rather than a calendar - they reach the declaration the same way a page
     // does, which is the only way the breadcrumb and the form can agree.
     expect(schoolDays(34)).toEqual([
       "2026-10-19",
@@ -60,7 +60,7 @@ describe("declared weeks — the pentadbir's override", () => {
   });
 
   it("cascades forward so numbering never runs backwards", () => {
-    // 26 Oct is 35 and 2 Nov is 36 — the whole reason one declaration is
+    // 26 Oct is 35 and 2 Nov is 36 - the whole reason one declaration is
     // enough, and what keeps the sequence monotone across a break.
     const anchors = DECLARED;
     expect(currentWeek(mytDate(2026, 10, 26), anchors)).toBe(35);
@@ -79,7 +79,7 @@ describe("declared weeks — the pentadbir's override", () => {
 
   it("keeps Sunday and Saturday on the following Monday", () => {
     // The weekend rule is orthogonal to the declaration and must not be lost
-    // by it — a teacher planning on Sunday 25 Oct plans week 35.
+    // by it - a teacher planning on Sunday 25 Oct plans week 35.
     const anchors = DECLARED;
     expect(currentWeek(mytDate(2026, 10, 25, 20), anchors)).toBe(35);
     expect(currentWeek(mytDate(2026, 10, 24, 9), anchors)).toBe(35);
@@ -147,7 +147,7 @@ describe("declared weeks — the pentadbir's override", () => {
     // `admin_set_calendar_week` will not write one of these. A row that arrived
     // another way has to behave as though it is not there: a non-Monday start
     // makes the 7-day step land mid-week, which is how a declared week can end
-    // up missing from every picker while `currentWeek` still answers with it —
+    // up missing from every picker while `currentWeek` still answers with it -
     // a number the teacher cannot choose anywhere.
     setCalendarAnchors([{ weekNo: 34, startDate: "2026-10-20" }]); // a Tuesday
 

@@ -32,7 +32,7 @@ const full: RphPayload = {
 
 afterEach(cleanup);
 
-describe("RphPaper — the school's form", () => {
+describe("RphPaper - the school's form", () => {
   it("renders every row the printed template has", () => {
     render(<RphPaper payload={full} session={SESSION} />);
 
@@ -59,7 +59,7 @@ describe("RphPaper — the school's form", () => {
 
   it("has no row the form does not have", () => {
     render(<RphPaper payload={full} session={SESSION} />);
-    // These were on the KPM circular, not on this school's template — they used
+    // These were on the KPM circular, not on this school's template - they used
     // to be printed regardless, which meant a document that did not match the
     // paper it had to be filed on.
     for (const gone of ["EMK", "KBAT", "Intervensi", "Bilangan Murid"]) {
@@ -70,7 +70,7 @@ describe("RphPaper — the school's form", () => {
   it("renders the actual content, not placeholders", () => {
     render(<RphPaper payload={full} session={SESSION} />);
     // "Nombor hingga 100,000" appears in both the Tema cell and Standard
-    // Kandungan — asserting it appears more than once is the point: the row
+    // Kandungan - asserting it appears more than once is the point: the row
     // that carries it is rendered, not skipped.
     expect(screen.getAllByText(/Nombor hingga 100,000/).length).toBeGreaterThan(1);
     expect(screen.getByText(/Murid dapat menulis semula/)).toBeTruthy();
@@ -89,7 +89,7 @@ describe("RphPaper — the school's form", () => {
 
   it("marks unfinished rows instead of hiding them", () => {
     // A blank plan must still show the full document shape with explicit
-    // "belum diisi" markers — the reviewer needs to see what is missing.
+    // "belum diisi" markers - the reviewer needs to see what is missing.
     render(<RphPaper payload={{ ...emptyPayload() }} session={SESSION} />);
     expect(screen.getAllByText(/belum diisi/).length).toBeGreaterThan(0);
     // Every label cell of the template is still printed, even on an empty plan.
@@ -111,13 +111,13 @@ describe("RphPaper — the school's form", () => {
     // stranger on the document that gets filed under someone else's plan.
     render(<RphPaper payload={full} session={SESSION} />);
     expect(screen.queryByText(/Nurul/)).toBeNull();
-    expect(screen.getByText("NAMA").closest("tr")?.textContent).toBe("NAMA—");
+    expect(screen.getByText("NAMA").closest("tr")?.textContent).toBe("NAMA-");
   });
 
   it("derives the day from the date rather than trusting it", () => {
     render(<RphPaper payload={full} session={SESSION} planDate="2026-01-12" />);
     // 12 January 2026 is a Monday, and the school's own form numbers the week
-    // Ahad = 1 — so Monday is "2. Isnin", not "1. Isnin".
+    // Ahad = 1 - so Monday is "2. Isnin", not "1. Isnin".
     expect(screen.getByText(/2\. Isnin/)).toBeTruthy();
   });
 });

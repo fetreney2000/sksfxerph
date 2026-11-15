@@ -2,12 +2,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
 
 /**
- * GET /api/rph — the caller's own plans, as the server has them.
+ * GET /api/rph - the caller's own plans, as the server has them.
  *
  * Documents have always synced *up* and nothing has ever pulled them *down*,
  * so a plan only existed in the browser that created it: the same teacher on a
- * second device saw an empty archive, and the seal — which is rendered from
- * the local document — could not appear at all. This is the other half.
+ * second device saw an empty archive, and the seal - which is rendered from
+ * the local document - could not appear at all. This is the other half.
  *
  * Scoped to the caller's own rows rather than filtered in the client. This
  * handler holds the secret key and bypasses RLS, so anything not excluded here
@@ -22,7 +22,7 @@ export interface DocumentRow {
   id: string;
   /** Written into the local copy, so IndexedDB can tell two accounts apart. */
   owner_id: string;
-  /** The classes this plan covers — sorted, distinct (the server's canonical form). */
+  /** The classes this plan covers - sorted, distinct (the server's canonical form). */
   class_ids: string[];
   subject_code: string;
   session: string;
@@ -55,7 +55,7 @@ export interface DocumentRow {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // The caller's *own* plans: only a role that writes plans may pull them. A
-  // Guru Besar teaches no class, so there is nothing of theirs to return —
+  // Guru Besar teaches no class, so there is nothing of theirs to return -
   // reviewers read plans through `/api/queue` and teachers through
   // `pantau_teachers`, both scoped differently.
   const gate = await requirePermission(request, "rph");
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         "updated_at, submitted_at, deleted_at, grade, reviewed_at, " +
         "subject:subject_code(nama), " +
         // The reviewer's catatan and their name, from the same row. One-to-many
-        // — a plan can be returned and re-reviewed — so the whole set comes
+        // - a plan can be returned and re-reviewed - so the whole set comes
         // across and the caller takes the newest, rather than the server
         // guessing which one a reader wants.
         "rph_review(reviewer:reviewer_id(full_name), comment, created_at)",
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // PostgREST cannot embed `class.nama` through an array column (`class_ids`
   // has no FK), so the names are resolved here: one extra read of the school's
   // class list, then a map. A plan naming a class that has since been archived
-  // keeps its name — the map simply has to include inactive rows to do that.
+  // keeps its name - the map simply has to include inactive rows to do that.
   const { data: classes } = await gate.db
     .from("class")
     .select("id, nama")

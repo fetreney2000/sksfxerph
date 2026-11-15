@@ -3,12 +3,12 @@ import { SESSION } from "@/lib/config";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
 
 /**
- * GET /api/admin/classes — every class in the current session, archived ones
+ * GET /api/admin/classes - every class in the current session, archived ones
  * included, with the plan count each one carries.
  *
  * Split from `GET /api/classes` on purpose: that endpoint is the editor's view
  * (active only, any member), this one is the administrator's (all of them, plus
- * `doc_count` so "archive this class" can be explained rather than guessed —
+ * `doc_count` so "archive this class" can be explained rather than guessed -
  * the count is what tells an admin how many plans the action touches).
  *
  * Writes live on `/api/classes` alongside the read the editor uses, so both go

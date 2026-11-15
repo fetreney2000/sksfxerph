@@ -59,7 +59,7 @@ def top_level_functions(src: str) -> list[tuple[str, str, bool]]:
     """(name, body, is_exported) for every top-level function in the file.
 
     Cut on the next top-level declaration, so a handler's body stops where
-    the next function begins — otherwise the GET handler of a file would
+    the next function begins - otherwise the GET handler of a file would
     swallow the local helper that follows it and appear to contain its guard.
     """
     matches = list(FN.finditer(src))
@@ -81,7 +81,7 @@ def handlers_in(src: str) -> list[tuple[str, str]]:
 
 
 def local_functions(src: str) -> dict[str, str]:
-    """Every function declared in this file, by name — the ones a handler may
+    """Every function declared in this file, by name - the ones a handler may
     reach its guard through."""
     return {name: body for name, body, _ in top_level_functions(src)}
 
@@ -110,9 +110,9 @@ def guards_properly(body: str) -> bool:
 def guarding_helpers(src: str) -> set[str]:
     """The local functions that themselves guard, properly.
 
-    A route is allowed to reach its guard through one of these —
+    A route is allowed to reach its guard through one of these -
     `adminGate(request)` and `canEdit(request, id)` are the two in this
-    codebase — so the checker follows the call rather than demanding that
+    codebase - so the checker follows the call rather than demanding that
     every handler spell the guard out itself.
     """
     return {
@@ -123,10 +123,10 @@ def guarding_helpers(src: str) -> set[str]:
 
 
 def guard_points(body: str, helpers: set[str]) -> list[int]:
-    """Where in this body a guard is reached — directly, or through a helper."""
+    """Where in this body a guard is reached - directly, or through a helper."""
     points = [body.find(g) for g in GUARDS if g in body]
     for name in helpers:
-        # The call site, not the definition — the definition is in another body.
+        # The call site, not the definition - the definition is in another body.
         for m in re.finditer(r"(?<![.\w])" + re.escape(name) + r"\s*\(", body):
             points.append(m.start())
     return points
@@ -139,8 +139,8 @@ def first_data_access(body: str) -> int:
 def select_parts(spec: str) -> list[str]:
     """Split a PostgREST select on its *top-level* commas.
 
-    An embedded relation carries its own list — `signer:signer_id(full_name,
-    jawatan)` — and splitting that on every comma turns it into two bogus
+    An embedded relation carries its own list - `signer:signer_id(full_name,
+    jawatan)` - and splitting that on every comma turns it into two bogus
     column names, each of which then "does not exist".
     """
     parts: list[str] = []
@@ -210,7 +210,7 @@ for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
     #
     # Per *handler*, not per file. A file with a guarded GET and an unguarded
     # POST used to read as guarded, because the check was "does this file
-    # mention a guard anywhere" — so the one property the script claims to
+    # mention a guard anywhere" - so the one property the script claims to
     # verify was the one thing it could not verify.
     #
     # Each exported method is cut out of the source and checked on its own:
@@ -235,7 +235,7 @@ for f in sorted(pathlib.Path("app/api").rglob("route.ts")):
             continue
         data_at = first_data_access(body)
         if data_at >= 0 and min(points) > data_at:
-            print(f"  [BUG: TOO LATE    ] {label} — data is read before the guard")
+            print(f"  [BUG: TOO LATE    ] {label} - data is read before the guard")
             problems += 1
             continue
         print(f"  [{'guarded':>20}] {label}")

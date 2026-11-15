@@ -5,7 +5,7 @@ import * as React from "react";
 type Theme = "light" | "dark";
 const KEY = "erph-theme";
 
-/** Deliberate switch (not prefers-color-scheme) — the school asked for one. */
+/** Deliberate switch (not prefers-color-scheme) - the school asked for one. */
 export function useTheme() {
   const [theme, setTheme] = React.useState<Theme>("light");
 

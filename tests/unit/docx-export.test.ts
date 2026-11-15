@@ -9,14 +9,14 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
 /**
  * The exported DOCX, opened.
  *
- * A .docx is a zip, so nothing here trusts that the route returned *a* file —
+ * A .docx is a zip, so nothing here trusts that the route returned *a* file -
  * it unzips it and reads the document's own text. That is the only way to
  * notice what this test was written for: the NAMA row came out as a dash and
  * the line above the header as "Guru: undefined", because the name was taken
  * from the request body and no caller ever sent it. Both look like a working
  * export until someone reads the paper.
  *
- * Local mode, deliberately: the export route is pure `docx` — no Supabase —
+ * Local mode, deliberately: the export route is pure `docx` - no Supabase -
  * so the whole path can be exercised here, session cookie and all.
  */
 
@@ -72,7 +72,7 @@ describe("the exported DOCX", () => {
     expect(xml).not.toContain("undefined");
   });
 
-  it("ignores any name sent in the body — a plan is the exporter's own", async () => {
+  it("ignores any name sent in the body - a plan is the exporter's own", async () => {
     const res = await POST(post({ ...BASE_BODY, teacherName: "Orang Lain" }));
     expect(res.status).toBe(200);
 
@@ -87,9 +87,9 @@ describe("the exported DOCX", () => {
     const res = await POST(post({ payload: emptyPayload(), session: "2026/2027" }));
     const xml = await exportedText(res);
     // Class, date and subject were not supplied, so they print the em dash the
-    // route has always used for a blank cell — a dash is honest, "undefined"
+    // route has always used for a blank cell - a dash is honest, "undefined"
     // is not.
-    expect(xml).toContain("—");
+    expect(xml).toContain("-");
     expect(xml).toContain(TEACHER.full_name);
   });
 
@@ -119,7 +119,7 @@ describe("the exported DOCX", () => {
  *
  * The class name is the teacher's own text and it goes straight into a
  * `content-disposition` parameter. A quote in it ends the parameter early and
- * the rest of the name is read as another header — so the name is built from
+ * the rest of the name is read as another header - so the name is built from
  * text that cannot do that.
  */
 describe("the exported file's name", () => {
@@ -156,7 +156,7 @@ describe("the exported file's name", () => {
 
   it("refuses a field that is longer than it has any right to be", async () => {
     // 600 is the bound the multi-class joined label earned (thirty classes,
-    // `cardinality between 1 and 30`, joined with ", ") — so this is over it
+    // `cardinality between 1 and 30`, joined with ", ") - so this is over it
     // by a comfortable margin, not by one character.
     const res = await POST(post({ ...BASE_BODY, className: "x".repeat(700) }));
 

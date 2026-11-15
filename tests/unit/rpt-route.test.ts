@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
 
 /**
- * GET / POST / DELETE /api/rpt — a teacher's RPT links, plus their appearance
+ * GET / POST / DELETE /api/rpt - a teacher's RPT links, plus their appearance
  * on the reviewer's roster (`GET /api/pantau/teachers`).
  *
  * The file bytes never enter this app: an RPT lives in the teacher's Drive
  * and only the link is stored, so the one thing worth proving at the boundary
- * is who may write one (a plan-writing role — the Guru Besar teaches nothing
+ * is who may write one (a plan-writing role - the Guru Besar teaches nothing
  * and holds no `rph`) and who may read one (the teacher themself, plus exactly
  * the reviewers `may_supervise` already grants). The second half is proved by
  * asserting the *query*, not just the rows: the roster must ask for links of
@@ -16,7 +16,7 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
  */
 
 // The session cookie cannot be minted without the secret once Supabase counts
-// as configured — the same gate every other route test trips over.
+// as configured - the same gate every other route test trips over.
 vi.hoisted(() => {
   process.env.SESSION_SECRET =
     process.env.SESSION_SECRET ?? "unit-test-secret-0123456789abcdef0123456789abcdef";
@@ -64,7 +64,7 @@ function matches(row: Record<string, unknown>, filters: { method: string; args: 
       const [col, pattern] = args as [string, string];
       const cell = String(row[col] ?? "");
       // The route escapes LIKE metacharacters, so the pattern is literal
-      // apart from no wildcards at all — a plain case-insensitive compare.
+      // apart from no wildcards at all - a plain case-insensitive compare.
       const literal = pattern.replace(/\\(.)/g, "$1");
       return cell.toLowerCase() === literal.toLowerCase();
     }
@@ -193,7 +193,7 @@ vi.mock("@/lib/server/db", () => ({
         const hit = filtered();
         return { data: hit[0] ?? null, error: null };
       };
-      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose — every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
+      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose - every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
       chain.then = (onOk: unknown, onErr: unknown) => {
         state.calls.push({ table, method: "then", args: [] });
         return Promise.resolve({ data: filtered(), error: null }).then(
@@ -319,7 +319,7 @@ describe("POST /api/rpt", () => {
     expect(blank.status).toBe(422);
   });
 
-  it("refuses a Guru Besar — they teach nothing to attach", async () => {
+  it("refuses a Guru Besar - they teach nothing to attach", async () => {
     state.role = "guru_besar";
 
     const res = await POST(
@@ -354,7 +354,7 @@ describe("DELETE /api/rpt", () => {
   });
 });
 
-describe("GET /api/pantau/teachers — RPT decoration", () => {
+describe("GET /api/pantau/teachers - RPT decoration", () => {
   const teacherRow = (userId: string) => ({
     user_id: userId,
     full_name: userId === TEACHER_ID ? "Suhaila" : "Lain",
@@ -388,7 +388,7 @@ describe("GET /api/pantau/teachers — RPT decoration", () => {
   it("asks for links of its own scoped teachers and nobody else", async () => {
     state.role = "guru_besar";
     // The other teacher's link exists in the table but the RPC did not scope
-    // them to this reviewer — it must neither be queried nor returned.
+    // them to this reviewer - it must neither be queried nor returned.
     state.rows.push({
       id: "rpt-2",
       school_id: SCHOOL_ID,

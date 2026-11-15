@@ -4,7 +4,7 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import type * as React from "react";
 import { cn } from "@/lib/cn";
 
-/** Segmented control — used for the review queue's "Belum semak / Semua". */
+/** Segmented control - used for the review queue's "Belum semak / Semua". */
 export const Tabs = TabsPrimitive.Root;
 
 export function TabsList({

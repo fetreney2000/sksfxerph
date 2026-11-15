@@ -10,16 +10,16 @@ import { fingerprint } from "@/lib/signature";
  *
  * Three states, and the middle two matter more than the happy one:
  *
- *   valid   — the seal, naming the reviewer and the moment they sealed it.
- *   pending — still being checked. Shown rather than assumed valid, because a
+ *   valid   - the seal, naming the reviewer and the moment they sealed it.
+ *   pending - still being checked. Shown rather than assumed valid, because a
  *             seal that appears before it has been verified is a claim, not
  *             evidence.
- *   invalid — **rendered loudly**. This is the state the design exists for: a
+ *   invalid - **rendered loudly**. This is the state the design exists for: a
  *             signature that does not verify, or one whose envelope hash no
  *             longer matches the plan on screen. Hiding it, or degrading it to
  *             a quiet grey, would turn a tampered document into a trusted one.
  *
- * The component never decides validity — `useSignature` does — so the same
+ * The component never decides validity - `useSignature` does - so the same
  * seal can be driven by a hook on screen and by data the export route already
  * knows about.
  */
@@ -52,7 +52,7 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
   // On paper this is where the reviewer signs, so the block is drawn even when
   // nothing has been sealed: a rule and two blank lines, which is what the
   // form has before anyone has approved it. On screen there is nothing to
-  // show — a blank block in a status column would read as an approval that
+  // show - a blank block in a status column would read as an approval that
   // has not happened.
   if (state === "none" || !signature) {
     return variant === "print" ? (
@@ -99,7 +99,7 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
         <span>
           <b>Tandatangan tidak sah.</b>{" "}
           {variant === "print"
-            ? "Rancangan ini tidak dapat disahkan berdasarkan tandatangan yang tersimpan — kandungan mungkin telah berubah."
+            ? "Rancangan ini tidak dapat disahkan berdasarkan tandatangan yang tersimpan - kandungan mungkin telah berubah."
             : "Rancangan ini tidak dapat disahkan berdasarkan tandatangan yang tersimpan. Kandungan mungkin telah berubah selepas ia ditandatangani, atau tandatangan itu sendiri telah diubah suai. Jangan keluarkan dokumen ini tanpa semakan lanjut."}
         </span>
       </div>
@@ -110,7 +110,7 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
   const key = fingerprint(signature.publicKey);
 
   // On paper this is a signature block, not a status card: a rule to rest a
-  // pen on, the name under it, the office under that, the moment — and the
+  // pen on, the name under it, the office under that, the moment - and the
   // verification kept to one quiet line. A green rounded panel printed on
   // every approved sheet is a screenshot of the app, and the district files
   // forms, not screenshots. Left-aligned, because that is how the rest of the
@@ -124,13 +124,13 @@ export function SignatureSeal({ signature, state, variant = "screen", className 
           Disahkan secara digital
         </p>
         {/* The line a signature rests on. There is no pen mark, and the block
-            does not pretend there is — the seal above is the signature. */}
+            does not pretend there is - the seal above is the signature. */}
         <div className="mt-1.5 w-full max-w-64 border-t border-[#1d2939]" />
         <p className="mt-1 w-full max-w-64 text-[12px] leading-tight font-bold text-[#1d2939]">
           {name}
         </p>
-        {/* The office under the name, as the form has it — and only when one
-            has been set: a "—" here would read as a missing label rather than
+        {/* The office under the name, as the form has it - and only when one
+            has been set: a "-" here would read as a missing label rather than
             as a fact nobody has supplied. */}
         {signature.signerTitle && (
           <p className="w-full max-w-64 text-[10.5px] leading-tight text-[#1d2939]">

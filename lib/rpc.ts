@@ -7,7 +7,7 @@
  * server-side by `requireUser`/`requireReviewer` and again inside the SQL RPCs
  * via `erph.actor()`.
  *
- * `null` means "local mode / not available" — callers apply their own local
+ * `null` means "local mode / not available" - callers apply their own local
  * rule, so a deployment without Supabase still works rather than losing a
  * feature. Anything else throws `RpcError`, which carries the HTTP status so a
  * caller can tell "your session died" (401/403) apart from "the server is
@@ -24,7 +24,7 @@ export class RpcError extends Error {
     this.name = "RpcError";
   }
 
-  /** Session is gone — the caller must not claim success. */
+  /** Session is gone - the caller must not claim success. */
   get isAuthFailure(): boolean {
     return this.status === 401 || this.status === 403;
   }
@@ -46,7 +46,7 @@ async function post<T>(path: string, body: unknown): Promise<T | null> {
   }
 
   // A 500 page, a proxy error or an empty body must not blow up as an
-  // unhandled SyntaxError — parse defensively and keep the status.
+  // unhandled SyntaxError - parse defensively and keep the status.
   let json: unknown = null;
   const text = await res.text();
   if (text) {
@@ -79,7 +79,7 @@ export interface SubmitResult {
   error?: string;
   status?: string;
   /**
-   * `rph_document.version` after the submit — submit_bump means a submitted
+   * `rph_document.version` after the submit - submit_bump means a submitted
    * plan's version is one higher than the draft the client last saw, so a
    * decision that signs must use THIS value, not a stale one from the queue
    * row. Only set when `ok`.
@@ -97,7 +97,7 @@ export type ReviewDecision = "sahkan" | "hantar_balik";
  * Decide a plan.
  *
  * An approval must carry the envelope and signature produced over the
- * document's current version — the server recomputes the payload hash and
+ * document's current version - the server recomputes the payload hash and
  * verifies the signature before it will append anything. `decide()` in
  * `lib/signature/review.ts` builds both; calling this directly with a missing
  * or stale signature is refused, which is the point.

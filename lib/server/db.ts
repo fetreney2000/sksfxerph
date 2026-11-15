@@ -3,19 +3,19 @@ import { supabaseConfigured } from "@/lib/config";
 import { DB_SCHEMA } from "@/lib/supabase/schema";
 
 /**
- * The ONLY PostgREST client in the app — server-side, privileged, and used
+ * The ONLY PostgREST client in the app - server-side, privileged, and used
  * exclusively by route handlers.
  *
  * Three consequences of moving authentication off Supabase Auth:
  *
  *  1. No browser holds a Supabase key that can act as a user, so every read and
  *     write goes through our handlers, which have already verified the session
- *     cookie. (`lib/supabase/client.ts` and `server.ts` — the GoTrue-based
- *     clients — are gone.)
+ *     cookie. (`lib/supabase/client.ts` and `server.ts` - the GoTrue-based
+ *     clients - are gone.)
  *
  *  2. This client authenticates with the SECRET key (`sb_secret_…`, falling
  *     back to the legacy `service_role` key), which PostgREST maps to the
- *     `service_role` database role — the one role that bypasses RLS. That makes
+ *     `service_role` database role - the one role that bypasses RLS. That makes
  *     it capable of reading any row, so **authorization must be explicit**: we
  *     pass the acting user's id and never rely on RLS to scope these queries.
  *
@@ -24,11 +24,11 @@ import { DB_SCHEMA } from "@/lib/supabase/schema";
  *     this header when the caller has already proven it holds the secret key,
  *     so it cannot be spoofed from the publishable-key path.
  *
- * Throws if unconfigured — callers gate on `supabaseConfigured` first.
+ * Throws if unconfigured - callers gate on `supabaseConfigured` first.
  */
 export function adminDb(actorId?: string) {
   if (!supabaseConfigured) {
-    throw new Error("adminDb() called in local mode — no Supabase configured.");
+    throw new Error("adminDb() called in local mode - no Supabase configured.");
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

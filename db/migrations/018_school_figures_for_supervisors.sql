@@ -1,11 +1,11 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 018 — the school's figures are a supervisor's question
+-- eRPH ▸ MIGRATION 018 - the school's figures are a supervisor's question
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/017. Safe to run more than once.
 --
 -- `school_week_stats` and `school_week_history` accepted any member of the
--- school. That was deliberate — they return counts and a percentage and never
--- a name — and it was the wrong question. A Guru Biasa's dashboard is about
+-- school. That was deliberate - they return counts and a percentage and never
+-- a name - and it was the wrong question. A Guru Biasa's dashboard is about
 -- their own week: four cards and nothing about anyone else's. A school's
 -- compliance percentage beside them is an answer to a question they are no
 -- more able to act on than a colleague's roster, which `/api/pantau/teachers`
@@ -13,7 +13,7 @@
 --
 -- So the dashboard hid the card while the endpoint served it, and both had to
 -- be told the same thing. `/api/stats` asks for `pantau` now, and these two
--- check for a supervisor — or the school's own Administrator, who already
+-- check for a supervisor - or the school's own Administrator, who already
 -- answers for the school's figures on `/utama` and whose view
 -- (`v_school_compliance`) is `security_invoker`, so leaving them out would
 -- make a table they hold error rather than quietly show less.
@@ -34,14 +34,14 @@ begin
   -- Whole-school figures are a supervisor's question, not a teacher's.
   --
   -- The check was `is_member`, which made this the one thing a Guru Biasa
-  -- could still see the school through — the dashboard hid the card but the
+  -- could still see the school through - the dashboard hid the card but the
   -- route served it. Now it is the same rule as `/api/stats`: a teacher's
   -- dashboard is about their own week, and the school's compliance percentage
   -- beside it is an answer to a question they are not the one to answer.
   --
   -- The Administrator keeps it: they already answer for the school's figures
   -- on `/utama` through `admin_list_overview`, and `v_school_compliance` is
-  -- `security_invoker` — a check that ignored them would make a table they
+  -- `security_invoker` - a check that ignored them would make a table they
   -- already hold error rather than quietly show less.
   if not erph.is_staff(p_school)
      and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
@@ -71,7 +71,7 @@ begin
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 — a school
+    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 - a school
     -- with no active Guru Biasa would report full compliance instead of no
     -- figure at all. The zero denominator is therefore handled here and
     -- returns NULL: not scored, rather than scored zero or scored perfectly.
@@ -92,7 +92,7 @@ begin
   -- is to say: a supervisor, or the school's own Administrator.
   --
   -- Both checks were missing here and `is_member` elsewhere, so the school's
-  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- figures were the one screen a Guru Biasa could still see the school on -
   -- the dashboard hid the card while the endpoint served it. Being SECURITY
   -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
   -- the only thing standing between a stranger and a school's year: headcount,

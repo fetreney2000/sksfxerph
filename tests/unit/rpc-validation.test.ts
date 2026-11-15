@@ -8,7 +8,7 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
  * SQL used to be the first thing to see these identifiers: a malformed
  * `documentId` died inside a `::uuid` cast and the 22P02 text went straight to
  * the client, and a malformed sync op did the same inside `sync_rph`. The
- * routes now refuse both with a 400 before any query runs — proved here by
+ * routes now refuse both with a 400 before any query runs - proved here by
  * asserting the RPC is never reached.
  */
 
@@ -59,7 +59,7 @@ vi.mock("@/lib/server/db", () => ({
         }
         return { data: null, error: null };
       };
-      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose — every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
+      // biome-ignore lint/suspicious/noThenProperty: a supabase builder is thenable on purpose - every caller reads it with `await … .eq()`, and a mock that is not would await into nothing.
       chain.then = (onOk: unknown, onErr: unknown) =>
         Promise.resolve({ data: [], error: null }).then(
           onOk as (v: unknown) => unknown,
@@ -113,7 +113,7 @@ beforeEach(() => {
   state.rpcCalls.length = 0;
 });
 
-describe("POST /api/rpc/submit — identifier shape", () => {
+describe("POST /api/rpc/submit - identifier shape", () => {
   it("refuses a non-UUID document id before the RPC runs", async () => {
     const res = await SUBMIT(post("/api/rpc/submit", { documentId: "bukan-uuid" }));
 
@@ -138,7 +138,7 @@ describe("POST /api/rpc/submit — identifier shape", () => {
   });
 });
 
-describe("POST /api/sync — op shape", () => {
+describe("POST /api/sync - op shape", () => {
   it("refuses a batch with a malformed op id, unknown entity, or non-object", async () => {
     for (const bad of [
       { ...OP, op_id: "nope" },

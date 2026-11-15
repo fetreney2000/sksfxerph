@@ -32,26 +32,26 @@ import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 
 /**
- * Tab — which week a date range is.
+ * Tab - which week a date range is.
  *
  * The week number has always been arithmetic: seven-day blocks from Monday 16
  * March 2026, the same for every school. That is right until a school's own
  * calendar disagrees with it, and then every figure on the dashboard, every
  * deadline and every printed sheet is confidently wrong in the same direction.
  *
- * So this screen does not offer a calendar to author — the term start already
+ * So this screen does not offer a calendar to author - the term start already
  * covers the ordinary case, and 38 rows would be a chore nobody completes. It
  * offers the **one week that moved**. Declaring 19–23 Oct to be week 34
  * renumbers the weeks after it automatically, which is what the preview below
  * is for: the administrator sees what the change will do before it does it, and
  * only the first week that needs correcting has to be typed.
  *
- * What is shown is the app's own numbering — the same `weekOptions()` the
- * penyunting's week picker uses — so this table and a teacher's week dropdown
+ * What is shown is the app's own numbering - the same `weekOptions()` the
+ * penyunting's week picker uses - so this table and a teacher's week dropdown
  * can never disagree about what the school calls week 34.
  */
 
-/** A calendar day arithmetic on `yyyy-mm-dd` — no timezone, no Date. */
+/** A calendar day arithmetic on `yyyy-mm-dd` - no timezone, no Date. */
 function plusDays(iso: string, days: number): string {
   const t = Date.parse(`${iso}T00:00:00Z`);
   if (!Number.isFinite(t)) return iso;
@@ -67,7 +67,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const isMonday = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay() === 1;
 
 /**
- * The rows as they would be with `next` applied — the cascade, computed from
+ * The rows as they would be with `next` applied - the cascade, computed from
  * the pure functions rather than guessed.
  */
 function withCandidate(
@@ -109,14 +109,14 @@ export function CalendarTab() {
    * Captured when a row is picked, not derived from the current date at save
    * time. Deriving it looks cleverer and is wrong: change the Monday of a
    * prefilled edit and the derivation finds nothing at the new date, reports
-   * "add", and leaves the old anchor standing — two declarations where the
+   * "add", and leaves the old anchor standing - two declarations where the
    * person asked to move one. This is a fact about what the form is *for*,
    * which is exactly the sort of thing that should not be recomputed from the
    * database underneath it.
    */
   const [editingWeek, setEditingWeek] = React.useState<number | null>(null);
 
-  /** Push the store as well as the cache — every screen reads the store. */
+  /** Push the store as well as the cache - every screen reads the store. */
   const refresh = React.useCallback(async () => {
     const fresh = await getAdminCalendar();
     setCalendarAnchors(toAnchors(fresh.anchors));
@@ -127,11 +127,11 @@ export function CalendarTab() {
   /**
    * Two different thresholds, on purpose.
    *
-   * The button needs a date and a week in range — *not* a Monday. Refusing the
+   * The button needs a date and a week in range - *not* a Monday. Refusing the
    * button instead would leave a person pressing something dead with no idea
    * why, so `submit` says "Tarikh mula mesti hari Isnin" where they can read it.
    * The preview, though, runs the cascade arithmetic, and a step of seven days
-   * is only exact from a Monday — so that one asks for one.
+   * is only exact from a Monday - so that one asks for one.
    */
   const formOk =
     ISO_DATE.test(startDate) &&
@@ -141,14 +141,14 @@ export function CalendarTab() {
   const previewable = formOk && isMonday(startDate);
 
   /**
-   * What the term-start grid already calls this date — passed an *empty*
+   * What the term-start grid already calls this date - passed an *empty*
    * calendar on purpose, because this is the comparison the declaration is
    * measured against and using the declaration to check itself would let a
    * second anchor contradict the first.
    *
    * A declaration may push numbering forward, never pull it back. The server
    * refuses the same thing for the same reason (and it is the only place that
-   * *has* to: `TERM_START` lives in TypeScript, so SQL cannot check it) — but a
+   * *has* to: `TERM_START` lives in TypeScript, so SQL cannot check it) - but a
    * person should be told why the button is dead rather than press it and read
    * the answer in a toast.
    */
@@ -157,8 +157,8 @@ export function CalendarTab() {
   /**
    * The Friday this week runs to, shown the moment the Monday is chosen.
    *
-   * There is no field for it — `end_date` is always the start plus four days,
-   * because a school week here is Monday to Friday — but a person who has just
+   * There is no field for it - `end_date` is always the start plus four days,
+   * because a school week here is Monday to Friday - but a person who has just
    * asked "how do I set the end date?" should have the answer on screen rather
    * than in a tooltip they never open.
    */
@@ -168,7 +168,7 @@ export function CalendarTab() {
    * What the change would do, shown before it happens.
    *
    * Computed from the same two functions the app runs on, with the proposed
-   * row swapped in — so the preview is the outcome rather than a description
+   * row swapped in - so the preview is the outcome rather than a description
    * of one.
    */
   const preview = React.useMemo(() => {
@@ -342,7 +342,7 @@ export function CalendarTab() {
                             size="sm"
                             disabled={busy}
                             // A button says what pressing it does. "Automatik" named the
-                            // state it moves to, not the action — and the accessible name
+                            // state it moves to, not the action - and the accessible name
                             // carries the whole sentence the visible label has to keep short.
                             aria-label={`Kembalikan Minggu ${w.week} kepada pengiraan automatik`}
                             onClick={() => clear(w.week)}

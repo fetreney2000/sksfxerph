@@ -6,7 +6,7 @@ import type { RphStatus } from "@/lib/types";
 /**
  * Maps the `rph_status` enum to the label teachers see in their lists.
  *
- * The reviewer's grade — 1 = lengkap, 0 = tidak lengkap, per Lampiran 7 — is
+ * The reviewer's grade - 1 = lengkap, 0 = tidak lengkap, per Lampiran 7 - is
  * shown on Semakan where the decision is made. The printed cover keeps its
  * own paper wording ("Lengkap") via `approvedPaper`.
  */

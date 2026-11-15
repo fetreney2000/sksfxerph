@@ -4,17 +4,17 @@ import { can, homeFor, permissionsFor, REVIEWER_ROLES } from "@/lib/auth/permiss
 /**
  * The role matrix, pinned.
  *
- * Every layer asks `can()` — the nav, the page layouts under app/(app)/ and the
- * route guards under app/api — so this test is the single place where "what may
+ * Every layer asks `can()` - the nav, the page layouts under app/(app)/ and the
+ * route guards under app/api - so this test is the single place where "what may
  * each role do" is asserted. If a cell changes, this fails before any UI does.
  *
  * The four roles and their intended reach, from the review that produced them:
- *   Guru Biasa        — their own RPH, nothing else
- *   Guru Penolong Kanan — their own RPH, plus supervise: grade, monitor, report,
+ *   Guru Biasa        - their own RPH, nothing else
+ *   Guru Penolong Kanan - their own RPH, plus supervise: grade, monitor, report,
  *                         read the log
- *   Guru Besar        — supervise only: grade, monitor, report, read the log.
+ *   Guru Besar        - supervise only: grade, monitor, report, read the log.
  *                       They teach no class, so no RPH of their own.
- *   Administrator     — set the app up and curate templates; never teach,
+ *   Administrator     - set the app up and curate templates; never teach,
  *                       grade, monitor or read the log
  */
 describe("permissions", () => {
@@ -53,10 +53,10 @@ describe("permissions", () => {
   });
 
   /**
-   * The Administrator does not teach — and neither does the Guru Besar.
+   * The Administrator does not teach - and neither does the Guru Besar.
    *
    * Holding `rph` would let them create, submit and be graded on plans of their
-   * own — and would put `/minggu`, `/editor` and `/arkib` in front of someone
+   * own - and would put `/minggu`, `/editor` and `/arkib` in front of someone
    * whose job is none of that. `templat` is split out precisely so they can
    * still curate the library without borrowing a permission named "write and
    * submit one's own plans".
@@ -73,7 +73,7 @@ describe("permissions", () => {
   /**
    * `homeFor` is what `/`, `/login` and every `requirePermission` fallback
    * redirect to. Getting it wrong for the Administrator means redirecting them
-   * to a page that gates on `rph` — which sends them back, in a loop. The Guru
+   * to a page that gates on `rph` - which sends them back, in a loop. The Guru
    * Besar is the same shape with a different destination: no `rph` either, but
    * a review queue to work through.
    */

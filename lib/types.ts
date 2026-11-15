@@ -6,15 +6,15 @@ export const MEMBER_ROLES = ["guru_biasa", "gpk", "guru_besar", "pentadbir", "sy
 export type MemberRole = (typeof MEMBER_ROLES)[number];
 
 /**
- * `erph.jawatan` — the office a person holds at the school, printed on the
+ * `erph.jawatan` - the office a person holds at the school, printed on the
  * JAWATAN row of the weekly cover sheet.
  *
  * Deliberately not derived from `MemberRole`: the app's roles say what an
  * *account* may do, and three completely different offices ('pk_pentadbiran',
  * 'pk_hem', 'pk_kokum') all live under the single role 'gpk'. Only the school
  * knows which one a given GPK holds, so it is stored and chosen, never
- * inferred — a cover sheet is read by people who have never met the signer.
- * `null` means "not set" and prints as "—".
+ * inferred - a cover sheet is read by people who have never met the signer.
+ * `null` means "not set" and prints as "-".
  */
 export const JAWATAN = [
   "guru_biasa",
@@ -26,13 +26,13 @@ export const JAWATAN = [
 export type Jawatan = (typeof JAWATAN)[number];
 
 /**
- * The offices each role may hold — the accounts picker's option list.
+ * The offices each role may hold - the accounts picker's option list.
  *
  * `erph.jawatan_for` in db/schema.sql is the same table, and it has to stay
  * in step with this one: an option offered here that SQL would refuse shows up
  * as a Malay error out of PostgREST instead of a saved row. `[]` is a real
  * answer, not a placeholder: the pentadbir and system accounts hold no office,
- * so their JAWATAN is "—" and stays that way.
+ * so their JAWATAN is "-" and stays that way.
  */
 export const JAWATAN_BY_ROLE: Record<MemberRole, readonly Jawatan[]> = {
   guru_biasa: ["guru_biasa"],
@@ -75,7 +75,7 @@ export interface RphDocument {
   schoolCode: string;
   ownerId: string;
   /**
-   * The classes this plan covers — the wizard's step 1 ticks them, and one
+   * The classes this plan covers - the wizard's step 1 ticks them, and one
    * document is one review, one approval and one sheet for all of them.
    * Stored sorted and distinct (the canonical form `sync_rph` writes), so a
    * `classIds` comparison in the client matches the server's unique index.
@@ -88,9 +88,9 @@ export interface RphDocument {
   session: string;
   weekNo: number;
   planDate: string; // ISO yyyy-mm-dd
-  slotTime: string; // '07:30' — Masa Mula
+  slotTime: string; // '07:30' - Masa Mula
   /**
-   * Masa Tamat. The school's form prints both, so both are stored — a single
+   * Masa Tamat. The school's form prints both, so both are stored - a single
    * start time leaves the printed page to invent an end time, which is how a
    * 5-hour lesson ends up on an approved document.
    */
@@ -106,7 +106,7 @@ export interface RphDocument {
    * The reviewer's catatan, from the newest `rph_review` row.
    *
    * Carried on the document rather than fetched alongside it because the cover
-   * sheet needs it at the same moment it needs the signature — and because a
+   * sheet needs it at the same moment it needs the signature - and because a
    * plan that has been returned once already should show the teacher what they
    * were told, not send them back to the queue to find out.
    */
@@ -203,8 +203,8 @@ export interface SyncResult {
    * Set on a `rejected` result: may this op succeed if it is tried again?
    *
    * The distinction is the difference between a teacher's edit being kept and
-   * being lost. A rejection the server decided on — a class that is not in
-   * this school — will be rejected forever, so the op is dropped and the
+   * being lost. A rejection the server decided on - a class that is not in
+   * this school - will be rejected forever, so the op is dropped and the
    * teacher is told. A failure the server did not expect might well succeed
    * next time, so the op stays in the queue and is retried.
    */

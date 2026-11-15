@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 020 — one plan may cover several classes
+-- eRPH ▸ MIGRATION 020 - one plan may cover several classes
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/019. Safe to run more than once.
 --
@@ -63,7 +63,7 @@ begin
     -- rather than raised.
     --
     -- `retryable` is the distinction the client acts on. A rejection the
-    -- server decided on — a class that is not in this school — will be
+    -- server decided on - a class that is not in this school - will be
     -- rejected forever, so the client drops the op and tells the teacher. A
     -- failure the server did not expect may well succeed next time, so the
     -- client keeps the op and tries again, which is only possible because the
@@ -89,7 +89,7 @@ begin
         continue;
       end if;
 
-      -- 2) the classes this op writes to. `class_ids` is the wire format now —
+      -- 2) the classes this op writes to. `class_ids` is the wire format now -
       -- one plan may cover several classes. A lone `class_id` is what the first
       -- release sent, and is still honoured as a one-element set: an installed
       -- PWA keeps running the app shell it precached, and refusing it would
@@ -141,7 +141,7 @@ begin
       --
       -- Which branch resolved the row decides how the class list merges below.
       -- An op that names its own row (by id) is authoritative and the list may
-      -- shrink — that is the editor's "untick a class" doing its job. An op
+      -- shrink - that is the editor's "untick a class" doing its job. An op
       -- resolved by key is an offline duplicate, and its classes union *in*
       -- rather than overwriting, so two devices that split the classes of one
       -- lesson between them lose nothing when they finally reach the server.
@@ -184,7 +184,7 @@ begin
                -- server now says the same: only a draft, or a returned plan the
                -- teacher is fixing, may be rewritten. Without this a client that
                -- bypassed the editor could change the content of a plan sitting
-               -- in a reviewer's queue — and the version would move under the
+               -- in a reviewer's queue - and the version would move under the
                -- signature that reviewer is about to make.
                payload = case when status in ('draft','returned')
                               then v_op->'payload' else payload end,
@@ -223,7 +223,7 @@ begin
         returning version, status into v_ver, v_status;
         exception when unique_violation then
           -- The by-id rewrite claimed a class set that collides with another
-          -- live plan on the same subject, week and date — a teacher unticking
+          -- live plan on the same subject, week and date - a teacher unticking
           -- one class while a second plan still claims another. Refusing would
           -- leave the op retryable and the queue stuck behind it, so instead
           -- the lists union and the teacher resolves the overlap in the editor.
@@ -321,8 +321,8 @@ begin
         'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
         'version', v_ver, 'status', v_status, 'completeness', v_pct));
     exception when others then
-      -- The block is a subtransaction, so everything this op did — the claim on
-      -- its op id included — has been rolled back by the time the handler
+      -- The block is a subtransaction, so everything this op did - the claim on
+      -- its op id included - has been rolled back by the time the handler
       -- runs. The op id is therefore still free and the client can retry the
       -- very same op. Burnt, it would come back as 'duplicate' and the
       -- client's queue would drop it: the teacher's edit, gone, because the
@@ -360,7 +360,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- ignores every return look identical once the first is caught up.
          --
          -- Read from rph_review rather than the document, because the document
-         -- only ever carries the latest decision — the history of a plan that
+         -- only ever carries the latest decision - the history of a plan that
          -- was returned and then approved is exactly what makes it "fixed".
          (select count(*) from erph.rph_document d2
            where d2.owner_id = m.user_id and d2.school_id = p_school
@@ -378,7 +378,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- Classes per teacher, as a self-contained subquery rather than a
          -- join: a plan now covers several classes, so joining class onto the
          -- document would multiply every row of it and inflate the counts
-         -- above — and the function body is SQL with a GROUP BY on the
+         -- above - and the function body is SQL with a GROUP BY on the
          -- teacher, which an outer reference to d.class_ids cannot survive.
          (select string_agg(distinct c.nama, ', ' order by c.nama)
             from erph.rph_document d2

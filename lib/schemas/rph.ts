@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 /**
- * eRPH payload — the JSONB `payload` column of `rph_document` (db/schema.sql).
+ * eRPH payload - the JSONB `payload` column of `rph_document` (db/schema.sql).
  *
  * ## This is the school's form, not the KPM circular
  *
- * Shaped against the template the school actually submits — a cover sheet plus
- * one page per plan, with pale-green label cells — rather than the generic KPM
+ * Shaped against the template the school actually submits - a cover sheet plus
+ * one page per plan, with pale-green label cells - rather than the generic KPM
  * RPH. The differences are not cosmetic and they are not mine to keep:
  *
  *   · activities are a **list of names**, some indented as sub-items, not a
@@ -17,7 +17,7 @@ import { z } from "zod";
  *     teacher fill in content nobody will ever see.
  *
  * `payload_version` is bumped because of that reshape. Old documents keep their
- * keys — zod strips what it does not know — so nothing written before this
+ * keys - zod strips what it does not know - so nothing written before this
  * change is unreadable, it simply carries less than a new one.
  */
 export const PAYLOAD_VERSION = 2;
@@ -27,7 +27,7 @@ export const PAYLOAD_VERSION = 2;
 /**
  * One entry of "Aktiviti PdPC".
  *
- * A name, optionally an indented sub-item — which is what the printed form
+ * A name, optionally an indented sub-item - which is what the printed form
  * does: a heading, then hyphen-prefixed entries beneath it ("Permainan
  * Dalaman" → "- Catur", "- Congkak").
  */
@@ -35,7 +35,7 @@ export const aktivitiSchema = z.object({
   nama: z.string().min(1, "Nama aktiviti diperlukan"),
   /**
    * Printed indented behind a hyphen rather than flush. Optional rather than
-   * defaulted, so an activity saved before this field existed still parses —
+   * defaulted, so an activity saved before this field existed still parses -
    * every one of them is a top-level entry, which is what `undefined` means.
    */
   sub: z.boolean().optional(),
@@ -93,7 +93,7 @@ export const temaLengkap = (p: RphPayload): string =>
  * Four 25-point checks = 0..100.
  *
  * MUST stay byte-for-byte equivalent to `rph_completeness()` in db/schema.sql
- * — tests/unit/completeness.test.ts runs the same fixtures through both rules
+ * - tests/unit/completeness.test.ts runs the same fixtures through both rules
  * so the editor's meter and `submit_rph`'s server gate can never disagree.
  *
  * The four checkpoints are the four things the printed form cannot be issued
@@ -129,7 +129,7 @@ export function completeness(payload: RphPayload): 0 | 25 | 50 | 75 | 100 {
 }
 
 /**
- * Step-level completion flags — drives the stepper and the checklist.
+ * Step-level completion flags - drives the stepper and the checklist.
  *
  * The grouping is the printed form's, not the editor's: bahagian 2 is Objektif
  * **+ Kriteria Kejayaan**, which is what `completeness()` scores and what the
@@ -184,12 +184,12 @@ export const aktivitiFromText = (text: string): { nama: string; sub: boolean }[]
  * This exists because zod's defaults only apply if something *parses*, and a
  * document read straight out of Dexie or a JSONB column never does. Without
  * it, every plan written before the school's template reshape crashed the
- * editor on `payload.kriteria_kejayaan.trim()` — a v1 document simply has no
+ * editor on `payload.kriteria_kejayaan.trim()` - a v1 document simply has no
  * such key.
  *
  * Deliberately not `rphPayloadSchema.parse`. The activity schema requires a
- * non-empty name, which is right for *saving* — a teacher should not submit a
- * blank row — but wrong for *reading*: a half-typed activity is work in
+ * non-empty name, which is right for *saving* - a teacher should not submit a
+ * blank row - but wrong for *reading*: a half-typed activity is work in
  * progress, and failing the whole document to complain about it would trade a
  * crash for data loss. So this reads fields one at a time and never throws.
  *
@@ -215,7 +215,7 @@ export function normalisePayload(input: unknown): RphPayload {
     standard_pembelajaran: str(raw.standard_pembelajaran),
     objektif: str(raw.objektif),
 
-    // `nama` first, `aktiviti_guru` as the fallback — rather than branching on
+    // `nama` first, `aktiviti_guru` as the fallback - rather than branching on
     // `payload_version`, so a plan edited across the change keeps whichever
     // half it actually has. Blank rows are dropped here rather than rejected
     // by zod, for the reason above.

@@ -17,7 +17,7 @@ test-results
 __pycache__/
 
 # The assistant's local preference store. Machine-local state, not project
-# documentation — the guidance that belongs in the repo is AGENTS.md.
+# documentation - the guidance that belongs in the repo is AGENTS.md.
 .commandcode/
 
 # OS
@@ -25,7 +25,7 @@ __pycache__/
 Thumbs.db
 
 # The school's reference template. Kept locally as the source the RPH was
-# shaped against; not something this repo should carry — the form it
+# shaped against; not something this repo should carry - the form it
 # describes is in components/rph/.
 contoh template.pdf
 template-extract.txt

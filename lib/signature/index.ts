@@ -6,8 +6,8 @@
  * Not the payload itself, but a compact envelope that *describes* what was
  * signed: the document, the version it had, a hash of its payload, the signer,
  * the decision and the time. Signing the whole payload would put kilobytes
- * under the signature for no extra assurance — the hash binds it just as
- * tightly — and it keeps the envelope small enough to be read and argued about
+ * under the signature for no extra assurance - the hash binds it just as
+ * tightly - and it keeps the envelope small enough to be read and argued about
  * in a dispute.
  *
  * ## Where the keys live
@@ -22,8 +22,8 @@
  * ## Why the database cannot verify any of this
  *
  * PostgreSQL cannot: pgcrypto's own documentation says "No support for
- * signing". So verification happens where the crypto exists — the browser and
- * Node — and the database contributes only a guarantee about *who may append*:
+ * signing". So verification happens where the crypto exists - the browser and
+ * Node - and the database contributes only a guarantee about *who may append*:
  * `erph.rph_signature` has no INSERT policy, so only our server writes to it,
  * and only after it has verified the signature. See erph.rph_signature.
  */
@@ -51,7 +51,7 @@ export interface SignatureEnvelope {
   /** Envelope version, so a future format change stays verifiable. */
   v: 1;
   alg: typeof ALGORITHM;
-  /** base64url SPKI public key — repeated so a retired key still verifies. */
+  /** base64url SPKI public key - repeated so a retired key still verifies. */
   kid: string;
   doc: string;
   /** The `rph_document.version` this signature covers. */
@@ -69,7 +69,7 @@ export interface SignatureEnvelope {
  * The canonicaliser in `./canonical` is RFC 8785 for the I-JSON subset our
  * envelopes use, and its number rule is the one part that is subset-dependent.
  * Rather than let a later field silently break every signature ever made,
- * signing fails loudly on a fractional or non-finite number — which is the
+ * signing fails loudly on a fractional or non-finite number - which is the
  * only shape that would do it.
  */
 function assertSignable(value: unknown, path = "$"): void {
@@ -127,9 +127,9 @@ export async function buildEnvelope(input: {
 
 /** A signer's key pair, in the only two forms we ever need. */
 export interface SigningKeyPair {
-  /** base64url SPKI — registered with the server, and published on every row. */
+  /** base64url SPKI - registered with the server, and published on every row. */
   publicKey: string;
-  /** base64url PKCS8 — stays on this device. Never sent anywhere. */
+  /** base64url PKCS8 - stays on this device. Never sent anywhere. */
   privateKey: string;
 }
 
@@ -159,7 +159,7 @@ export async function signEnvelope(
   const key = await importPrivate(privateKey);
   const bytes = utf8(canonicalize(envelope));
   const signature = await crypto.subtle.sign(SIGN_PARAMS, key, bytes);
-  // WebCrypto ECDSA returns raw r‖s (IEEE P1363), not DER — so it is a fixed
+  // WebCrypto ECDSA returns raw r‖s (IEEE P1363), not DER - so it is a fixed
   // 64 bytes and there is no conversion, and no DER-parser bug, to get wrong.
   return toBase64Url(new Uint8Array(signature));
 }
@@ -168,7 +168,7 @@ export async function signEnvelope(
  * Verify a stored signature against the envelope the database holds.
  *
  * Returns `false` rather than throwing: an unverifiable signature is a
- * *result* — the claim is still there, it just does not hold up — and a caller
+ * *result* - the claim is still there, it just does not hold up - and a caller
  * rendering a document must not have an exception interrupt the render.
  *
  * This runs in the browser too, so a reviewer can check one themselves instead

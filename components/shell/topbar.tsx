@@ -22,7 +22,7 @@ export function Topbar() {
   // Inside the component, and through the store rather than a bare call: the
   // school's declared week arrives from the server long after this bundle has
   // evaluated, so a module constant could only ever report the automatic
-  // numbering — and a changed declaration would never reach this breadcrumb.
+  // numbering - and a changed declaration would never reach this breadcrumb.
   const WEEK = useCurrentWeek();
   const meta = routeMetaFor(pathname);
 

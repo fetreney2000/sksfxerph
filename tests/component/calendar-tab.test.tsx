@@ -12,8 +12,8 @@ import { schoolDays } from "@/lib/date";
  * The tab's whole job is to let a school say "this range is week 34" and to be
  * honest about what that does to the weeks after it, so what is pinned here is
  * that it shows the app's own numbering rather than a parallel one, that a
- * declaration actually reaches the endpoint, and — the one a person would most
- * easily get wrong — that a Monday that is not a Monday is refused *in words*
+ * declaration actually reaches the endpoint, and - the one a person would most
+ * easily get wrong - that a Monday that is not a Monday is refused *in words*
  * rather than by a button that simply will not press.
  *
  * The database refuses the same thing again, and `run_schema.py` proves that.
@@ -63,7 +63,7 @@ beforeEach(() => {
   // form into view, and without the stub that throws out of the click handler.
   Element.prototype.scrollIntoView = vi.fn();
   // The week picker is built from the store, which providers populate in the
-  // real app and no test does here — so the declared week has to be in it for
+  // real app and no test does here - so the declared week has to be in it for
   // the row to exist at all.
   setCalendarAnchors([{ weekNo: WEEK, startDate: MONDAY, label: "Minggu PTS" }]);
 });

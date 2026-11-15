@@ -63,8 +63,8 @@ export default function MingguPage() {
   const WEEK = useCurrentWeek();
   const week = useWeek();
   // Whole-school figures are a supervisor's question. A Guru Biasa's
-  // dashboard is about their own week — four cards below and nothing about
-  // anyone else's — so they are neither fetched nor shown.
+  // dashboard is about their own week - four cards below and nothing about
+  // anyone else's - so they are neither fetched nor shown.
   const seesSchool = can(me.role, "pantau");
   const stats = useSchoolStats(undefined, seesSchool);
   // Reviewers also teach. Rather than taking their own week away by landing
@@ -72,8 +72,8 @@ export default function MingguPage() {
   const stage = reviewStageFor(me.role);
   const reviewQueue = useReviewQueueData(stage?.status ?? null);
   const pendingReviews = stage ? reviewQueue.items.length : 0;
-  // Nothing to count yet — the figures have not loaded, or the school owes
-  // nothing this week. Both read as "—" rather than as a school that has
+  // Nothing to count yet - the figures have not loaded, or the school owes
+  // nothing this week. Both read as "-" rather than as a school that has
   // handed in zero plans: a number nobody has measured is not zero.
   const noFigures = stats.expected === 0 && stats.submitted === 0 && stats.approved === 0;
   const { items: classes } = useSchoolClasses();
@@ -85,7 +85,7 @@ export default function MingguPage() {
   const remaining = week.total - week.approved;
 
   // "RPH baharu" has to mean *new*: resuming unfinished work is what the
-  // per-row "Sambung" buttons are for. It now navigates rather than creating —
+  // per-row "Sambung" buttons are for. It now navigates rather than creating -
   // the penyunting opens blank and the teacher saves when there is something
   // worth saving, so a mis-tap leaves nothing behind.
   const onNew = () => {
@@ -97,14 +97,14 @@ export default function MingguPage() {
     toast.success(
       n > 0
         ? `${n} RPH minggu lepas disalin ke Minggu ${WEEK}`
-        : "Tiada slot kosong — semua RPH minggu ini sudah wujud",
+        : "Tiada slot kosong - semua RPH minggu ini sudah wujud",
     );
   };
 
   /**
    * The week's pentadbir, for the cover sheet.
    *
-   * Signatures are per plan, but the cover carries one — and every plan in a
+   * Signatures are per plan, but the cover carries one - and every plan in a
    * week is sealed by the same person, so any of them speaks for the sheet.
    * The newest is taken rather than the first: if the week was returned and
    * then re-approved, the cover should carry the approval that stands, not
@@ -127,7 +127,7 @@ export default function MingguPage() {
   /**
    * Bring an existing .docx RPH into the penyunting.
    *
-   * The parse is heuristic — Word documents disagree about labels — so
+   * The parse is heuristic - Word documents disagree about labels - so
    * nothing is saved here. The file is read, stashed and handed to the
    * penyunting, where the teacher corrects it and presses Simpan like any
    * other plan. Importing a file must not leave a draft behind if they
@@ -190,8 +190,8 @@ export default function MingguPage() {
           <div>
             {/* The greeting follows the school's clock (lib/date). It is the
                 one string on the page that can differ between the server's
-                render and the browser's — at the exact moment a greeting
-                turns over — so a mismatch here is expected, not a bug. */}
+                render and the browser's - at the exact moment a greeting
+                turns over - so a mismatch here is expected, not a bug. */}
             <h2
               className="text-[21px] font-extrabold tracking-[-0.6px]"
               suppressHydrationWarning
@@ -320,7 +320,7 @@ export default function MingguPage() {
           {seesSchool && (
             <StatCard
               label={ms.dashboard.onTime}
-              value={week.onTimePct === null ? "—" : String(week.onTimePct)}
+              value={week.onTimePct === null ? "-" : String(week.onTimePct)}
               sub={
                 week.onTimePct === null
                   ? ""
@@ -333,7 +333,7 @@ export default function MingguPage() {
         </div>
 
         {/* ── School totals ─────────────────────────────────────────────────
-          Aggregates only — `school_week_stats` returns counts, never names —
+          Aggregates only - `school_week_stats` returns counts, never names -
           and only for a role that supervises. The per-teacher table, the
           reminders and the exports are behind `/sekolah`, which needs the same
           permission; this is the part a Guru Biasa used to see, and a teacher
@@ -351,9 +351,9 @@ export default function MingguPage() {
                     <span className="text-ink-4">Belum ada angka untuk minggu ini.</span>
                   ) : (
                     <>
-                      {/* The denominator is the school's own rule — teachers ×
+                      {/* The denominator is the school's own rule - teachers ×
                         the RPH each owes a week, five for a Monday-to-Friday
-                        school — stated beside the percentage so it can be
+                        school - stated beside the percentage so it can be
                         checked by hand. It is deliberately not teachers ×
                         classes: that would need teaching_assignment, which has
                         no writer, and a made-up denominator is worse than
@@ -369,11 +369,11 @@ export default function MingguPage() {
               </div>
               <div className="min-w-[180px] flex-1">
                 <p className="mb-1.5 text-[12.5px] text-ink-3">
-                  {/* "—" when there is no rate to show — no denominator, or the
+                  {/* "-" when there is no rate to show - no denominator, or the
                     figures have not been measured. A percentage nobody has
                     computed is not zero. */}
                   <b className="num text-ink">
-                    {stats.compliancePct === null ? "—" : stats.compliancePct}%
+                    {stats.compliancePct === null ? "-" : stats.compliancePct}%
                   </b>{" "}
                   pematuhan sekolah
                 </p>
@@ -481,8 +481,8 @@ export default function MingguPage() {
                       className="flex gap-3 border-b border-dashed border-border py-3 last:border-b-0"
                     >
                       {/* The document's own status, not a person's face. The
-                          reviewer's name is not on this record — it lives on
-                          the signature, fetched per plan — and a feed that
+                          reviewer's name is not on this record - it lives on
+                          the signature, fetched per plan - and a feed that
                           attributes a decision to a named colleague who may
                           never have seen the plan is worse than one that
                           simply does not say who. */}
@@ -546,7 +546,7 @@ export default function MingguPage() {
               />
               {/* No count shown. The number would have to come from a query
                   this page does not make, and a badge that reads "8" because
-                  someone typed 8 is worse than no badge — the teacher opens
+                  someone typed 8 is worse than no badge - the teacher opens
                   /templat expecting eight and finds however many there are. */}
               <Shortcut
                 icon={<Layers className="h-4 w-4" />}
@@ -588,8 +588,8 @@ export default function MingguPage() {
         </div>
       </div>
 
-      {/* The artefact. `hidden` on screen — it is not a preview, it is the
-          thing the printer takes — and `@media print` in globals.css makes it
+      {/* The artefact. `hidden` on screen - it is not a preview, it is the
+          thing the printer takes - and `@media print` in globals.css makes it
           the whole page. */}
       {printable.length > 0 && (
         <div data-print="page" className="hidden">
@@ -638,14 +638,14 @@ function PlanRow({ doc }: { doc: RphDocument }) {
       <TD className="num whitespace-nowrap">{daySlot(doc.planDate, doc.slotTime)}</TD>
       <TD>
         <span className="ellip block max-w-[250px]">
-          {doc.payload.standard_kandungan || "—"}
+          {doc.payload.standard_kandungan || "-"}
         </span>
       </TD>
       <TD>
         <StatusBadge status={doc.status} grade={doc.grade} />
         {/* The penyunting's four-section meter, on the list. Without it a
             teacher with six plans opens each one to find which are unfinished
-            — the number was already computed, it was just only ever shown
+            - the number was already computed, it was just only ever shown
             inside the editor. Shown for drafts and returns, because a
             submitted plan has already passed the gate that requires all four. */}
         {actionable && (
@@ -657,7 +657,7 @@ function PlanRow({ doc }: { doc: RphDocument }) {
       <TD>
         {/* The name when the record carries one, the date when only that is
             known, and nothing when neither is. The reviewer is whoever wrote
-            the newest `rph_review` row — so for a plan returned and then
+            the newest `rph_review` row - so for a plan returned and then
             approved, it is the person who approved it, which is the decision
             the Status column beside it reflects. */}
         {doc.reviewerName || doc.reviewedAt ? (
@@ -672,7 +672,7 @@ function PlanRow({ doc }: { doc: RphDocument }) {
             )}
           </div>
         ) : (
-          <span className="text-[12.5px] text-ink-4">—</span>
+          <span className="text-[12.5px] text-ink-4">-</span>
         )}
       </TD>
       <TD className="text-right">

@@ -27,13 +27,13 @@ import { ms } from "@/lib/i18n/ms";
 import { MEMBER_ROLES, type MemberRole } from "@/lib/types";
 
 /**
- * `/utama` — the Administrator's home.
+ * `/utama` - the Administrator's home.
  *
  * Not a teacher's dashboard with the numbers swapped: an administrator does not
  * write plans, so "your RPH this week" would be a card permanently at zero.
- * What they are actually accountable for is the *school* — how many teachers
+ * What they are actually accountable for is the *school* - how many teachers
  * are registered, how much of the app is configured, and whether the week's
- * submissions are landing — plus the one thing only they need: a map of who can
+ * submissions are landing - plus the one thing only they need: a map of who can
  * do what, which is the definition of the roles they hand out.
  *
  * The overview and the set-up console used to live on two screens (`/utama` and
@@ -80,7 +80,7 @@ interface SetupItem {
   label: string;
   detail: string;
   /**
-   * `null` means "not measured yet" — a checklist that paints five grey checks
+   * `null` means "not measured yet" - a checklist that paints five grey checks
    * while the figures are still arriving is a checklist that lies twice.
    */
   done: boolean | null;
@@ -133,25 +133,25 @@ export default function UtamaPage() {
   const stats: Stat[] = [
     {
       label: "Guru berdaftar",
-      value: o?.members.teachers ?? "—",
+      value: o?.members.teachers ?? "-",
       hint: `${o?.members.total ?? 0} akaun keseluruhan`,
       icon: <UserCheck className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
     {
       label: "Kelas",
-      value: o?.classes ?? "—",
+      value: o?.classes ?? "-",
       hint: "sesi semasa",
       icon: <LayoutGrid className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
     {
       label: "Mata pelajaran",
-      value: o?.subjects ?? "—",
+      value: o?.subjects ?? "-",
       hint: "ditawarkan",
       icon: <BookOpen className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
     {
       label: "Templat",
-      value: o?.templates ?? "—",
+      value: o?.templates ?? "-",
       hint: "dalam perpustakaan",
       icon: <Users className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
@@ -160,17 +160,17 @@ export default function UtamaPage() {
   const weekStats: Stat[] = [
     {
       label: "RPH dihantar · minggu ini",
-      value: o?.week ? `${o.week.submitted}/${o.week.expected}` : "—",
-      // "—%" while there is nothing to measure against: a rate nobody has
+      value: o?.week ? `${o.week.submitted}/${o.week.expected}` : "-",
+      // "-%" while there is nothing to measure against: a rate nobody has
       // computed is not zero.
-      hint: `${o?.week?.compliance == null ? "—" : o.week.compliance}% pematuhan sekolah`,
+      hint: `${o?.week?.compliance == null ? "-" : o.week.compliance}% pematuhan sekolah`,
       icon: <CalendarCheck className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
     {
       label: "Disahkan",
-      value: o?.week?.approved ?? "—",
+      value: o?.week?.approved ?? "-",
       // Counts of a week that has not been read yet are not zeroes either.
-      hint: o?.week ? `${o.week.returned_t} dikembalikan · ${o.week.drafts} draf` : "—",
+      hint: o?.week ? `${o.week.returned_t} dikembalikan · ${o.week.drafts} draf` : "-",
       icon: <ShieldCheck className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
   ];
@@ -247,7 +247,7 @@ export default function UtamaPage() {
         <div>
           <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Papan Pemuka</h2>
           <p className="mt-0.5 text-[12.5px] text-ink-3">
-            Ringkasan sekolah, persediaan, dan tetapan — semuanya di satu tempat.
+            Ringkasan sekolah, persediaan, dan tetapan - semuanya di satu tempat.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -280,7 +280,7 @@ export default function UtamaPage() {
               key={item.key}
               type="button"
               onClick={() => openTab(item.key)}
-              aria-label={`${item.label} — ${item.detail}${
+              aria-label={`${item.label} - ${item.detail}${
                 item.done === true
                   ? " (selesai)"
                   : item.done === false
@@ -429,7 +429,7 @@ export default function UtamaPage() {
           <div>
             <CardTitle>Ringkasan kebenaran</CardTitle>
             <p className="text-xs text-ink-3">
-              Senarai tepat yang digunakan oleh aplikasi — sama seperti matriks di atas.
+              Senarai tepat yang digunakan oleh aplikasi - sama seperti matriks di atas.
             </p>
           </div>
         </CardHeader>

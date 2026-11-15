@@ -12,7 +12,7 @@ export interface FeedNotification {
   type: string;
   title: string;
   body?: string | null;
-  /** Deep-link target the school's own insert chose — 'dashboard', 'review'. */
+  /** Deep-link target the school's own insert chose - 'dashboard', 'review'. */
   linkView?: string | null;
   readAt?: number | null;
   createdAt: number;
@@ -21,9 +21,9 @@ export interface FeedNotification {
 /**
  * One notification feed from two sources.
  *
- *  · Dexie — events generated *on this device* (e.g. an offline plan merged
+ *  · Dexie - events generated *on this device* (e.g. an offline plan merged
  *    into a server plan), available offline.
- *  · `/api/notifications` — rows written by `sahkan_rph()` and `hantar_balik()`
+ *  · `/api/notifications` - rows written by `sahkan_rph()` and `hantar_balik()`
  *    when a GPK decides on a plan, which the device has never seen.
  *
  * In local mode the API isn't called at all (no database), so the Dexie list
@@ -31,7 +31,7 @@ export interface FeedNotification {
  *
  * Marking read goes to *both*. The Dexie write is what the offline list
  * reflects; the PATCH is what the school's rows need, because `read_at` on
- * `erph.notification` is not reachable from the client — and without it the
+ * `erph.notification` is not reachable from the client - and without it the
  * bell counted every review decision as unread for ever, with a button
  * beside it that could not clear them.
  */

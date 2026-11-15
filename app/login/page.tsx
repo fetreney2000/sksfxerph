@@ -9,7 +9,7 @@ import { resolveSchool } from "@/lib/server/school";
  * Login gate.
  *
  * Credentials are username + password against `erph.user` (Supabase Auth is
- * not used). Already signed in? Straight through — otherwise a returning
+ * not used). Already signed in? Straight through - otherwise a returning
  * teacher with a valid cookie would be asked to log in again.
  *
  * Two panels: the school's own crest, because at 6am on a school laptop this
@@ -17,7 +17,7 @@ import { resolveSchool } from "@/lib/server/school";
  * *their* school's system is worth more than any amount of product branding.
  *
  * The identity is read here rather than imported from `lib/config` because
- * this is the screen *before* authentication — there is no user to resolve a
+ * this is the screen *before* authentication - there is no user to resolve a
  * membership for, and the school's name and logo are exactly the things that
  * must not need a session to be correct.
  */

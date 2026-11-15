@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 008 — reminders a supervisor can actually send
+-- eRPH ▸ MIGRATION 008 - reminders a supervisor can actually send
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007. Safe to run more than once.
 --

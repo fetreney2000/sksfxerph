@@ -6,7 +6,7 @@ import { CLASSES, SUBJECTS } from "@/lib/demo/seed";
 import type { SchoolClass, Subject } from "@/lib/types";
 
 /**
- * The school's classes and subjects — what the editor's two pickers offer.
+ * The school's classes and subjects - what the editor's two pickers offer.
  *
  * Local mode returns the bundled fixtures and never issues a request; synced
  * mode reads `/api/classes` and `/api/subjects`, which scope the rows to the
@@ -14,7 +14,7 @@ import type { SchoolClass, Subject } from "@/lib/types";
  *
  * This split exists because the fixtures are not safe in synced mode. Their ids
  * (`c-5a`) are not UUIDs, `rph_document.class_ids` holds UUIDs, and
- * `sync_rph` validates every element against the caller's school — so a plan
+ * `sync_rph` validates every element against the caller's school - so a plan
  * built against a fixture was rejected on every flush with "kelas bukan dalam
  * sekolah/sesi anda", which reads on screen as a sync that never finishes.
  * Serving the real classes is the fix, and it is also
@@ -24,7 +24,7 @@ import type { SchoolClass, Subject } from "@/lib/types";
  * While a synced fetch is still in flight the list is empty rather than
  * fixture-backed. Every caller already treats an empty list as "nothing to do"
  * (the penyunting waits for the class *and* the subject list before it will
- * seed a document at all), which is the honest answer during load — offering
+ * seed a document at all), which is the honest answer during load - offering
  * demo classes for one render is how a fixture id got into the database in
  * the first place.
  */

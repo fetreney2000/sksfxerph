@@ -21,14 +21,14 @@ import { SubjectsTab } from "./subjects-tab";
  *
  * Four tabs rather than two: the original covered accounts and deadlines, but
  * its own permission promises "accounts, classes, subjects, session, deadlines"
- * — and classes are not a nicety. They are what `rph_document.class_ids` points
+ * - and classes are not a nicety. They are what `rph_document.class_ids` points
  * at, so a school that cannot manage them cannot plan against a class nobody
  * created.
  *
  * Kalendar minggu is the newest, and the smallest job: the app counts weeks from
  * a fixed term start, and a school whose calendar says otherwise needs one place
  * to say which date range is week 34. It sits beside the session for the same
- * reason session does — both are the calendar the whole school's numbers come
+ * reason session does - both are the calendar the whole school's numbers come
  * from.
  */
 

@@ -5,12 +5,12 @@ import { toClientError } from "@/lib/server/http/errors";
 import { payloadHash, verifySignature } from "@/lib/signature";
 
 /**
- * POST /api/rpc/review — decide a plan: *sahkan* (approve, signed) or
+ * POST /api/rpc/review - decide a plan: *sahkan* (approve, signed) or
  * *hantar balik* (return to the teacher).
  *
  * GPK and Guru Besar only, enforced here *and* inside the RPC. Which function
- * runs is derived from the role, never from the request. Scope — a GPK may
- * only reach the teachers assigned to them — is checked in SQL by
+ * runs is derived from the role, never from the request. Scope - a GPK may
+ * only reach the teachers assigned to them - is checked in SQL by
  * `erph.may_supervise`, which cannot be talked around from this layer.
  *
  * ── Why approval takes three steps instead of one ────────────────────────────
@@ -19,13 +19,13 @@ import { payloadHash, verifySignature } from "@/lib/signature";
  * does not already have one on file for this exact version and signer. It has
  * to be that way round: PostgreSQL cannot verify an ECDSA signature (pgcrypto,
  * "No support for signing"), so if the signature travelled *inside* the RPC the
- * only check on it would be structural — and a GPK calling PostgREST directly,
+ * only check on it would be structural - and a GPK calling PostgREST directly,
  * skipping this handler, would record a signature nobody ever produced.
  *
  * Here instead:
  *   1. the envelope's payload hash is recomputed from the stored payload;
  *   2. the ECDSA signature is verified over the envelope;
- *   3. only then is the row appended — and only this server can append, because
+ *   3. only then is the row appended - and only this server can append, because
  *      `erph.rph_signature` has no INSERT policy.
  *
  * A caller who skips this handler can still reach `sahkan_rph`, and gets
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const rpc = body.decision === "sahkan" ? stage.approveRpc : stage.returnRpc;
 
-  /** Whether *this* request wrote a signature row — see the rollback below. */
+  /** Whether *this* request wrote a signature row - see the rollback below. */
   let inserted = false;
 
   if (body.decision === "sahkan") {
@@ -93,13 +93,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (error) {
     console.error("[review] rpc failed:", error.message);
     // The signature row is now an orphan: a signature over a version that was
-    // never approved. Harmless — nothing reads it, and a later attempt reuses
-    // it if the version still matches — but tidier to take it back.
+    // never approved. Harmless - nothing reads it, and a later attempt reuses
+    // it if the version still matches - but tidier to take it back.
     //
     // Only the row *this request* wrote, and only when it wrote one. The
     // earlier version deleted every signature this reviewer had for the
     // document, so a second, failed attempt to approve an already-approved
-    // plan — which the status check refuses before anything is inserted —
+    // plan - which the status check refuses before anything is inserted -
     // took the approval's own signature with it.
     if (inserted) await discardSignature(gate, body.documentId);
     return toClientError("[review] rpc failed:", error);
@@ -112,7 +112,7 @@ type Gate = Awaited<ReturnType<typeof requireReviewer>>;
 /**
  * Verify the signature, then append it.
  *
- * Returns the refusal to send back — or `null` — and whether a row was
+ * Returns the refusal to send back - or `null` - and whether a row was
  * written, so the caller knows whether there is anything to roll back.
  */
 async function verifyAndStore(
@@ -132,7 +132,7 @@ async function verifyAndStore(
     .from("rph_document")
     .select("id, version, payload, status, owner_id")
     .eq("id", documentId)
-    // `.is(…, null)`, not `.eq(…, false)` — `deleted_at` is a timestamptz.
+    // `.is(…, null)`, not `.eq(…, false)` - `deleted_at` is a timestamptz.
     // PostgREST rejects a boolean against it before the query reaches the
     // database, so every approval answered 500 "Ralat pelayan" from a branch
     // that could not possibly have been the cause. The same mistake was made
@@ -195,7 +195,7 @@ async function verifyAndStore(
   }
 
   // `unique (document_id, document_version, signer_id)` makes a second request
-  // for the same decision fail the insert — so a double-click on "Sahkan"
+  // for the same decision fail the insert - so a double-click on "Sahkan"
   // reported a 500 while the first request had in fact succeeded, and the
   // reviewer was told an approval had failed when it had gone through.
   //
@@ -239,7 +239,7 @@ async function verifyAndStore(
  *
  * "Best effort" on purpose: this runs on an error path, and a second failure
  * here must not replace the original message the reviewer is shown. The row
- * left behind is inert — `sahkan_rph` ignores signatures for a version it is
+ * left behind is inert - `sahkan_rph` ignores signatures for a version it is
  * not approving, and a later attempt re-uses it while the version holds.
  *
  * Scoped to the document and the signer. The earlier version deleted every

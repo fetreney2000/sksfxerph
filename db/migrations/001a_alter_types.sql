@@ -1,12 +1,12 @@
 -- ============================================================================
--- eRPH · MIGRATION 001a — role and status values (RUN ONE LINE AT A TIME)
+-- eRPH · MIGRATION 001a - role and status values (RUN ONE LINE AT A TIME)
 -- ============================================================================
 -- Run BEFORE 001b_schema_delta.sql, and run it by selecting a single line and
 -- pressing Run each time. Two Postgres rules make that unavoidable:
 --
 --   · `alter type ... rename value` refuses to run inside a transaction block,
 --     and the SQL editor wraps a pasted script in one.
---   · a value added inside a transaction cannot be used until it commits —
+--   · a value added inside a transaction cannot be used until it commits -
 --     001b defines functions that reference `pentadbir` and views that
 --     reference `forwarded`, so both must exist before it starts.
 --

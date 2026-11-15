@@ -36,7 +36,7 @@ import { completeness, normalisePayload } from "@/lib/schemas/rph";
 import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review";
 
 /**
- * Review queue — the admin screen.
+ * Review queue - the admin screen.
  *
  * Keyboard-first on purpose: a GPK grades 40–60 plans a week, so `J`/`K` to
  * move and `1`/`0` to decide (the exact grades from Lampiran 7 of the KPM
@@ -44,8 +44,8 @@ import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review
  */
 /** The message shown after a decision. Both reviewers now end the flow. */
 function decisionMessage(decision: "sahkan" | "hantar_balik"): string {
-  if (decision === "hantar_balik") return "Tidak lengkap — dikembalikan kepada guru";
-  return "Disahkan dan ditandatangani — guru dimaklumkan";
+  if (decision === "hantar_balik") return "Tidak lengkap - dikembalikan kepada guru";
+  return "Disahkan dan ditandatangani - guru dimaklumkan";
 }
 
 /**
@@ -53,8 +53,8 @@ function decisionMessage(decision: "sahkan" | "hantar_balik"): string {
  *
  * A `draft` is actionable through the submit-on-behalf step (the server's
  * `submit_rph` already permits staff to submit for their teachers), a
- * `submitted` plan is the ordinary decision, and everything else — approved,
- * returned, forwarded — is listed only so the week reads as a whole. Re-deciding
+ * `submitted` plan is the ordinary decision, and everything else - approved,
+ * returned, forwarded - is listed only so the week reads as a whole. Re-deciding
  * an audited plan would fork the audit trail, so it is view-only here.
  */
 function isActionable(q: QueueItem): boolean {
@@ -62,7 +62,7 @@ function isActionable(q: QueueItem): boolean {
 }
 
 export default function SemakanPage() {
-  // Remote when configured, bundled demo otherwise — same shape either way.
+  // Remote when configured, bundled demo otherwise - same shape either way.
   const { id: meId, role } = useUser();
   const router = useRouter();
   const session = useSession();
@@ -78,14 +78,14 @@ export default function SemakanPage() {
   // ── Minggu lampau ────────────────────────────────────────────────────────
   // Null selects the ordinary pending queue; a number browses that whole
   // school week, any status. The picker is driven by `weekOptions()`, which
-  // already applies the school's declared weeks — a gap between declarations
+  // already applies the school's declared weeks - a gap between declarations
   // is not offered, because its dates belong to nobody.
   const currentWeekNo = useCurrentWeek();
   const [weekFilter, setWeekFilter] = React.useState<number | null>(null);
   // `currentWeekNo` is the trigger, not a value the body reads: `weekOptions()`
   // reads `currentWeek()` internally, and re-running the memo when the school's
   // declarations arrive is what keeps the picker from staying empty forever.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: subscribe-then-read — the dependency fires the recompute the store's update needs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: subscribe-then-read - the dependency fires the recompute the store's update needs.
   const weekOpts = React.useMemo(() => weekOptions(), [currentWeekNo]);
   const { items: weekPlans, refetch: refetchWeek } = useWeekPlans(weekFilter);
   /** The list on screen: the queue, or the browsed week. */
@@ -102,7 +102,7 @@ export default function SemakanPage() {
   /**
    * Latches the decision controls while a request is in flight.
    *
-   * Without it, a second click on "Sahkan" signs and posts again — and before
+   * Without it, a second click on "Sahkan" signs and posts again - and before
    * the server-side fix, the loser of that race reported a 500 for an approval
    * that had in fact gone through. The queue advances optimistically, so this
    * only re-enables the buttons once the first request has actually settled.
@@ -166,13 +166,13 @@ export default function SemakanPage() {
 
       // Server owns the decision when configured: sahkan_rph / hantar_balik_rph
       // write the review, the notification to the teacher and the audit row,
-      // and sahkan_rph refuses unless a verified signature is already on file —
+      // and sahkan_rph refuses unless a verified signature is already on file -
       // so an approval here means the browser has signed it first. Local mode
       // updates the demo queue only.
       /**
        * What a *recorded* decision does to the screen.
        *
-       * Called only once the write has landed — or in local mode, where the
+       * Called only once the write has landed - or in local mode, where the
        * write is the screen. Doing it earlier marked a plan as graded while
        * the toast beside it said the review had failed, and the plan left the
        * queue the reviewer was working through.
@@ -180,7 +180,7 @@ export default function SemakanPage() {
       const applyDecision = () => {
         setGraded((g) => ({ ...g, [item.id]: decision === "sahkan" ? 1 : 0 }));
         setComment("");
-        // Advance to the next actionable, ungraded item — the queue is the
+        // Advance to the next actionable, ungraded item - the queue is the
         // whole workflow. Week mode has decided rows in between; they are
         // skipped, not landed on.
         const next = list.find((q) => isActionable(q) && !(q.id in graded) && q.id !== item.id);
@@ -190,7 +190,7 @@ export default function SemakanPage() {
         // rather than the plan they just approved still filling the screen.
         else setMobileOpen(false);
         // Week mode: the decision changed that row's status in place, so the
-        // browsed week must re-read the server to show it — the local copy
+        // browsed week must re-read the server to show it - the local copy
         // still says what it said before.
         if (weekFilter !== null) void refetchWeek();
       };
@@ -198,7 +198,7 @@ export default function SemakanPage() {
       if (supabaseConfigured) {
         void (async () => {
           try {
-            // A draft must be submitted before the decide RPCs will touch it —
+            // A draft must be submitted before the decide RPCs will touch it -
             // they only answer a `submitted` plan. `submit_rph` lets staff
             // submit on the teacher's behalf, and it bumps the document
             // version, so the signature envelope has to be built over the
@@ -296,9 +296,9 @@ export default function SemakanPage() {
         />
         <Kpi
           label="Pematuhan sekolah"
-          // "—" rather than 0% when the school has no denominator or the
+          // "-" rather than 0% when the school has no denominator or the
           // figure has not been measured.
-          value={stats.compliancePct === null ? "—" : `${stats.compliancePct}%`}
+          value={stats.compliancePct === null ? "-" : `${stats.compliancePct}%`}
           tone="ok"
           bar={stats.compliancePct ?? 0}
         />
@@ -409,7 +409,7 @@ export default function SemakanPage() {
                   <span className="flex flex-col items-end gap-1.5">
                     {weekFilter !== null ? (
                       // Week mode lists every status, so the badge is the
-                      // plan's own — the "Baru / Lengkap / Baiki" badges below
+                      // plan's own - the "Baru / Lengkap / Baiki" badges below
                       // answer a queue question, not a week question.
                       <StatusBadge status={q.status} />
                     ) : g === undefined ? (
@@ -568,7 +568,7 @@ function ReviewWorkspace({
   onDecide: (decision: ReviewDecision) => void;
   /** Week mode only: a decided plan renders without the decision controls. */
   readOnly?: boolean;
-  /** Why the row is not (yet) decidable — the draft or decided note. */
+  /** Why the row is not (yet) decidable - the draft or decided note. */
   note?: string;
 }) {
   const desktop = mode === "desktop";
@@ -592,7 +592,7 @@ function ReviewWorkspace({
         <AutoCheck item={item} />
         {readOnly ? (
           // A decided plan: no comment box (there is nothing to comment into),
-          // no decisions — the note says why the row is closed.
+          // no decisions - the note says why the row is closed.
           desktop && note ? (
             <ViewOnlyNote text={note} tone="muted" />
           ) : null
@@ -633,7 +633,7 @@ function AutoCheck({ item }: { item: QueueItem }) {
   ];
 
   return (
-    // Mirrors the checklist `sahkan_rph()` stores — exactly the six rows the
+    // Mirrors the checklist `sahkan_rph()` stores - exactly the six rows the
     // printed form cannot be issued without, not the editor's step grouping.
     <div className="mb-3 rounded-[11px] border border-border bg-surface-2 p-3.5">
       <p className="mb-2.5 text-[11px] font-bold tracking-[0.7px] text-ink-4 uppercase">
@@ -689,7 +689,7 @@ function CommentBox({
           [
             ["+ KBAT", "Aktiviti penutup boleh tambah soalan KBAT."],
             ["+ Refleksi", "Sila lengkapkan bahagian Refleksi."],
-            ["+ Masa", "Masa aktiviti melebihi 50 minit — sila laraskan."],
+            ["+ Masa", "Masa aktiviti melebihi 50 minit - sila laraskan."],
           ] as [string, string][]
         ).map(([label, text]) => (
           <button
@@ -747,7 +747,7 @@ function DecisionButtons({
           </kbd>
         </Button>
         {/* No "Simpan & teruskan". It claimed to save a comment draft and the
-            app has nowhere to keep one — no draft table, no local store — so
+            app has nowhere to keep one - no draft table, no local store - so
             pressing it changed nothing. Both real actions above take the typed
             comment with the decision. */}
       </div>
@@ -825,7 +825,7 @@ function InfoNote() {
  * Why a browsed row is not (yet) decidable, or what deciding a draft will do.
  *
  * `info` marks an *actionable* row with an extra step (the draft note); `muted`
- * marks a closed one (the decided note) — the two read differently on purpose.
+ * marks a closed one (the decided note) - the two read differently on purpose.
  */
 function ViewOnlyNote({
   text,

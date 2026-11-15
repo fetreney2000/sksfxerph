@@ -8,7 +8,7 @@ import { adminDb } from "@/lib/server/db";
 /**
  * Route-handler guard.
  *
- * With Supabase Auth gone, this — plus the signed cookie behind it — is the
+ * With Supabase Auth gone, this - plus the signed cookie behind it - is the
  * only thing standing between an anonymous request and a privileged query.
  * Returns the authenticated user, or a ready-to-send 401/503.
  */
@@ -53,7 +53,7 @@ export async function requireDbUser(
  * permission check should not have to invent its own. The distinction this
  * exists for is `/sekolah`: the aggregate counts behind it are open to every
  * member (they cannot name anyone), while the per-teacher rows behind *this*
- * are not — and a GPK's rows are narrower still, which `erph.pantau_teachers`
+ * are not - and a GPK's rows are narrower still, which `erph.pantau_teachers`
  * enforces independently of whatever this check allows.
  */
 export async function requirePermission(
@@ -70,7 +70,7 @@ export async function requirePermission(
   return gate;
 }
 
-/** Graders only — the queue and review routes. Roles come from `permissions`. */
+/** Graders only - the queue and review routes. Roles come from `permissions`. */
 export async function requireReviewer(
   req: NextRequest,
 ): Promise<{ user: SessionUser; db: ReturnType<typeof adminDb> } | { error: NextResponse }> {
@@ -84,7 +84,7 @@ export async function requireReviewer(
   return gate;
 }
 
-/** App set-up only — reserved for the `/pentadbiran` API. */
+/** App set-up only - reserved for the `/pentadbiran` API. */
 export async function requireAdministrator(
   req: NextRequest,
 ): Promise<{ user: SessionUser; db: ReturnType<typeof adminDb> } | { error: NextResponse }> {

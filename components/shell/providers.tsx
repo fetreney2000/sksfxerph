@@ -12,10 +12,10 @@ import { flushQueue, isOnline } from "@/lib/sync/queue";
 /**
  * App-wide client wiring. Four jobs, all idempotent:
  *
- *  1. React Query — server-state for the admin/read screens.
+ *  1. React Query - server-state for the admin/read screens.
  *  2. Seed local demo data once, only if the store is empty (local mode).
  *  3. Flush the sync queue when connectivity returns or on a slow interval.
- *  4. Register the service worker (production only — never cache dev builds).
+ *  4. Register the service worker (production only - never cache dev builds).
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = React.useState(
@@ -38,7 +38,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     // Local mode only. The fixtures carry class ids like `c-5a`, which are not
-    // UUIDs — `sync_rph` validates every element of `class_ids`, so writing
+    // UUIDs - `sync_rph` validates every element of `class_ids`, so writing
     // them into a synced deployment would leave a dashboard full of demo plans
     // that can never reach the server, each one failing on every flush. The
     // comment on this function has always said "(local mode)"; the call is
@@ -47,7 +47,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
       navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((err: unknown) => {
-        // Never break the app over a caching layer — but do make the failure
+        // Never break the app over a caching layer - but do make the failure
         // visible, otherwise a broken SW is indistinguishable from a slow one.
         console.error("[sw] registration failed", err);
       });
@@ -55,7 +55,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     const refresh = () => {
       // Push before pull. Pulling while a local edit is still queued would be
-      // pointless — `pullDocuments` skips exactly those rows anyway — and this
+      // pointless - `pullDocuments` skips exactly those rows anyway - and this
       // order means a plan written on another device arrives already flushed
       // over anything this one has changed since.
       void flushQueue().then(() => pullDocuments());
@@ -68,7 +68,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     // First paint of a new session: get whatever happened elsewhere while this
     // browser was closed. The 30s interval below is a *retry* for failed
-    // pushes, so it does not also pull — polling on every tick would be a
+    // pushes, so it does not also pull - polling on every tick would be a
     // request for data that changes once a week.
     void refresh();
 
@@ -92,8 +92,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
    * session's anchors would keep renumbering the new one's weeks until somebody
    * happened to reload.
    *
-   * It also re-asks whenever the tab is looked at again. Nothing else does —
-   * React Query's focus refetch is off app-wide — so a dashboard left open
+   * It also re-asks whenever the tab is looked at again. Nothing else does -
+   * React Query's focus refetch is off app-wide - so a dashboard left open
    * through somebody else's declaration would show the old week for as long as
    * it stayed open, which is the one thing this feature exists to keep every
    * screen agreeing on.
@@ -102,7 +102,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
    * still has to happen, because the penyunting waits on this signal before it
    * stamps a week and with no server to ask, waiting forever is not an option.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `session` is the trigger, not a value the body reads. `/api/calendar` answers for the *current* session, so a rollover has to re-ask — and nothing inside the effect can name the session to make that look necessary.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `session` is the trigger, not a value the body reads. `/api/calendar` answers for the *current* session, so a rollover has to re-ask - and nothing inside the effect can name the session to make that look necessary.
   React.useEffect(() => {
     if (!supabaseConfigured) {
       setCalendarAnchors([]);
@@ -117,7 +117,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         })
         .catch((err: unknown) => {
           // Logged, and still marked answered. A school that did declare weeks
-          // would number from the term start instead — wrong, but working —
+          // would number from the term start instead - wrong, but working -
           // where leaving it unanswered would leave every new plan unable to
           // decide its week at all.
           console.error("[calendar] load failed:", err);

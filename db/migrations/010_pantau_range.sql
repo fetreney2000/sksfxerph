@@ -1,11 +1,11 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 010 — the roster follows the same window as the cards
+-- eRPH ▸ MIGRATION 010 - the roster follows the same window as the cards
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009. Safe to run more than
 -- once.
 --
 -- /sekolah's filter widened the window its cards describe, and the roster
--- underneath still counted a single week — so a supervisor choosing
+-- underneath still counted a single week - so a supervisor choosing
 -- "Sepanjang sesi" read a session total beside a table that disagreed with
 -- it. The table and the cards now come from the same weeks by construction:
 -- both take p_first_week/p_last_week.
@@ -43,7 +43,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- ignores every return look identical once the first is caught up.
          --
          -- Read from rph_review rather than the document, because the document
-         -- only ever carries the latest decision — the history of a plan that
+         -- only ever carries the latest decision - the history of a plan that
          -- was returned and then approved is exactly what makes it "fixed".
          (select count(*) from erph.rph_document d2
            where d2.owner_id = m.user_id and d2.school_id = p_school
@@ -61,7 +61,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- Classes per teacher, as a self-contained subquery rather than a
          -- join: a plan now covers several classes, so joining class onto the
          -- document would multiply every row of it and inflate the counts
-         -- above — and the function body is SQL with a GROUP BY on the
+         -- above - and the function body is SQL with a GROUP BY on the
          -- teacher, which an outer reference to d.class_ids cannot survive.
          (select string_agg(distinct c.nama, ', ' order by c.nama)
             from erph.rph_document d2

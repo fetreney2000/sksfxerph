@@ -7,13 +7,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * The lock is what stops a password being guessed, and it used to have a
  * second, unintended life: the failure counter outlived the lock it had set.
  * Once a lock expired the count was still five, so the very next wrong guess
- * re-armed it — and because the counter was only ever cleared by a successful
+ * re-armed it - and because the counter was only ever cleared by a successful
  * sign-in, the account's owner could not clear it either. One request every
  * fifteen minutes kept any account locked, for good, and the school's only
  * administrator could have been reached the same way.
  */
 
-// Every successful sign-in mints a session cookie, which needs the secret —
+// Every successful sign-in mints a session cookie, which needs the secret -
 // set it here so this file tests the lockout, not the environment.
 vi.hoisted(() => {
   process.env.SESSION_SECRET =
@@ -32,7 +32,7 @@ interface UserRow {
   locked_until: string | null;
 }
 
-/** The real scrypt hash of "biasa123" — so the verification path is the real one. */
+/** The real scrypt hash of "biasa123" - so the verification path is the real one. */
 const HASH =
   "scrypt$16384$8$1$l5LNcBYQOSm6M_tOuRNTyw$OIhgfFgcxiGTo2GeOra-dmMfOc8KlQeHl1szR9cN9UlvxU_lB86lLYutFhYlCM1Axphko8kuo3qvqJQxaG135g";
 
@@ -70,7 +70,7 @@ vi.mock("@/lib/server/db", () => ({
         },
         ilike(column: string, value: string) {
           // The route picks the column by the identifier's shape: an address
-          // is matched against `email`, a bare name against `username` —
+          // is matched against `email`, a bare name against `username` -
           // both case-insensitively, as PostgREST's `ilike` would.
           chain.row =
             [...store.users.values()].find(
@@ -201,8 +201,8 @@ describe("the login lockout", () => {
   });
 
   it("rejects an over-long identifier or password before scrypt ever runs", async () => {
-    // An over-long input is never a real credential — 320 chars tops an email,
-    // stored passwords are far shorter than 1024 — so it is answered as bad
+    // An over-long input is never a real credential - 320 chars tops an email,
+    // stored passwords are far shorter than 1024 - so it is answered as bad
     // credentials rather than hashed. Without the cap a caller could make
     // every attempt pay KDF time on megabytes of input.
     const longId = await POST(post(`${"a".repeat(320)}@sk.local`, "salah"));
@@ -237,7 +237,7 @@ describe("the login lockout", () => {
 
   it("still reaches an account with no email through its username", async () => {
     // The email is optional on `erph.user`; the split is guidance, not a
-    // lockout — the username door stays open for exactly these accounts.
+    // lockout - the username door stays open for exactly these accounts.
     seed({ email: null });
     const res = await POST(post("guru.biasa", "biasa123"));
     expect(res.status).toBe(200);

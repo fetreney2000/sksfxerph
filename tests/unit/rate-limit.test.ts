@@ -6,7 +6,7 @@ import { clientIp, clientKey, rateLimit } from "@/lib/http/rate-limit";
  *
  * The limiter is the brake on the login route's account lockout, so the key
  * it buckets on has to be one the caller cannot choose. It used to be the
- * `sub` claim of an `Authorization` header — decoded, never verified — so a
+ * `sub` claim of an `Authorization` header - decoded, never verified - so a
  * caller could mint a fresh key per request and the limit never applied. That
  * turned the lockout into a one-request-per-window denial of service against
  * every account in the school.

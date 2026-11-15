@@ -18,7 +18,7 @@ import { cn } from "@/lib/cn";
 import { ms } from "@/lib/i18n/ms";
 
 /**
- * Bottom navigation — frontend research §4.2(9) "mobile-first: bottom nav".
+ * Bottom navigation - frontend research §4.2(9) "mobile-first: bottom nav".
  *
  * The sidebar is desktop-only (`hidden lg:flex`), so without this a teacher on
  * a phone has no visible way to move between screens.

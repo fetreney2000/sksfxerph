@@ -23,7 +23,7 @@ import {
  * An earlier version offered CSV, ZIP and compliance-report buttons that
  * printed a success toast and generated nothing. On a page that opens by
  * citing a statutory obligation, a button that claims to have produced a
- * record and has not is worse than no button at all — it is a compliance
+ * record and has not is worse than no button at all - it is a compliance
  * claim, not a feature claim.
  */
 const EXPORTS = [
@@ -99,7 +99,7 @@ export default function LaporanPage() {
           </p>
           <p className="text-ink-3">
             Mengikut Surat Siaran KPM Bil. 2/2025, guru <b>tidak perlu mencetak</b> e-RPH setiap
-            minggu — hanya apabila diminta.
+            minggu - hanya apabila diminta.
           </p>
         </CardContent>
       </Card>

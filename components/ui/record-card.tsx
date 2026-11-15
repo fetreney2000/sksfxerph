@@ -22,7 +22,7 @@ export function RecordCard({
   className,
 }: {
   title: React.ReactNode;
-  /** The second line under the title — a username, a code, a form. */
+  /** The second line under the title - a username, a code, a form. */
   subtitle?: React.ReactNode;
   /** A status, pinned to the top-right corner. */
   badge?: React.ReactNode;
@@ -61,7 +61,7 @@ export function RecordCard({
  * The endpoints order differently and each was chosen for a table with headers
  * to explain it: accounts by role, classes with the archived ones pushed down,
  * subjects by curriculum. Those groupings look like a shuffle once every row
- * carries its own labels — what someone scanning a grid came for is the name
+ * carries its own labels - what someone scanning a grid came for is the name
  * they came for, so that is the key.
  */
 export function byName<T>(key: (row: T) => string) {
@@ -73,7 +73,7 @@ export function byName<T>(key: (row: T) => string) {
  *
  * The label is a real `<label>`, not a caption: the pickers in the accounts
  * card are the same controls the table had, and they have to stay reachable by
- * their accessible names for a screen reader — and for the tests that ask for
+ * their accessible names for a screen reader - and for the tests that ask for
  * "Jawatan <name>" by name.
  */
 export function CardField({

@@ -7,10 +7,10 @@ import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
 
 /**
- * GET /api/stats — whole-school compliance for the week, and the trend.
+ * GET /api/stats - whole-school compliance for the week, and the trend.
  *
  * Supervisors only. It returns counts and a percentage and never a name, so
- * there is nothing here to identify a teacher — but that was never the
+ * there is nothing here to identify a teacher - but that was never the
  * question. A Guru Biasa's dashboard is about their own week, and a school's
  * compliance percentage beside it is a school's answer to a school's problem;
  * they are no better placed to act on it than they are to act on a colleague's
@@ -21,7 +21,7 @@ import { resolveSession } from "@/lib/server/session";
  * the same one `/sekolah` and `/api/pantau/teachers` are behind, so the UI and
  * the endpoint can no longer disagree about who may look.
  *
- * 503 in local mode — the caller falls back to the bundled demo figures.
+ * 503 in local mode - the caller falls back to the bundled demo figures.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const gate = await requirePermission(request, "pantau");
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // The trend, over the requested range. Same permission shape as the single
-  // week above — counts and a percentage, never a name.
+  // week above - counts and a percentage, never a name.
   const { data: history, error: histErr } = await gate.db.rpc("school_week_history", {
     p_school: schoolId,
     p_session: session,
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     history: rows.map((r) => ({
       week: r.week,
       // The headcount. `expected` is the number of RPH the school owes that
-      // week — teachers × the school's rph_per_week — so the two are no
+      // week - teachers × the school's rph_per_week - so the two are no
       // longer the same figure and a roster needs the first one.
       teachers: r.teachers,
       expected: r.expected,

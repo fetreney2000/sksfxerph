@@ -11,7 +11,7 @@ import { setSession } from "@/lib/session";
  * Rendered once by `(app)/layout.tsx`, which reads both per request. Two
  * reasons these are effects rather than render-time writes: both stores are
  * module state shared with plain (non-React) code, and writing during render
- * would fire subscribers before React has finished committing — which is how a
+ * would fire subscribers before React has finished committing - which is how a
  * `useSyncExternalStore` consumer ends up in a render loop.
  *
  * Re-runs only when a value actually changes, so an ordinary navigation does

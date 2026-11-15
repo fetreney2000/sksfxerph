@@ -11,7 +11,7 @@ import {
 /**
  * The signature is the part of this feature where being wrong is expensive and
  * quiet: a signature that verifies over the wrong bytes still *looks* valid on
- * a printed RPH. So the things that would make it wrong are asserted directly —
+ * a printed RPH. So the things that would make it wrong are asserted directly -
  * canonicalisation, payload binding, and both tampering directions.
  */
 const DOC = "11111111-1111-4111-8111-111111111111";
@@ -27,7 +27,7 @@ describe("canonicalisation", () => {
     expect(canonicalize({ z: { y: 1, x: 2 } })).toBe('{"z":{"x":2,"y":1}}');
   });
 
-  it("keeps array order — arrays are ordered, objects are not", () => {
+  it("keeps array order - arrays are ordered, objects are not", () => {
     expect(canonicalize({ xs: [3, 1, 2] })).toBe('{"xs":[3,1,2]}');
   });
 
@@ -135,11 +135,11 @@ describe("signing an approval", () => {
       publicKey: key.publicKey,
     });
     // A document rendering a signature must not be interrupted by one that
-    // will not verify — an unverifiable signature is a *result*.
+    // will not verify - an unverifiable signature is a *result*.
     expect(await verifySignature("not-a-key", envelope, "not-a-signature")).toBe(false);
   });
 
-  it("is non-deterministic — ECDSA draws a fresh nonce each time", async () => {
+  it("is non-deterministic - ECDSA draws a fresh nonce each time", async () => {
     const key = await generateSigningKey();
     const envelope = await buildEnvelope({
       documentId: DOC,
@@ -155,7 +155,7 @@ describe("signing an approval", () => {
 
     // Not Ed25519: signing the same bytes twice does *not* reproduce the same
     // signature, so anything comparing signatures for equality is wrong. What
-    // has to hold is that both verify — and it does, which is why the stored
+    // has to hold is that both verify - and it does, which is why the stored
     // row is identified by (document, version, signer) rather than by value.
     expect(first).not.toBe(second);
     expect(await verifySignature(key.publicKey, envelope, first)).toBe(true);

@@ -6,26 +6,26 @@ import { toClientError } from "@/lib/server/http/errors";
 import { JAWATAN, MEMBER_ROLES } from "@/lib/types";
 
 /**
- * GET / POST / PATCH /api/admin/accounts — who may use the app, and as what.
+ * GET / POST / PATCH /api/admin/accounts - who may use the app, and as what.
  *
  * Reads and writes go through `erph.admin_list_members` /
  * `erph.admin_create_member` / `erph.admin_set_member` rather than PostgREST,
  * for two reasons: every handler holds the secret key and so bypasses RLS
  * entirely, and the role is duplicated on `erph.user` (what the route guard
- * reads) and `erph.school_member` (what SQL reads) — updating one alone would
+ * reads) and `erph.school_member` (what SQL reads) - updating one alone would
  * leave a demoted account privileged through whichever layer it reached next.
  *
  * POST mints the scrypt hash here, never in SQL: a `security definer` function
  * is readable by anyone with SELECT on `pg_proc`, and there is no reason for a
- * password — even a hashed one — to be produced by the database.
+ * password - even a hashed one - to be produced by the database.
  */
 
-/** Roles an administrator may hand out — `system` is a service account. */
+/** Roles an administrator may hand out - `system` is a service account. */
 const ASSIGNABLE = MEMBER_ROLES.filter((r) => r !== "system");
 
 /**
  * `jawatan` is optional because it is nullable in SQL: an office nobody has
- * set prints as "—" on the cover sheet, which is honest, so an account must
+ * set prints as "-" on the cover sheet, which is honest, so an account must
  * never have to invent one before it can be saved.
  */
 const postSchema = z.object({
@@ -42,13 +42,13 @@ const postSchema = z.object({
 
 /**
  * Five distinct actions in one PATCH. `password` and `unlock` are separate
- * from `role`/`isActive` because they hit different RPCs — and resetting a
+ * from `role`/`isActive` because they hit different RPCs - and resetting a
  * password already clears the lockout, so the two are never sent together.
  * `supervisorId` is separate again: it is the scope assignment that decides
  * which plans a GPK can reach, and it has its own validation in SQL (a
  * supervisor must be an active GPK or Guru Besar, and nobody supervises
  * themselves). `jawatan` is separate for the same reason: it is an office
- * rather than a permission, so `erph.admin_set_jawatan` — not the role write —
+ * rather than a permission, so `erph.admin_set_jawatan` - not the role write -
  * is what accepts it, and it refuses one that does not fit the account.
  * `fullName` and `email` travel together as `admin_set_profile`, because a
  * name without the address it corrects is half an edit.
@@ -60,9 +60,9 @@ const patchSchema = z
     isActive: z.boolean().optional(),
     password: z.string().min(8, "Kata laluan: sekurang-kurangnya 8 aksara").max(128).optional(),
     unlock: z.literal(true).optional(),
-    /** null clears it — the teacher falls back to Guru-Besar-only visibility. */
+    /** null clears it - the teacher falls back to Guru-Besar-only visibility. */
     supervisorId: z.string().uuid().nullable().optional(),
-    /** null clears it — the cover sheet's JAWATAN row prints "—". */
+    /** null clears it - the cover sheet's JAWATAN row prints "-". */
     jawatan: z.enum(JAWATAN).nullable().optional(),
     /** The name printed on every RPH this person writes. */
     fullName: z.string().min(1, "Nama penuh diperlukan").max(120).optional(),
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     p_jawatan: parsed.data.jawatan ?? null,
   });
 
-  // 23505 is the unique index doing its job when two admins race on a name —
+  // 23505 is the unique index doing its job when two admins race on a name -
   // surfaced as text rather than a Postgres code, because nobody reading the
   // UI knows what 23505 means. Anything else goes through the central
   // sanitizer: authored raises pass, infrastructure does not.
@@ -191,7 +191,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   let args: Record<string, unknown>;
 
   if (body.password !== undefined) {
-    // Hash in Node, and note in the response that this logged every device out —
+    // Hash in Node, and note in the response that this logged every device out -
     // the administrator needs to be able to tell the teacher that.
     rpc = "admin_reset_password";
     args = {
@@ -203,7 +203,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     rpc = "admin_unlock_member";
     args = { p_school: schoolId, p_user: body.userId };
   } else if (body.fullName !== undefined && body.email !== undefined) {
-    // Name and address together — the refine above makes it impossible to
+    // Name and address together - the refine above makes it impossible to
     // send one without the other, so there is no half-edit to fall back on.
     rpc = "admin_set_profile";
     args = {

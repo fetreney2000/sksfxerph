@@ -8,7 +8,7 @@ import { adminDb } from "@/lib/server/db";
  * can simply ask. A server process must not do that: every handler would share
  * one array, so whichever request loaded last would decide what every other
  * request meant by "this week". This deployment is single-school today, but
- * that is not a property worth quietly relying on — each handler passes its own
+ * that is not a property worth quietly relying on - each handler passes its own
  * school's rows in as the second argument instead, and `currentWeek` stays
  * pure.
  *
@@ -18,7 +18,7 @@ import { adminDb } from "@/lib/server/db";
  *
  * **Failure returns no rows, on purpose.** An empty calendar is exactly what
  * local mode, a fresh deployment and a school that never overrode anything all
- * have, and in that state the server numbers weeks from the term start — which
+ * have, and in that state the server numbers weeks from the term start - which
  * is what it has always done. A read error therefore degrades to the previous
  * behaviour rather than taking the dashboard down; it is logged, because a
  * school that *did* declare weeks would otherwise see the wrong ones and have
@@ -27,7 +27,7 @@ import { adminDb } from "@/lib/server/db";
 const TTL_MS = 30_000;
 const cache = new Map<string, { at: number; rows: readonly CalendarAnchor[] }>();
 
-/** Drop the cached rows — called when an administrator changes them. */
+/** Drop the cached rows - called when an administrator changes them. */
 export function invalidateCalendarCache(schoolId?: string): void {
   if (schoolId) cache.delete(schoolId);
   else cache.clear();

@@ -14,7 +14,7 @@ import {
  *
  * Uses the Google Identity Services **JavaScript API** rather than their HTML
  * button-plus-redirect, because the redirect posts a full page to a login URI
- * and reloads — while this app already knows exactly where a successful sign-in
+ * and reloads - while this app already knows exactly where a successful sign-in
  * goes. The credential is sent by `XMLHttpRequest` with a custom header, which
  * is the CSRF pattern Google recommends for that route: a cross-origin caller
  * would have to preflight, and this server grants no preflight.
@@ -22,7 +22,7 @@ import {
  * ── `auto_select` is off on purpose ──────────────────────────────────────────
  * Staff-room laptops are shared. One Tap's whole value is remembering who used
  * the machine last, which is exactly the wrong behaviour for a system where a
- * GPK's scope decides whose plans they can see — "it thought I was the previous
+ * GPK's scope decides whose plans they can see - "it thought I was the previous
  * teacher" is a failure this app cannot afford. The user always picks.
  *
  * Renders nothing at all when Google is not configured, which is both the
@@ -81,7 +81,7 @@ export function GoogleSignIn({ onError }: { onError: (message: string) => void }
 
   React.useEffect(() => {
     // Both conditions, not just the client id: accounts live in `erph.user`, so
-    // in local mode a rendered button would POST to a route that answers 503 —
+    // in local mode a rendered button would POST to a route that answers 503 -
     // a failure the teacher cannot act on, on a page that looked ready.
     if (!googleAuthConfigured || !supabaseConfigured) return;
 
@@ -93,7 +93,7 @@ export function GoogleSignIn({ onError }: { onError: (message: string) => void }
 
         window.google.accounts.id.initialize({
           client_id: googleClientId,
-          // Always ask who is signing in — see the note above about shared
+          // Always ask who is signing in - see the note above about shared
           // machines and One Tap.
           auto_select: false,
           prompt: "select_account",
@@ -124,7 +124,7 @@ export function GoogleSignIn({ onError }: { onError: (message: string) => void }
                 }
                 // Full navigation: the (app) layout reads the cookie
                 // server-side, so the shell has to be rendered by the server.
-                // `homeFor` rather than a local copy — the login card already
+                // `homeFor` rather than a local copy - the login card already
                 // uses it, and two implementations of "where does this role
                 // land" is how a role ends up bouncing between two screens.
                 window.location.assign(homeFor(body?.role));
@@ -144,7 +144,7 @@ export function GoogleSignIn({ onError }: { onError: (message: string) => void }
         setReady(true);
       })
       .catch(() => {
-        // Google unreachable — which in a school means the network, not the
+        // Google unreachable - which in a school means the network, not the
         // app. Password login is still there, so this is a note, not a fault.
         onError("Log masuk Google tidak tersedia. Gunakan kata laluan.");
       });

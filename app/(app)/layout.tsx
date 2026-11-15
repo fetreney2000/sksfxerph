@@ -10,11 +10,11 @@ import { resolveSchool } from "@/lib/server/school";
  *
  * Supabase Auth and its `proxy.ts` session refresh are gone: this layout reads
  * the signed cookie and resolves the user server-side, on every navigation. A
- * missing/expired/revoked session bounces to /login — including the case where
+ * missing/expired/revoked session bounces to /login - including the case where
  * the password was changed after the cookie was minted, which is why
  * `resolveUser` compares `iat` against `password_changed_at`.
  *
- * It resolves the school here too — name, crest, motto and school year — for
+ * It resolves the school here too - name, crest, motto and school year - for
  * the same reason it resolves the user: one server-side read the whole shell
  * then agrees on, so the sidebar, the breadcrumb and the printed plan cannot
  * show three different schools. The client adopts it through `useSchool()` and

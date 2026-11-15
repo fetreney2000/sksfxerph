@@ -33,7 +33,7 @@ const EMPTY_WEEK_COUNTS: WeekCounts = {
 
 /**
  * Everything the dashboard and archive need from IndexedDB, in one live query.
- * `useLiveQuery` re-renders on any matching write — this is how the editor's
+ * `useLiveQuery` re-renders on any matching write - this is how the editor's
  * save shows up in the dashboard without any global store.
  */
 export function useWeek(): WeekSummary {
@@ -47,7 +47,7 @@ export function useWeek(): WeekSummary {
   const owner = ownerId();
   // Inside the hook rather than the module constant `WEEK` used to be: that was
   // evaluated when the bundle loaded, before the school's calendar had been
-  // fetched, so it could only ever hold the term-start grid's answer — and a
+  // fetched, so it could only ever hold the term-start grid's answer - and a
   // Dexie query keyed on an unchanging value could not re-run once it had.
   const weekNo = useCurrentWeek();
 
@@ -59,7 +59,7 @@ export function useWeek(): WeekSummary {
     };
   }, [owner, session, weekNo]);
 
-  // `summariseWeek` owns the definitions — approved, waiting, action and the
+  // `summariseWeek` owns the definitions - approved, waiting, action and the
   // punctuality denominator all come from the same pass over the same rows.
   const counts = summary ?? EMPTY_WEEK_COUNTS;
 

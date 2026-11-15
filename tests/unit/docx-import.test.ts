@@ -6,7 +6,7 @@ import { parseDocumentXml, parseDocx } from "@/lib/import/docx";
 /**
  * Importing an existing .docx.
  *
- * The parser is heuristic on purpose — Word documents disagree about labels —
+ * The parser is heuristic on purpose - Word documents disagree about labels -
  * so what is asserted here is that the school's own form reads correctly and
  * that a file it cannot read says so. Getting a field wrong costs the teacher
  * a correction; throwing on a file they chose would cost them the feature.
@@ -14,8 +14,8 @@ import { parseDocumentXml, parseDocx } from "@/lib/import/docx";
 const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
 
 /**
- * A paragraph. Word always wraps text in `<w:t>` — even a single word, and
- * even when the run is the whole paragraph — so a bare text node here would
+ * A paragraph. Word always wraps text in `<w:t>` - even a single word, and
+ * even when the run is the whole paragraph - so a bare text node here would
  * be a fixture that no real document produces.
  */
 const para = (...parts: string[]) =>
@@ -54,7 +54,7 @@ const SCHOOL_FORM = doc(
   ),
 );
 
-describe("parseDocumentXml — the school's form", () => {
+describe("parseDocumentXml - the school's form", () => {
   it("reads every field the form carries", () => {
     const { payload } = parseDocumentXml(SCHOOL_FORM);
     expect(payload.standard_kandungan).toBe("");
@@ -68,7 +68,7 @@ describe("parseDocumentXml — the school's form", () => {
 
   it("splits the activity list on paragraphs, not on the cell", () => {
     // Reading the cell as one string would collapse five activities into one
-    // very long line — the difference the teacher would notice first.
+    // very long line - the difference the teacher would notice first.
     const { payload } = parseDocumentXml(SCHOOL_FORM);
     expect(payload.aktiviti.map((a) => a.nama)).toEqual([
       "Minggu Pengoperasian Sekolah",
@@ -128,7 +128,7 @@ describe("parseDocumentXml — the school's form", () => {
   });
 });
 
-describe("parseDocx — the zip around it", () => {
+describe("parseDocx - the zip around it", () => {
   const asFile = (xml: string) =>
     new File([zipSync({ "word/document.xml": strToU8(xml) })], "rph.docx");
 

@@ -29,7 +29,7 @@ export function UserProvider({
 }) {
   // Whose plans this browser is holding, for every Dexie query in the app.
   // Set here because this is the first place the client knows which account
-  // signed in — and it runs before the shell's own effect, the sync pull in
+  // signed in - and it runs before the shell's own effect, the sync pull in
   // `Providers`, so nothing is ever pulled under the wrong name.
   React.useEffect(() => {
     setOwnerId(user.id);
@@ -42,7 +42,7 @@ export function UserProvider({
 export function useUser(): ShellUser {
   const ctx = React.useContext(UserContext);
   if (!ctx) {
-    // Rendered outside the provider would mean the layout gate was bypassed —
+    // Rendered outside the provider would mean the layout gate was bypassed -
     // fall back rather than crash the tree.
     return { id: "", fullName: "", role: "guru_biasa" };
   }
@@ -60,7 +60,7 @@ export function initialsOf(fullName: string): string {
   const first = parts[0] ?? "";
   const second = parts[1] ?? "";
   // No `!`: an index one past the end is `undefined`, and the single-name
-  // branch above already returned — but the type does not know that, and a
+  // branch above already returned - but the type does not know that, and a
   // crash in an avatar is not how to learn the string was short.
   if (!second) return first.slice(0, 2).toUpperCase();
   return `${first[0] ?? ""}${second[0] ?? ""}`.toUpperCase();

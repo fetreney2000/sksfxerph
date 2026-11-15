@@ -27,11 +27,11 @@ import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import type { Curriculum } from "@/lib/types";
 
 /**
- * Tab 3 — subjects.
+ * Tab 3 - subjects.
  *
  * The switch is `is_active`, never a delete: `rph_document.subject_code` and
  * `dskp_standard.subject_code` both reference `erph.subject`, so removing a row
- * would take every plan already written against it — and with it a statutory
+ * would take every plan already written against it - and with it a statutory
  * record of teaching. Turning a subject off instead stops the editor offering
  * it to teachers from that moment on, which is the actual need ("this school
  * does not teach Bahasa Inggeris this year") without destroying anything.
@@ -69,7 +69,7 @@ export function SubjectsTab() {
           <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Mata pelajaran</h2>
           <p className="text-[12.5px] text-ink-3">
             Mata pelajaran yang ditawarkan kepada guru. Mematikan satu item menyembunyikannya
-            daripada penyunting — rancangan sedia ada tidak terjejas.
+            daripada penyunting - rancangan sedia ada tidak terjejas.
           </p>
         </div>
         <Button className="ml-auto" size="sm" disabled={busy} onClick={() => setCreating(true)}>
@@ -256,8 +256,8 @@ function SubjectDialog({
  * Correct a subject that already exists.
  *
  * Name and curriculum only. The code is shown because it is what the subject is
- * filed under — on every plan, every DSKP standard and every teaching
- * assignment — and left read-only for exactly that reason: renaming one would
+ * filed under - on every plan, every DSKP standard and every teaching
+ * assignment - and left read-only for exactly that reason: renaming one would
  * leave all of them pointing at a code that no longer exists.
  */
 function EditSubjectDialog({
@@ -318,7 +318,7 @@ function EditSubjectDialog({
               aria-describedby="subject-code-hint"
             />
             <p id="subject-code-hint" className="mt-1.5 text-[11.5px] text-ink-4">
-              Kod tidak boleh ditukar — setiap rancangan yang sudah ditulis merujuk kepadanya.
+              Kod tidak boleh ditukar - setiap rancangan yang sudah ditulis merujuk kepadanya.
             </p>
           </div>
           <div>

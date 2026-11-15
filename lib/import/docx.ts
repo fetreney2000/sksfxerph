@@ -6,8 +6,8 @@ import { normalisePayload, type RphPayload } from "@/lib/schemas/rph";
  *
  * ## What this is, and what it is not
  *
- * A .docx is a zip holding OOXML. The layout the school uses — a table of
- * label-then-value cells — is exactly the structure that survives in
+ * A .docx is a zip holding OOXML. The layout the school uses - a table of
+ * label-then-value cells - is exactly the structure that survives in
  * `word/document.xml`, so the labels can be matched and the values taken
  * without a rendering engine. `mammoth` would have been the usual choice, but
  * it pulls in `sprintf-js`, which carries an advisory with no non-breaking
@@ -20,7 +20,7 @@ import { normalisePayload, type RphPayload } from "@/lib/schemas/rph";
  * half of it right still saves them the half they would have retyped, and
  * getting all of it wrong costs them nothing but a glance.
  *
- * A file that cannot be read at all throws — "this is not a .docx" is a fact
+ * A file that cannot be read at all throws - "this is not a .docx" is a fact
  * about the file, not about the teacher, and they need to be told which.
  */
 export interface ImportedRph {
@@ -108,7 +108,7 @@ function textOf(el: Element): string {
  * Each paragraph in a cell, separately.
  *
  * The Aktiviti PdPC cell holds a list, one entry per paragraph. Reading the
- * cell as a single string would collapse that list into one line — which is
+ * cell as a single string would collapse that list into one line - which is
  * the difference between five activities and one very long one.
  */
 function linesOf(el: Element): string[] {
@@ -126,7 +126,7 @@ const norm = (s: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-/** "7:20 am", "07.20", "1240" — the ways a school writes a lesson time. */
+/** "7:20 am", "07.20", "1240" - the ways a school writes a lesson time. */
 function asTime(raw: string): string | undefined {
   const m = raw.replace(/\./g, ":").match(/(\d{1,2})\s*[:h]?\s*(\d{2})?\s*(am|pm|pg|mt)?/i);
   if (!m) return undefined;
@@ -141,8 +141,8 @@ function asTime(raw: string): string | undefined {
 
 /** A list entry indented behind a hyphen on the printed form. */
 function asActivity(line: string): { nama: string; sub: boolean } | null {
-  const sub = /^[-–—•*]\s*/.test(line);
-  const nama = line.replace(/^[-–—•*]\s*/, "").trim();
+  const sub = /^[-–\u2014•*]\s*/.test(line);
+  const nama = line.replace(/^[-–\u2014•*]\s*/, "").trim();
   return nama ? { nama, sub } : null;
 }
 
@@ -215,7 +215,7 @@ export function parseDocumentXml(xml: string): ImportedRph {
   if (mula) imported.slotTime = mula;
   if (tamat) imported.slotTimeEnd = tamat;
 
-  // A document with no table at all — some schools type the form freehand.
+  // A document with no table at all - some schools type the form freehand.
   // "Label: value" per paragraph is a weak signal, but a teacher who uploaded
   // the wrong file should see the fields empty rather than an error that says
   // nothing about why.

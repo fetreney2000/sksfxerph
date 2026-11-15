@@ -7,16 +7,16 @@ import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
 
 /**
- * GET /api/pantau/teachers — who has and has not submitted, per teacher.
+ * GET /api/pantau/teachers - who has and has not submitted, per teacher.
  *
- * The one place this app names an individual, so it is gated on `pantau` — as
+ * The one place this app names an individual, so it is gated on `pantau` - as
  * `/api/stats` is now too. A row here says *this* teacher has not submitted,
  * which the school's counts never did; the counts came to be gated for the
  * opposite reason: a Guru Biasa has nothing to act on in them.
  *
  * A GPK sees only their supervised teachers and a Guru Besar the whole school,
  * and that is enforced by `erph.pantau_teachers` rather than here. This handler
- * holds the secret key, so nothing is left to RLS — and the RPC is called with
+ * holds the secret key, so nothing is left to RLS - and the RPC is called with
  * the caller's own id attached, because `may_supervise` reads `erph.actor()`
  * and the service key has no actor: without it every row would come back empty
  * and look like a school with no teachers.
@@ -33,7 +33,7 @@ export interface TeacherRow {
   /**
    * Of the plans this teacher has had sent back, and how many are approved
    * now. The pair separates a teacher who acts on feedback from one who does
-   * not — a count of who is *currently* returned cannot, because a teacher who
+   * not - a count of who is *currently* returned cannot, because a teacher who
    * fixes everything and one who ignores every return look identical once the
    * first is caught up.
    */
@@ -41,7 +41,7 @@ export interface TeacherRow {
   fixedTotal: number;
   lastReviewedAt: string | null;
   classes: string | null;
-  /** The teacher's RPT links for the session — Drive only, view-only. */
+  /** The teacher's RPT links for the session - Drive only, view-only. */
   rptLinks: { title: string; url: string }[];
 }
 
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { data, error } = await adminDb(gate.user.id).rpc("pantau_teachers", {
     p_school: schoolId,
     p_session: session,
-    // The range the page's filter chose, not always the current week — the
+    // The range the page's filter chose, not always the current week - the
     // roster and the cards above it have to describe the same weeks, or a
     // supervisor reads a total beside a table that disagrees with it.
     p_first_week: range.first,
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const rows = (data ?? []) as unknown as RpcRow[];
 
   // The teachers' RPT links for this session, keyed by owner. Queried against
-  // the already-scoped row set above — never the whole school — so a GPK sees
+  // the already-scoped row set above - never the whole school - so a GPK sees
   // links only for their own supervised teachers, exactly like the plans. No
   // RPC change needed: `pantau_teachers` owns the scope, this only decorates it.
   const ids = rows.map((r) => r.user_id);

@@ -20,10 +20,10 @@ import { type ClassRow, createClass, listAdminClasses, setClass } from "@/lib/cl
 import { useAdminSave } from "@/lib/hooks/use-admin-save";
 
 /**
- * Tab 2 — classes.
+ * Tab 2 - classes.
  *
  * This is the list the editor reads. Before it existed the picker served the
- * local demo fixtures in *every* mode, and their ids (`c-5a`) are not UUIDs —
+ * local demo fixtures in *every* mode, and their ids (`c-5a`) are not UUIDs -
  * `rph_document.class_ids` holds them, and `sync_rph` validates every element
  * against the caller's school, so a plan built against a fixture was rejected
  * on every flush with "kelas bukan dalam sekolah/sesi anda". On screen that
@@ -33,7 +33,7 @@ import { useAdminSave } from "@/lib/hooks/use-admin-save";
  *
  * Archiving rather than deleting: `rph_document.class_ids` has no FK to the
  * class table (an array cannot carry one), so a class with plans behind it is
- * not removed by the database either — and would not be right to remove, since
+ * not removed by the database either - and would not be right to remove, since
  * the plan is a record. `doc_count` is shown for exactly that reason: it turns
  * "archive this class" from a guess into a decision.
  */
@@ -52,7 +52,7 @@ export function ClassesTab() {
 
   // A→Z by the class name. The endpoint pushes the archived ones down, which
   // read as a deliberate order under a header row and reads as a shuffle in a
-  // grid of cards — the badge on each card already says which are archived.
+  // grid of cards - the badge on each card already says which are archived.
   const items = [...(classes.data?.items ?? [])].sort(byName((c) => c.nama));
   const session = classes.data?.session ?? "";
 
@@ -63,7 +63,7 @@ export function ClassesTab() {
         <div className="min-w-0">
           <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Kelas</h2>
           <p className="text-[12.5px] text-ink-3">
-            Kelas yang tersedia untuk sesi {session || "semasa"} — inilah yang dipaparkan dalam
+            Kelas yang tersedia untuk sesi {session || "semasa"} - inilah yang dipaparkan dalam
             penyunting. Kelas yang diarkibkan tidak lagi ditawarkan, tetapi rancangan sedia ada
             kekal.
           </p>
@@ -92,7 +92,7 @@ export function ClassesTab() {
               key={c.id}
               title={c.nama}
               subtitle={
-                c.tahun ? `Tahun ${c.tahun}` : c.tingkatan ? `Tingkatan ${c.tingkatan}` : "—"
+                c.tahun ? `Tahun ${c.tahun}` : c.tingkatan ? `Tingkatan ${c.tingkatan}` : "-"
               }
               badge={
                 <Badge variant={c.is_active ? "success" : "neutral"}>
@@ -176,7 +176,7 @@ function ClassDialog({
   const [tahun, setTahun] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
-  // Adopt the row's values only when the dialog changes identity — reading them
+  // Adopt the row's values only when the dialog changes identity - reading them
   // on every render would fight the person typing into the field.
   React.useEffect(() => {
     if (!state) return;

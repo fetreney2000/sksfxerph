@@ -8,12 +8,12 @@ import type { Curriculum, Jawatan, MemberRole } from "@/lib/types";
  * Kept in one place because every one of them does the same three things and
  * gets them wrong in the same way when they are inlined: it must send the
  * session cookie, it must turn a non-2xx into a *Malay* message a school
- * administrator can act on (the server already returns one — the job here is
+ * administrator can act on (the server already returns one - the job here is
  * not to swallow it), and it must send the user to /login when the cookie has
  * expired rather than rendering an empty table that looks like "no accounts".
  *
- * Every endpoint under `/api/admin` is gated twice — `requireAdministrator` in
- * the route, `has_role(..., 'pentadbir')` inside the function — so a failure
+ * Every endpoint under `/api/admin` is gated twice - `requireAdministrator` in
+ * the route, `has_role(..., 'pentadbir')` inside the function - so a failure
  * here is rarely authorization. It is almost always the message worth showing.
  */
 
@@ -52,7 +52,7 @@ export interface Member {
   /**
    * The office this person holds, printed on the cover sheet's JAWATAN row.
    *
-   * `null` is a real state — "nobody has set this yet" — and the picker shows
+   * `null` is a real state - "nobody has set this yet" - and the picker shows
    * it as "belum ditetapkan" rather than pretending a value exists.
    */
   jawatan: Jawatan | null;
@@ -87,7 +87,7 @@ export const listMembers = () => request<{ items: Member[] }>("/api/admin/accoun
 export const createAccount = (body: NewAccount) =>
   request<{ ok: boolean; userId: string }>("/api/admin/accounts", json(body));
 
-/** Role + active flag together — `admin_set_member` writes both or neither. */
+/** Role + active flag together - `admin_set_member` writes both or neither. */
 export const setMember = (userId: string, role: MemberRole, isActive: boolean) =>
   request<{ ok: boolean }>("/api/admin/accounts", patch({ userId, role, isActive }));
 
@@ -102,7 +102,7 @@ export const setJawatan = (userId: string, jawatan: Jawatan | null) =>
 
 /**
  * The name printed on every RPH this person writes, and the address Google
- * sign-in links to on a first visit. Sent together — a name without the
+ * sign-in links to on a first visit. Sent together - a name without the
  * address it corrects is half an edit, and the server refuses one without the
  * other for exactly that reason.
  */
@@ -179,7 +179,7 @@ export const editSubject = (body: { code: string; nama: string; curriculum: Curr
 /* ── Settings ─────────────────────────────────────────────────────────────── */
 
 /**
- * The school's identity — what `/pentadbiran` edits and what the login screen,
+ * The school's identity - what `/pentadbiran` edits and what the login screen,
  * sidebar, breadcrumb and printed RPH then show everywhere.
  *
  * `PATCH` takes a `FormData`, not JSON, because the crest rides along as a file.
@@ -223,7 +223,7 @@ export interface SchoolSetting {
   submit_time: string;
   require_complete: boolean;
   /**
-   * How many RPH one teacher owes in a week — five for a school that runs
+   * How many RPH one teacher owes in a week - five for a school that runs
    * Monday to Friday. This is what "pematuhan sekolah" divides by, so it is
    * the school's rule rather than a constant in the code.
    */
@@ -251,7 +251,7 @@ export const setSettings = (body: {
 
 /* ── Calendar ─────────────────────────────────────────────────────────────── */
 
-/** One `academic_calendar` row — a week number, the Monday it belongs to. */
+/** One `academic_calendar` row - a week number, the Monday it belongs to. */
 export interface CalendarRow {
   session: string;
   week_no: number;
@@ -264,7 +264,7 @@ export interface CalendarRow {
  * `CalendarRow`s as the calendar store wants them.
  *
  * The row is the table's shape and the anchor is `lib/config`'s, and the
- * difference matters in exactly three places — the boot fetch, this tab's own
+ * difference matters in exactly three places - the boot fetch, this tab's own
  * refresh, and the cascade preview. Doing it in one place means no caller can
  * forget which field is called what.
  */
@@ -279,7 +279,7 @@ export const toAnchors = (rows: readonly CalendarRow[]): CalendarAnchor[] =>
  * The declared weeks, for whoever is signed in.
  *
  * Every screen needs these once a calendar override exists, so this is the one
- * calendar call that is not under `/api/admin` — the tab that *edits* them
+ * calendar call that is not under `/api/admin` - the tab that *edits* them
  * uses `getAdminCalendar` below.
  */
 export const getCalendar = async (): Promise<CalendarAnchor[]> => {

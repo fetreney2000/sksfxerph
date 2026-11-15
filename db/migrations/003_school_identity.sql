@@ -1,9 +1,9 @@
 -- ============================================================================
--- eRPH · MIGRATION 003 — the school's own identity
+-- eRPH · MIGRATION 003 - the school's own identity
 -- ============================================================================
 -- Run AFTER 001a/001b and 002. Safe to run more than once.
 --
---   · erph.school gains `motto` and `logo_url` — what the administrator edits
+--   · erph.school gains `motto` and `logo_url` - what the administrator edits
 --     from /pentadbiran and what the login screen, sidebar and printed RPH
 --     then show everywhere.
 --   · erph.admin_set_school writes those *and* `kod_sekolah`, which became

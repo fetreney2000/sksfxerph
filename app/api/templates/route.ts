@@ -9,17 +9,17 @@ import { toClientError } from "@/lib/server/http/errors";
 import type { Curriculum } from "@/lib/types";
 
 /**
- * GET / POST / PATCH / DELETE /api/templates — the school's template library.
+ * GET / POST / PATCH / DELETE /api/templates - the school's template library.
  *
  * Reads go through `requireDbUser` (any member) and writes through
  * `requireUser` + an explicit ownership check, because every handler holds the
- * secret key and therefore **bypasses RLS** — `template_update` on
+ * secret key and therefore **bypasses RLS** - `template_update` on
  * `erph.rph_template` would otherwise be decorative. The rule it encodes is
  * reproduced here: you may edit what you own, and the Administrator may edit
  * anything in their school, since curating the library is their job.
  *
  * `owner_id` is always the caller. Allowing one member to file a template under
- * another's name would make `template_update` — which keys on ownership — the
+ * another's name would make `template_update` - which keys on ownership - the
  * only thing standing between them and each other's work.
  */
 
@@ -61,7 +61,7 @@ const updateSchema = z.object({
   /**
    * The plan inside the template, when it is being changed.
    *
-   * It was absent, so "Sunting" could only ever rename — a template's whole
+   * It was absent, so "Sunting" could only ever rename - a template's whole
    * value is the plan it starts from, and a way in that could not touch it
    * meant a typo in one was permanent. Omitted, the payload is left exactly as
    * it is, so a rename still costs nothing and cannot blank the plan.

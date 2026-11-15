@@ -30,7 +30,7 @@ export const CURRICULUMS: { value: Curriculum; label: string }[] = [
   { value: "PRASEKOLAH", label: "Prasekolah" },
 ];
 
-/** Longest values `erph.rph_template` accepts — and the limits the API enforces. */
+/** Longest values `erph.rph_template` accepts - and the limits the API enforces. */
 export const TITLE_MAX = 160;
 export const TAHAP_MAX = 40;
 

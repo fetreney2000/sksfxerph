@@ -1,7 +1,7 @@
 """Generate db/seed.sql from scripts/seed-hashes.json.
 
 Kept as a generator rather than hand-written SQL because the scrypt hashes are
-random per run — regenerating means the documented plaintext passwords and the
+random per run - regenerating means the documented plaintext passwords and the
 stored hashes can never drift apart silently.
 
     node scripts/gen-seed-hashes.js   # refresh seed-hashes.json
@@ -48,9 +48,9 @@ SQL = f"""-- ===================================================================
 --   · 1 school            + its school_setting row
 --   · 1 account per member_role  (guru_biasa / gpk / guru_besar / pentadbir,
 --     plus an inactive `system` row used as a stable actor id for automated
---     rows — it cannot log in: is_active = false)
+--     rows - it cannot log in: is_active = false)
 --   · a school_member row per account, mirroring the account role
---   · 3 subjects + 3 classes  — the FK targets a plan cannot be created without
+--   · 3 subjects + 3 classes  - the FK targets a plan cannot be created without
 --   · 1 submitted lesson plan so the reviewer screens have something to grade
 --
 -- Idempotent: every statement uses ON CONFLICT DO NOTHING or a WHERE NOT
@@ -76,7 +76,7 @@ insert into erph.subject (code, nama, curriculum) values
   ('SAIN', 'Sains',         'KSSR')
 on conflict (code) do nothing;
 
--- ── 3 · classes (rph_document.class_ids is NOT NULL — no class, no plan) ─────
+-- ── 3 · classes (rph_document.class_ids is NOT NULL - no class, no plan) ─────
 insert into erph.class (school_id, nama, tahun, session)
 select s.id, v.nama, v.tahun, '2026/2027'
 from erph.school s

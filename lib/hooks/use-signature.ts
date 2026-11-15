@@ -11,8 +11,8 @@ import { payloadHash, verifySignature } from "@/lib/signature";
  * the payload on screen rather than trusting a `verified: true` someone else
  * computed. Two independent checks, because they answer different questions:
  *
- *   · does the signature actually cover this envelope? — cryptographic
- *   · does the envelope's hash match the plan being displayed? — content
+ *   · does the signature actually cover this envelope? - cryptographic
+ *   · does the envelope's hash match the plan being displayed? - content
  *
  * A seal can pass the first and fail the second: a genuine signature over an
  * older version of a plan that has since been edited back. Showing that as
@@ -40,7 +40,7 @@ export function useSignature(
     },
     enabled: Boolean(documentId) && supabaseConfigured,
     // Signatures are append-only and never rewritten, so nothing can invalidate
-    // this once it has resolved — refetching would only re-run the crypto.
+    // this once it has resolved - refetching would only re-run the crypto.
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
@@ -53,7 +53,7 @@ export function useSignature(
       setState("none");
       return;
     }
-    // Without the payload there is nothing to compare the envelope against —
+    // Without the payload there is nothing to compare the envelope against -
     // render it as "still checking" rather than claiming validity we cannot
     // establish.
     if (!payload) {

@@ -1,7 +1,7 @@
 /**
  * Malay-first copy.
  *
- * One locale, no i18n framework (erph-frontend-stack.md §9 — an i18n library is
+ * One locale, no i18n framework (erph-frontend-stack.md §9 - an i18n library is
  * dead weight when there is exactly one language). Kept as a typed object so a
  * missing key is a compile error, not a blank label in front of a teacher.
  *
@@ -21,7 +21,7 @@ export const ms = {
   },
 
   /**
-   * How each `erph.jawatan` is written on paper — the JAWATAN row of the
+   * How each `erph.jawatan` is written on paper - the JAWATAN row of the
    * weekly cover sheet and the accounts picker. Keyed by the enum so the
    * printed office and the selected one can never drift apart.
    */
@@ -51,7 +51,7 @@ export const ms = {
 
   dashboard: {
     /**
-     * Which greeting the hour calls for — paired with `greetingPart()` in
+     * Which greeting the hour calls for - paired with `greetingPart()` in
      * lib/date.ts, which reads the school's clock rather than the browser's.
      * A single fixed greeting said "Selamat pagi" to a teacher opening the app
      * at nine at night.
@@ -73,7 +73,7 @@ export const ms = {
     reuseLast: "Guna semula minggu lepas",
     shortcuts: "Pintasan",
     activity: "Aktiviti semakan terkini",
-    noPrint: "Tiada keperluan mencetak — dokumen hanya perlu disediakan apabila diminta.",
+    noPrint: "Tiada keperluan mencetak - dokumen hanya perlu disediakan apabila diminta.",
   },
 
   status: {
@@ -128,7 +128,7 @@ export const ms = {
     standardPembelajaran: "Standard Pembelajaran",
     objective: "Objektif pembelajaran",
     // The school's form calls the section "Aktiviti PdPC" and its success
-    // criterion "Kriteria Kejayaan" — names a teacher recognises from the
+    // criterion "Kriteria Kejayaan" - names a teacher recognises from the
     // paper they have been filling in for years.
     activities: "Aktiviti PdPC",
     successCriteria: "Kriteria Kejayaan",
@@ -166,7 +166,7 @@ export const ms = {
 
   review: {
     queue: "Giliran semakan",
-    // One stage: a GPK or the Guru Besar either approves — signed — or returns.
+    // One stage: a GPK or the Guru Besar either approves - signed - or returns.
     // `forward`, `forwardHint`, `gpkNote` and `gbNote` are gone with the hop
     // they described: there is nobody left to send it *to*.
     approve: "Sahkan · Lengkap (1)",
@@ -176,7 +176,7 @@ export const ms = {
     returnShort: "Kembalikan",
     tapHint: "Ketik RPH untuk membuka paparan penuh.",
     comment: "Maklum balas sulit",
-    commentHint: "wajib sebelum mengembalikan — hanya guru boleh melihat",
+    commentHint: "wajib sebelum mengembalikan - hanya guru boleh melihat",
     returnReasonRequired:
       "Tulis sebab atau pilih daripada senarai semak sebelum mengembalikan.",
     approvedThisSession: "Disahkan sesi ini",
@@ -187,17 +187,17 @@ export const ms = {
     keyboardHint: "navigasi",
     grade0: "kembalikan",
     signedNote:
-      "Mengesahkan bermakna menandatangani rancangan ini dengan kunci penyemak sendiri — nama, versi dan masa keputusan tercatat bersamanya, dan guru boleh mengesahkannya sendiri.",
+      "Mengesahkan bermakna menandatangani rancangan ini dengan kunci penyemak sendiri - nama, versi dan masa keputusan tercatat bersamanya, dan guru boleh mengesahkannya sendiri.",
     // ── Minggu lampau (week browser) ─────────────────────────────────────────
     // The week picker beside the queue: a reviewer reaching a backdated RPH
     // the teacher never submitted, or reading a past week whole.
     weekLabel: "Semak minggu lampau",
     weekCurrent: "Minggu semasa",
     weekSuffix: "Minggu",
-    browseHint: "Memaparkan semua RPH minggu ini — draf, dihantar dan yang sudah diputuskan.",
+    browseHint: "Memaparkan semua RPH minggu ini - draf, dihantar dan yang sudah diputuskan.",
     draftNote:
       "Draf belum dihantar guru. Sahkan di sini untuk menghantarnya bagi pihak guru terlebih dahulu, kemudian buat keputusan.",
-    decidedNote: "RPH ini sudah diputuskan — paparan sahaja.",
+    decidedNote: "RPH ini sudah diputuskan - paparan sahaja.",
     submitFirst: "Dihantar bagi pihak guru",
   },
 

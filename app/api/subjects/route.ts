@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireDbUser } from "@/lib/server/auth/guard";
 
 /**
- * GET /api/subjects — the subjects the editor may offer.
+ * GET /api/subjects - the subjects the editor may offer.
  *
  * Any signed-in member: this is the teacher's own reference data, the same way
- * `/api/classes` is. Local mode never calls it — `lib/demo/seed.ts` supplies
+ * `/api/classes` is. Local mode never calls it - `lib/demo/seed.ts` supplies
  * three fixtures instead, which is what keeps the offline editor working.
  *
  * `is_active` is the whole point of the filter: an administrator who switches a

@@ -35,8 +35,8 @@ export function currentSession(): string {
 }
 
 /**
- * Adopt a session. Idempotent — called from a layout effect on every navigation
- * — and a malformed value is ignored rather than written, because a bad session
+ * Adopt a session. Idempotent - called from a layout effect on every navigation
+ * - and a malformed value is ignored rather than written, because a bad session
  * would silently empty every screen that filters on it.
  */
 export function setSession(next: string): void {
@@ -45,7 +45,7 @@ export function setSession(next: string): void {
   for (const listener of listeners) listener();
 }
 
-/** Subscribe — the shape `useSyncExternalStore` expects. */
+/** Subscribe - the shape `useSyncExternalStore` expects. */
 export function subscribeSession(listener: () => void): () => void {
   listeners.add(listener);
   return () => {

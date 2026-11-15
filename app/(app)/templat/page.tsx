@@ -24,14 +24,14 @@ import { useSchoolSubjects } from "@/lib/hooks/use-school-data";
 import type { Curriculum } from "@/lib/types";
 
 /**
- * Perpustakaan templat — with create, read, update and delete.
+ * Perpustakaan templat - with create, read, update and delete.
  *
  * Until now the five cards were a hard-coded array, "Guna templat" merely
  * toasted, and the "create" tile actually opened a blank *eRPH*. Every one of
  * those has been replaced by something that works against `erph.rph_template`.
  *
  * **Cipta** and **Sunting** both go to `/templat/baru`, which is the RPH
- * editor — the first without a template behind it, the second with one. A
+ * editor - the first without a template behind it, the second with one. A
  * template's whole value is the plan inside it, so the screen that writes one
  * is the screen that writes a plan, and there is one surface for a template's
  * content rather than a dialog that could only ever rename it. Which of the
@@ -40,7 +40,7 @@ import type { Curriculum } from "@/lib/types";
  * "Guna templat" navigates to `/editor?template=<id>` rather than writing a
  * document: the template's payload is loaded into the unsaved plan, so it can
  * be read and edited before anything exists. That is what makes CRUD here safe
- * — using the wrong template costs a navigation, not a row to clean up.
+ * - using the wrong template costs a navigation, not a row to clean up.
  *
  * Local mode keeps the bundled fixtures (read-only, as with everything else
  * that needs a database): they are what makes the screen demoable offline, and
@@ -60,7 +60,7 @@ interface Template {
   curriculum: Curriculum | null;
   visibility: "private" | "school" | "system";
   ownerId: string | null;
-  /** Fixture with no row behind it — CRUD does not apply. */
+  /** Fixture with no row behind it - CRUD does not apply. */
   local: boolean;
 }
 
@@ -238,7 +238,7 @@ export default function TemplatPage() {
             </button>
           ))}
           {/* Create needs a database to write to, so offering it in local mode
-              only ever ended in a 503 — and now it costs a whole plan written
+              only ever ended in a 503 - and now it costs a whole plan written
               before that happens. */}
           <Button
             size="sm"
@@ -356,7 +356,7 @@ export default function TemplatPage() {
           </DialogHeader>
           <DialogBody>
             <p className="text-[13px] text-ink-3">
-              Rancangan yang pernah dibuat daripada templat ini tidak terjejas — hanya templat
+              Rancangan yang pernah dibuat daripada templat ini tidak terjejas - hanya templat
               itu sendiri dipadam.
             </p>
           </DialogBody>

@@ -8,19 +8,19 @@
  *
  * ── Why localStorage, and what it costs ──────────────────────────────────────
  * It is readable by any script on this origin, exactly like IndexedDB, so this
- * is device-bound storage — not a hardware enclave. What it does *not* do is
+ * is device-bound storage - not a hardware enclave. What it does *not* do is
  * weaken the signature: a stolen key lets an attacker sign as that reviewer
  * from that browser, which is the same exposure their session cookie already
  * carries, and the signature still names the reviewer who made it.
  *
- * The consequence worth stating out loud is that clearing site data — which is
- * the tidy way to wipe a demo account off a shared laptop — removes the key
+ * The consequence worth stating out loud is that clearing site data - which is
+ * the tidy way to wipe a demo account off a shared laptop - removes the key
  * with it. Old signatures still verify, because every row carries its own
  * public key; only *new* signing needs a fresh key, and generating one takes a
  * moment with no ceremony.
  *
  * A second device gets its own key. That is not a flaw so much as the honest
- * consequence of not having a CA issue one key per person — and it means two
+ * consequence of not having a CA issue one key per person - and it means two
  * signatures from the same GPK on different laptops legitimately carry
  * different `kid`s.
  */

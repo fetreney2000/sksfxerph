@@ -14,12 +14,12 @@ interface NotificationRow {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * GET /api/notifications — the server half of the notification feed.
+ * GET /api/notifications - the server half of the notification feed.
  *
  * `sahkan_rph()` and `hantar_balik()` insert rows for the plan's owner
  * (approved / returned). The Dexie mirror only ever holds events that happen
  * *on this device* (sync merges), so without this route a synced-mode teacher
- * would never see "RPH perlu dibaiki" in the bell — the table would have a
+ * would never see "RPH perlu dibaiki" in the bell - the table would have a
  * writer and no reader.
  *
  * Scoped to the caller by `user_id`; other people's notifications are not
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     adminDb(gate.user.id)
       .from("notification")
       // `read_at` and `link_view` were missing. Without read_at the client had
-      // no way to tell a seen row from a new one — the bell's badge counted
+      // no way to tell a seen row from a new one - the bell's badge counted
       // every server notification forever, and "Tanda semua dibaca" touched
       // only the local mirror, leaving the badge exactly where it was.
       .select("id, type, title, body, link_view, read_at, created_at")
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 /**
- * PATCH /api/notifications — mark rows read.
+ * PATCH /api/notifications - mark rows read.
  *
  * Exists because the only writer of `read_at` was the client's Dexie mirror,
  * which cannot reach this table. The bell therefore had no way to dismiss the
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * permanent unread badge, and the button offered to clear it did nothing to
  * the rows that mattered.
  *
- * Scoped to the caller. `read_at` is only ever set, never cleared — a
+ * Scoped to the caller. `read_at` is only ever set, never cleared - a
  * notification that has been read has been read.
  */
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
@@ -91,7 +91,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   let query = adminDb(gate.user.id)
     .from("notification")
     .update({ read_at: new Date().toISOString() })
-    // The scope is the caller's own rows, and only those still unread — so a
+    // The scope is the caller's own rows, and only those still unread - so a
     // repeated request is a no-op rather than a second write.
     .eq("user_id", gate.user.id)
     .is("read_at", null);
@@ -99,7 +99,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (!body.all) {
     const ids = (body.ids ?? []).filter((i) => UUID.test(i));
     // No ids and no `all` marks nothing. That is a no-op, not a mistake worth
-    // a 400 — the caller asked for nothing and got nothing.
+    // a 400 - the caller asked for nothing and got nothing.
     if (ids.length === 0) return NextResponse.json({ ok: true });
     query = query.in("id", ids);
   }

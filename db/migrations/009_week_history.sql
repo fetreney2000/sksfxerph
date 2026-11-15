@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 009 — real weekly figures for /sekolah
+-- eRPH ▸ MIGRATION 009 - real weekly figures for /sekolah
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008. Safe to run more than once.
 --
@@ -10,7 +10,7 @@
 -- second question up.
 --
 -- `school_week_history` counts it instead. Same permission shape as the
--- single-week function — counts and a percentage, never a name — so a Guru
+-- single-week function - counts and a percentage, never a name - so a Guru
 -- Biasa still cannot learn who is behind a figure.
 --
 -- `expected` is active membership *now*, not per week: historical membership
@@ -38,7 +38,7 @@ begin
   -- is to say: a supervisor, or the school's own Administrator.
   --
   -- Both checks were missing here and `is_member` elsewhere, so the school's
-  -- figures were the one screen a Guru Biasa could still see the school on —
+  -- figures were the one screen a Guru Biasa could still see the school on -
   -- the dashboard hid the card while the endpoint served it. Being SECURITY
   -- DEFINER, neither ever consulted the caller's RLS, so the check inside is
   -- the only thing standing between a stranger and a school's year: headcount,

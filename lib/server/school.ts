@@ -6,7 +6,7 @@ import { adminDb } from "@/lib/server/db";
  * The school's identity and school year, read from the database.
  *
  * Public by design: this is called by the `(app)` layout *and* the login page,
- * and the login page is the screen where the crest matters most — it renders
+ * and the login page is the screen where the crest matters most - it renders
  * before anyone has a session. It takes no caller identity and returns one
  * school, which is what this deployment is.
  *
@@ -16,14 +16,14 @@ import { adminDb } from "@/lib/server/db";
  * into the build. That made the school's code a value the administrator could
  * not change: editing it would leave this lookup looking for a code no row had
  * any more, branding would fall back to `lib/config`, and the only cure would
- * be editing `.env` and redeploying — a half-working feature.
+ * be editing `.env` and redeploying - a half-working feature.
  *
  * Everything else in the app already resolves a school by **id**, never by
  * code: `schoolIdFor()` walks `school_member`, `sync_rph` derives it from
  * `school_member` too (its classes are validated against that school), and
  * `rph_document` has a `school_id` uuid with no code column.
  * The code is therefore a label, and this is the last place that ever treated
- * it as a key — so it is now read as the single active school instead.
+ * it as a key - so it is now read as the single active school instead.
  *
  * `lib/config.ts`'s `SCHOOL` and `SESSION` are the fallbacks, not dead code:
  * local mode has no row to read, and a database that has never been edited
@@ -35,7 +35,7 @@ export interface SchoolContext {
   /**
    * The school's uuid.
    *
-   * For the records that have to say *which* school they belong to — the
+   * For the records that have to say *which* school they belong to - the
    * statutory export log, most of all. The brand above is what the paper
    * prints; this is what the database joins on.
    */
@@ -49,7 +49,7 @@ const FALLBACK: SchoolContext = { session: SESSION, school: SCHOOL, id: "" };
  *
  * Deliberately blank rather than the bundled school. A statutory document
  * headed with another school's name, printed on this school's own paper, is
- * worse than an unbranded one — and a blank one is what makes a missing row
+ * worse than an unbranded one - and a blank one is what makes a missing row
  * (or a missing `SUPABASE_SECRET_KEY`, which `adminDb` throws on) findable,
  * instead of quietly rebranding the school to somewhere in Keningau. The
  * session year is left alone: an empty one would stamp every new plan with a
@@ -69,7 +69,7 @@ export async function resolveSchool(): Promise<SchoolContext> {
     const db = adminDb();
 
     // `order by created_at` is not a tie-break for a deployment with two
-    // schools — this app is single-school — but it keeps the choice stable
+    // schools - this app is single-school - but it keeps the choice stable
     // across navigations so branding cannot flicker between rows.
     const { data: school, error } = await db
       .from("school")
@@ -81,7 +81,7 @@ export async function resolveSchool(): Promise<SchoolContext> {
     if (error || !school) {
       console.error(
         "[school] lookup failed:",
-        error?.message ?? "no active school row — add one in Papan Pemuka",
+        error?.message ?? "no active school row - add one in Papan Pemuka",
       );
       return UNKNOWN;
     }

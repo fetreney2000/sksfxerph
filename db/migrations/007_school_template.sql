@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 007 — the school's own RPH template
+-- eRPH ▸ MIGRATION 007 - the school's own RPH template
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006. Safe to run more than once.
 --
@@ -7,14 +7,14 @@
 --
 --   1. `slot_time_end`. The printed form has Masa Mula *and* Masa Tamat, and a
 --      plan that carries only a start time leaves the printed page to invent an
---      end time — which is how a five-hour lesson reaches an approved document.
+--      end time - which is how a five-hour lesson reaches an approved document.
 --      Defaulted to 12:40, the school's own end time, so every existing plan
 --      prints a plausible pair rather than a dash.
 --
 --   2. `rph_completeness` redefined. Kriteria Kejayaan replaces the old
 --      Intervensi/EMK checkpoint: the printed form has a Kriteria Kejayaan row
 --      and no Intervensi or EMK row, so scoring those meant a plan could read
---      100% while missing a field the district will look for — or read less
+--      100% while missing a field the district will look for - or read less
 --      than 100% because a teacher left blank the content nobody prints.
 --
 --      Also: an activity now scores if *any* element carries a `nama`, not if
@@ -96,7 +96,7 @@ begin
     -- rather than raised.
     --
     -- `retryable` is the distinction the client acts on. A rejection the
-    -- server decided on — a class that is not in this school — will be
+    -- server decided on - a class that is not in this school - will be
     -- rejected forever, so the client drops the op and tells the teacher. A
     -- failure the server did not expect may well succeed next time, so the
     -- client keeps the op and tries again, which is only possible because the
@@ -122,7 +122,7 @@ begin
         continue;
       end if;
 
-      -- 2) the classes this op writes to. `class_ids` is the wire format now —
+      -- 2) the classes this op writes to. `class_ids` is the wire format now -
       -- one plan may cover several classes. A lone `class_id` is what the first
       -- release sent, and is still honoured as a one-element set: an installed
       -- PWA keeps running the app shell it precached, and refusing it would
@@ -174,7 +174,7 @@ begin
       --
       -- Which branch resolved the row decides how the class list merges below.
       -- An op that names its own row (by id) is authoritative and the list may
-      -- shrink — that is the editor's "untick a class" doing its job. An op
+      -- shrink - that is the editor's "untick a class" doing its job. An op
       -- resolved by key is an offline duplicate, and its classes union *in*
       -- rather than overwriting, so two devices that split the classes of one
       -- lesson between them lose nothing when they finally reach the server.
@@ -217,7 +217,7 @@ begin
                -- server now says the same: only a draft, or a returned plan the
                -- teacher is fixing, may be rewritten. Without this a client that
                -- bypassed the editor could change the content of a plan sitting
-               -- in a reviewer's queue — and the version would move under the
+               -- in a reviewer's queue - and the version would move under the
                -- signature that reviewer is about to make.
                payload = case when status in ('draft','returned')
                               then v_op->'payload' else payload end,
@@ -256,7 +256,7 @@ begin
         returning version, status into v_ver, v_status;
         exception when unique_violation then
           -- The by-id rewrite claimed a class set that collides with another
-          -- live plan on the same subject, week and date — a teacher unticking
+          -- live plan on the same subject, week and date - a teacher unticking
           -- one class while a second plan still claims another. Refusing would
           -- leave the op retryable and the queue stuck behind it, so instead
           -- the lists union and the teacher resolves the overlap in the editor.
@@ -354,8 +354,8 @@ begin
         'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
         'version', v_ver, 'status', v_status, 'completeness', v_pct));
     exception when others then
-      -- The block is a subtransaction, so everything this op did — the claim on
-      -- its op id included — has been rolled back by the time the handler
+      -- The block is a subtransaction, so everything this op did - the claim on
+      -- its op id included - has been rolled back by the time the handler
       -- runs. The op id is therefore still free and the client can retry the
       -- very same op. Burnt, it would come back as 'duplicate' and the
       -- client's queue would drop it: the teacher's edit, gone, because the

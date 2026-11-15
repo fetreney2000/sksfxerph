@@ -18,16 +18,16 @@ import { useAdminSave } from "@/lib/hooks/use-admin-save";
 import { setSchool as adoptSchool, placeFrom } from "@/lib/school";
 
 /**
- * Tab 5 — the school's own identity: code, name, district/state, motto, crest.
+ * Tab 5 - the school's own identity: code, name, district/state, motto, crest.
  *
  * Everything on this form is what the login screen, sidebar, breadcrumb,
- * the live preview and the printed RPH all read — so the preview on the right
+ * the live preview and the printed RPH all read - so the preview on the right
  * is not decoration. Changing a school's name is the one edit with no undo
  * button in the user's mind: seeing it in place, in the same lockup the app
  * will use, is what makes the change deliberate rather than a leap of faith.
  *
  * The code is editable, which it was not for a while. `school.kod_sekolah` is
- * UNIQUE, so it reads like the field that must stay fixed — but nothing in the
+ * UNIQUE, so it reads like the field that must stay fixed - but nothing in the
  * database references it (`school_id` is the foreign key everywhere) and the
  * one code-keyed lookup, `resolveSchool()`, now reads the active row instead.
  * The lock is removable precisely because nothing else was ever holding on.
@@ -71,13 +71,13 @@ export function SchoolTab() {
 
   // Adopt the stored values once. Re-adopting on every refetch would overwrite
   // what the administrator is in the middle of typing the moment a response
-  // lands — the same rule the settings form follows.
+  // lands - the same rule the settings form follows.
   React.useEffect(() => {
     if (!stored || form !== null) return;
     setForm(toForm(stored));
   }, [stored, form]);
 
-  // A local object URL for a chosen file, revoked when replaced or unmounted —
+  // A local object URL for a chosen file, revoked when replaced or unmounted -
   // otherwise every pick leaks a blob for the life of the tab.
   React.useEffect(() => {
     if (!file) {
@@ -94,7 +94,7 @@ export function SchoolTab() {
 
   const submit = () => {
     const kod = active.kod.trim();
-    // Same pattern, same words as `erph.admin_set_school` and the API schema —
+    // Same pattern, same words as `erph.admin_set_school` and the API schema -
     // so a bad code is answered here without a round trip, rather than after
     // the crest has already been uploaded.
     if (!kod) {
@@ -193,7 +193,7 @@ export function SchoolTab() {
               />
               <p className="mt-1.5 text-[11.5px] text-ink-4">
                 Kod KPM sekolah (cth. <span className="font-mono">BBA4039</span>). Kunci unik
-                bagi rekod sekolah sahaja — tiada rancangan, kelas atau ahli bergantung padanya,
+                bagi rekod sekolah sahaja - tiada rancangan, kelas atau ahli bergantung padanya,
                 jadi mengubahnya tidak mengubah apa-apa yang sudah tersimpan.
               </p>
             </div>

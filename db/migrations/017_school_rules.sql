@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 017 — the school's own rules
+-- eRPH ▸ MIGRATION 017 - the school's own rules
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/016. Safe to run more than once.
 --
@@ -14,7 +14,7 @@
 --   · `sahkan_rph` records a grade, and the grade is a factual claim:
 --     Lampiran 7 grades a plan 1 = lengkap, 0 = tidak lengkap. Recording 1
 --     for a plan that is missing sections puts a false statement into a
---     statutory record — and the school's compliance figures are built from
+--     statutory record - and the school's compliance figures are built from
 --     the grade, so a false grade is a false figure. An approval now needs
 --     the same completeness the school asked for at submission.
 --
@@ -22,12 +22,12 @@
 --     aborted the other twenty-four and took the teacher's work with it. Each
 --     op is now applied inside its own block: a failure is reported for that
 --     op and the rest go through. The block is a subtransaction, so the claim
---     on a failed op's id is rolled back with it — the op id is still free and
+--     on a failed op's id is rolled back with it - the op id is still free and
 --     the client can retry the very same op rather than losing the edit.
 --
 --   · `erph.user` had one UPDATE policy allowing any column of one's own row.
 --     It was harmless only because the whole table is revoked from the API
---     roles at the end of the schema — a single statement, in a 2,300-line
+--     roles at the end of the schema - a single statement, in a 2,300-line
 --     file. The column grant below says which columns are writable, so a
 --     lost revoke cannot let a teacher write their own role.
 --
@@ -52,7 +52,7 @@ begin
   -- NULL-actor guard, matching sync_rph's.
   --
   -- This is load-bearing: `owner_id <> erph.actor()` evaluates to NULL when no
-  -- actor can be resolved, and PL/pgSQL treats NULL in IF as false — so the
+  -- actor can be resolved, and PL/pgSQL treats NULL in IF as false - so the
   -- "Tidak dibenarkan" branch would be skipped and ANY caller (including one with
   -- just the publishable key, for whom actor() is always null) could submit
   -- another teacher's plan. `IS DISTINCT FROM` never yields NULL.
@@ -76,7 +76,7 @@ begin
   -- /pentadbiran → Sesi & tarikh akhir ("Halang penghantaran sehingga
   -- kelengkapan 100%"). It used to be written by `admin_set_setting` and read
   -- by *nothing*: the gate below was hard-coded to 100%, so the switch in the
-  -- console did nothing at all — a setting that looked like a control and was
+  -- console did nothing at all - a setting that looked like a control and was
   -- not one.
   --
   -- `p_force` is the teacher's acknowledged escape hatch, not a bypass: it is
@@ -91,7 +91,7 @@ begin
 
   if v_pct < 100 and v_require and not p_force then
     return jsonb_build_object('ok', false, 'completeness', v_pct,
-      'error', 'RPH belum lengkap — lengkapkan setiap seksyen wajib');
+      'error', 'RPH belum lengkap - lengkapkan setiap seksyen wajib');
   end if;
 
   update erph.rph_document
@@ -156,7 +156,7 @@ begin
   --
   -- So an approval needs the same completeness the school asked for at
   -- submission. A school that has turned the requirement off may still approve
-  -- an incomplete plan — that is its own policy, set by the administrator who
+  -- an incomplete plan - that is its own policy, set by the administrator who
   -- answers for it.
   v_pct := erph.rph_completeness(v_doc.payload);
   select coalesce(
@@ -165,7 +165,7 @@ begin
            true)
     into v_require;
   if v_pct < 100 and v_require then
-    raise exception 'RPH belum lengkap untuk disahkan — kembalikan kepada guru';
+    raise exception 'RPH belum lengkap untuk disahkan - kembalikan kepada guru';
   end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
@@ -216,7 +216,7 @@ begin
     -- rather than raised.
     --
     -- `retryable` is the distinction the client acts on. A rejection the
-    -- server decided on — a class that is not in this school — will be
+    -- server decided on - a class that is not in this school - will be
     -- rejected forever, so the client drops the op and tells the teacher. A
     -- failure the server did not expect may well succeed next time, so the
     -- client keeps the op and tries again, which is only possible because the
@@ -242,7 +242,7 @@ begin
         continue;
       end if;
 
-      -- 2) the classes this op writes to. `class_ids` is the wire format now —
+      -- 2) the classes this op writes to. `class_ids` is the wire format now -
       -- one plan may cover several classes. A lone `class_id` is what the first
       -- release sent, and is still honoured as a one-element set: an installed
       -- PWA keeps running the app shell it precached, and refusing it would
@@ -294,7 +294,7 @@ begin
       --
       -- Which branch resolved the row decides how the class list merges below.
       -- An op that names its own row (by id) is authoritative and the list may
-      -- shrink — that is the editor's "untick a class" doing its job. An op
+      -- shrink - that is the editor's "untick a class" doing its job. An op
       -- resolved by key is an offline duplicate, and its classes union *in*
       -- rather than overwriting, so two devices that split the classes of one
       -- lesson between them lose nothing when they finally reach the server.
@@ -337,7 +337,7 @@ begin
                -- server now says the same: only a draft, or a returned plan the
                -- teacher is fixing, may be rewritten. Without this a client that
                -- bypassed the editor could change the content of a plan sitting
-               -- in a reviewer's queue — and the version would move under the
+               -- in a reviewer's queue - and the version would move under the
                -- signature that reviewer is about to make.
                payload = case when status in ('draft','returned')
                               then v_op->'payload' else payload end,
@@ -376,7 +376,7 @@ begin
         returning version, status into v_ver, v_status;
         exception when unique_violation then
           -- The by-id rewrite claimed a class set that collides with another
-          -- live plan on the same subject, week and date — a teacher unticking
+          -- live plan on the same subject, week and date - a teacher unticking
           -- one class while a second plan still claims another. Refusing would
           -- leave the op retryable and the queue stuck behind it, so instead
           -- the lists union and the teacher resolves the overlap in the editor.
@@ -474,8 +474,8 @@ begin
         'op_id', v_op_id, 'result', 'applied', 'id', v_doc_id,
         'version', v_ver, 'status', v_status, 'completeness', v_pct));
     exception when others then
-      -- The block is a subtransaction, so everything this op did — the claim on
-      -- its op id included — has been rolled back by the time the handler
+      -- The block is a subtransaction, so everything this op did - the claim on
+      -- its op id included - has been rolled back by the time the handler
       -- runs. The op id is therefore still free and the client can retry the
       -- very same op. Burnt, it would come back as 'duplicate' and the
       -- client's queue would drop it: the teacher's edit, gone, because the

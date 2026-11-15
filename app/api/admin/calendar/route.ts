@@ -6,7 +6,7 @@ import { invalidateCalendarCache } from "@/lib/server/calendar";
 import { toClientError } from "@/lib/server/http/errors";
 
 /**
- * GET / PATCH / DELETE /api/admin/calendar — which week a date range is.
+ * GET / PATCH / DELETE /api/admin/calendar - which week a date range is.
  *
  * Reading is the ordinary member-scoped query (`calendar_read` lets any member
  * select it); both writes go through `erph.admin_set_calendar_week` /
@@ -16,7 +16,7 @@ import { toClientError } from "@/lib/server/http/errors";
  *
  * `session` is read from `school_setting` here rather than taken from the body.
  * It is half the table's primary key, so a caller who chose it could write
- * declarations into a year the school is not running — and the session switch
+ * declarations into a year the school is not running - and the session switch
  * already has one place it may be changed from.
  */
 const weekNo = z
@@ -33,7 +33,7 @@ const patchSchema = z.object({
   weekNo,
   startDate: date,
   endDate: date,
-  /** The administrator's own name for the week — `Minggu PTS`. */
+  /** The administrator's own name for the week - `Minggu PTS`. */
   label: z.string().max(80, "Nama minggu: maksimum 80 aksara").nullish(),
   /**
    * The week number this Monday is declared under *today*, when the call is an
@@ -104,17 +104,17 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // A declaration may push numbering *forward*, never pull it back — and this
+  // A declaration may push numbering *forward*, never pull it back - and this
   // is the one the SQL cannot do: the grid it would have to compare against is
   // `TERM_START` in lib/config.ts, a TypeScript constant the database has never
   // heard of. Without it the neighbour checks below have nothing to bite on for
   // the *first* row, and declaring 6 April to be week 1 leaves week 2 meaning
   // 13 April (the anchor) while a Tuesday in March still resolves to week 2 on
-  // the grid — one number, two different weeks, and a plan whose `plan_date`
+  // the grid - one number, two different weeks, and a plan whose `plan_date`
   // falls outside its own `schoolDays(week)`.
   //
   // Server-side, the store is empty, so `weekOfIso` is exactly the grid's
-  // answer — which is what it must be here; the loaded calendar would be the
+  // answer - which is what it must be here; the loaded calendar would be the
   // thing being checked against.
   const gridWeek = weekOfIso(parsed.data.startDate);
   if (parsed.data.weekNo < gridWeek) {

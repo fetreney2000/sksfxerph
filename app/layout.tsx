@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 /**
- * Inter is bundled by next/font at build time and served from our own origin —
+ * Inter is bundled by next/font at build time and served from our own origin -
  * no runtime request to fonts.googleapis.com (render-blocking + a third party
  * touching teacher traffic under PDPA).
  */
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     "Sistem Rancangan Pengajaran Harian Secara Dalam Talian bagi guru di sekolah di bawah Kementerian Pendidikan Malaysia.",
   applicationName: "eRPH",
   manifest: "/manifest.webmanifest",
-  // The school crest, not the "eR" mark — a teacher should recognise the tab
+  // The school crest, not the "eR" mark - a teacher should recognise the tab
   // as their own school's before reading a word of it.
   icons: { icon: "/logo.png", apple: "/logo.png" },
 };
@@ -45,7 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ms-MY" className={inter.variable} suppressHydrationWarning>
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: themeInit is a
-            build-time constant with no interpolation — this runs before hydration
+            build-time constant with no interpolation - this runs before hydration
             to avoid a white flash for teachers in dark mode. */}
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>

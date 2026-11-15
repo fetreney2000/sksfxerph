@@ -1,9 +1,9 @@
 /**
- * Date helpers — Asia/Kuala_Lumpur, no date library.
+ * Date helpers - Asia/Kuala_Lumpur, no date library.
  *
  * MYT is UTC+8 with **no DST**, so local wall-clock time is always a fixed
  * offset from UTC. Every function here derives from that one fact rather than
- * mixing `Date#getHours()` (server-local) with `timeZone` options — that mix
+ * mixing `Date#getHours()` (server-local) with `timeZone` options - that mix
  * is what produced a deadline labelled "Ahad, 27 September · 23:00".
  *
  * (erph-frontend-stack.md §9: `Intl.DateTimeFormat` covers everything we
@@ -63,7 +63,7 @@ function myt(ms: number) {
  * is not a real instant.
  *
  * Exported for the printed stamps, whose shape (`19-01-2026 | 09:06 AM`) no
- * `Intl` option list produces — and which used `Date#getHours()`, i.e. the
+ * `Intl` option list produces - and which used `Date#getHours()`, i.e. the
  * reader's machine's zone rather than the school's.
  */
 export function mytFields(value: number | string | Date): ReturnType<typeof myt> | null {
@@ -81,7 +81,7 @@ export function mytFields(value: number | string | Date): ReturnType<typeof myt>
  *
  * `timeZone` is the whole point. Without it Intl renders in the *browser's*
  * zone, so the same plan reads "9:06 pagi" at the school and "1:06 pagi" on a
- * colleague's machine set to UTC — two different documents out of one row.
+ * colleague's machine set to UTC - two different documents out of one row.
  */
 export function formatMyt(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat(LOCALE, { timeZone: TIME_ZONE, ...options });
@@ -105,7 +105,7 @@ export function greetingPart(now: number = Date.now()): GreetingPart {
   return "petang";
 }
 
-/** Parse `yyyy-mm-dd` as midday MYT — safely inside the intended calendar day. */
+/** Parse `yyyy-mm-dd` as midday MYT - safely inside the intended calendar day. */
 function parseIso(iso: string): number {
   return new Date(`${iso}T12:00:00+08:00`).getTime();
 }
@@ -118,7 +118,7 @@ export const weekdayIndex = (iso: string) => myt(parseIso(iso)).dow;
 /**
  * The day's number as the school's own form writes it.
  *
- * The paper form numbers the week **Ahad = 1**, so a Monday is `2. Isnin` —
+ * The paper form numbers the week **Ahad = 1**, so a Monday is `2. Isnin` -
  * 12 Januari 2026 is a Monday and the form says "2. Isnin" against it.
  * `weekdayIndex` counts from zero, which is right for a day of the week and
  * wrong for the number printed beside it: the sheets came out a day early
@@ -139,27 +139,27 @@ export function longDate(iso: string): string {
 }
 
 /**
- * 'Rabu, 7 Oktober 2026' for an *instant* — the school's calendar day of it.
+ * 'Rabu, 7 Oktober 2026' for an *instant* - the school's calendar day of it.
  *
  * For anything that arrives as a timestamp. Taking `.toISOString().slice(0,
  * 10)` first would use the UTC day instead, so a plan reviewed at 17:30 UTC
- * — half past one the next morning at the school — would print the wrong
+ * - half past one the next morning at the school - would print the wrong
  * date on a record the school has to file.
  */
 export function longDateOf(value: number | string | Date): string {
   const f = mytFields(value);
-  if (!f) return "—";
+  if (!f) return "-";
   const iso = `${f.year}-${String(f.month + 1).padStart(2, "0")}-${String(f.date).padStart(2, "0")}`;
   return longDate(iso);
 }
 
-/** '16:00' — 24-hour, matching KPM's own form. */
+/** '16:00' - 24-hour, matching KPM's own form. */
 export const hhmm = (ms: number) => {
   const p = myt(ms);
   return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
 };
 
-/** 'Isn 5 Okt · 07:30' — the dashboard table's compact cell. */
+/** 'Isn 5 Okt · 07:30' - the dashboard table's compact cell. */
 export function daySlot(iso: string, time: string): string {
   return `${hariName(iso).slice(0, 3)} ${shortDate(iso)} · ${time}`;
 }
@@ -179,7 +179,7 @@ export function schoolDays(weekNo: number, mondayIso?: string): string[] {
 
 export const todayIso = (): string => isoFromMytMidnight(Date.now());
 
-/** '5–9 Okt 2026' — week range label for the breadcrumb. */
+/** '5–9 Okt 2026' - week range label for the breadcrumb. */
 export function weekRangeLabel(weekNo: number, mondayIso?: string): string {
   const days = schoolDays(weekNo, mondayIso);
   const first = days[0];
@@ -190,7 +190,7 @@ export function weekRangeLabel(weekNo: number, mondayIso?: string): string {
   const b = myt(parseIso(last));
 
   // Both months when the week crosses one. It used to print only the ending
-  // month, so the week before a term break read "30–4 Dis 2026" — two numbers
+  // month, so the week before a term break read "30–4 Dis 2026" - two numbers
   // and one month, on the header of the statutory sheet.
   if (a.month === b.month && a.year === b.year) {
     return `${a.date}–${b.date} ${BULAN[b.month]?.slice(0, 3)} ${b.year}`;
@@ -204,7 +204,7 @@ export function weekRangeLabel(weekNo: number, mondayIso?: string): string {
  *
  * The week is a choice because back-filling is a real thing a teacher owes. A
  * week missed to illness still had lessons, and until now a plan could only be
- * born into whatever week the penyunting happened to be opened in — there was
+ * born into whatever week the penyunting happened to be opened in - there was
  * no way to write Monday's RPH on Thursday of the following week, and the gap
  * simply stayed a gap.
  *
@@ -214,8 +214,8 @@ export function weekRangeLabel(weekNo: number, mondayIso?: string): string {
  *
  * A week also only appears if it **round-trips**: `weekOfIso(weekMondayIso(w))`
  * has to give `w` back. When an administrator declares a week by hand the grid
- * and the declaration disagree in between — automatic numbering calls 19 Oct
- * week 33 while the declaration says 34 — and the number in the gap has no
+ * and the declaration disagree in between - automatic numbering calls 19 Oct
+ * week 33 while the declaration says 34 - and the number in the gap has no
  * dates belonging to it. Offering it would let a plan be filed for a week that
  * resolves to somebody else's dates.
  */
@@ -244,7 +244,7 @@ export function weekOptions(): {
  * 'Jumaat, 9 Oktober 2026 · 16:00'
  *
  * Takes a Date produced by `weekDeadline()` (or anything else) and renders it
- * entirely from MYT wall-clock parts — no server-local `getFullYear()`, no
+ * entirely from MYT wall-clock parts - no server-local `getFullYear()`, no
  * locale database dependency.
  */
 export function deadlineLabel(deadline: Date): string {

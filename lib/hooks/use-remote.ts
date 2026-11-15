@@ -18,7 +18,7 @@ import { useSession } from "@/lib/hooks/use-session";
  * These used to query PostgREST directly from the browser. With Supabase Auth
  * removed there is no user JWT to send, so every read now goes through a route
  * handler that authenticates the session cookie and scopes the query to that
- * user's school — the browser never touches the database.
+ * user's school - the browser never touches the database.
  */
 
 /** One point on the weekly trend. Every figure is counted, never modelled. */
@@ -26,19 +26,19 @@ export interface SchoolWeekPoint {
   week: number;
   /** Active guru_biasa that week. Historical membership is not recorded, so this is current headcount repeated. */
   teachers: number;
-  /** RPH owed that week — teachers × the school's own `rph_per_week` (five for a Monday–Friday school). */
+  /** RPH owed that week - teachers × the school's own `rph_per_week` (five for a Monday–Friday school). */
   expected: number;
   submitted: number;
   approved: number;
   returned: number;
-  /** Null for a week whose denominator was zero — not zero, which would read as a collapse. */
+  /** Null for a week whose denominator was zero - not zero, which would read as a collapse. */
   compliance: number | null;
   /** Submission → review decision. Null while the week still has undecided plans. */
   avgMinutes: number | null;
 }
 
 export interface SchoolStatsView {
-  /** Active guru_biasa — the teaching headcount, not a tally of who has submitted. */
+  /** Active guru_biasa - the teaching headcount, not a tally of who has submitted. */
   activeTeachers: number;
   /** RPH the school owes across the window: teachers × the school's weekly rule × the weeks in view. */
   expected: number;
@@ -49,8 +49,8 @@ export interface SchoolStatsView {
    * Approved against what the school owes, capped at 100.
    *
    * `null` is a real state, not zero: either the school has no denominator at
-   * all (no active Guru Biasa) or these figures have not been measured —
-   * still loading, or unreachable. A page that must show something shows "—".
+   * all (no active Guru Biasa) or these figures have not been measured -
+   * still loading, or unreachable. A page that must show something shows "-".
    */
   compliancePct: number | null;
   avgMinutes: number | null;
@@ -74,8 +74,8 @@ interface WeekStatsRow {
 /**
  * Plans awaiting a grade for one reviewer's stage.
  *
- * `stage` is the rung this user owns — `submitted` for a GPK, `forwarded` for
- * a Guru Besar — so the same hook serves both without the component having to
+ * `stage` is the rung this user owns - `submitted` for a GPK, `forwarded` for
+ * a Guru Besar - so the same hook serves both without the component having to
  * know which. Passing it in rather than reading the role here keeps `lib/`
  * from reaching into `components/`.
  */
@@ -86,15 +86,15 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
   const session = useSession();
   const remote = useQuery<{ items: QueueItem[] }>({
     // The session is in the key so rolling the school year over refetches rather
-    // than serving last year's cache — the server filters on it too.
+    // than serving last year's cache - the server filters on it too.
     queryKey: ["review-queue", schoolCode, session, stage],
     queryFn: async () => {
       const res = await fetch("/api/queue", { credentials: "same-origin" });
-      // Expired session: leave rather than fall back to demo data — a reviewer
+      // Expired session: leave rather than fall back to demo data - a reviewer
       // must never be shown fake plans as if they were the real queue.
       if (handleExpiredSession(res.status)) return { items: [] };
-      // Everything else — a Guru Biasa's 403, a 500, and a 503 from a proxy
-      // or a deployment mid-restart — is an empty queue, not the demo one.
+      // Everything else - a Guru Biasa's 403, a 500, and a 503 from a proxy
+      // or a deployment mid-restart - is an empty queue, not the demo one.
       // This query only ever runs in synced mode (`enabled` below), so a 503
       // here means the school's own service did not answer, which is exactly
       // when three colleagues' demo RPH would be the worst thing to show.
@@ -118,7 +118,7 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
 }
 
 /**
- * Every plan of one school week, any status — the reviewer's week browser.
+ * Every plan of one school week, any status - the reviewer's week browser.
  *
  * The pending queue filters by status, so a backdated plan never showed up in
  * it: one the teacher never submitted (a draft), or one already decided, were
@@ -126,8 +126,8 @@ export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
  * `/api/queue?week=N` instead, which the server answers with the whole week,
  * and the page decides what is actionable.
  *
- * Returns `refetch` because a decision changes the row's status in place —
- * approved, returned, or submitted-on-behalf — and the list should say so
+ * Returns `refetch` because a decision changes the row's status in place -
+ * approved, returned, or submitted-on-behalf - and the list should say so
  * without a manual reload.
  *
  * `week === null` (the current queue selected) never enables the query; the
@@ -152,7 +152,7 @@ export function useWeekPlans(week: number | null): {
     },
     // Only a real week in synced mode asks the server. In local mode there is
     // no backend, so the bundled dataset is filtered by the week each plan
-    // was written for — the same substitution every demo hook makes.
+    // was written for - the same substitution every demo hook makes.
     enabled: supabaseConfigured && week !== null,
     retry: false,
     staleTime: 30_000,
@@ -177,7 +177,7 @@ export function useWeekPlans(week: number | null): {
 /**
  * School compliance for the current week, plus the six-week trend behind it.
  *
- * Local mode has no backend, so the bundled demo figures stand in — and that
+ * Local mode has no backend, so the bundled demo figures stand in - and that
  * is what local mode is. What must not happen is synced mode leaving some of
  * them standing, which is the bug this replaced: byPanel, weeks and
  * avgMinutes survived every refresh and were then read as the school's own.
@@ -190,18 +190,18 @@ export function useWeekPlans(week: number | null): {
  * source beside a chart drawn from another is a total that can disagree with
  * the evidence next to it.
  *
- * Local mode has no backend, so the bundled demo figures stand in — and that
+ * Local mode has no backend, so the bundled demo figures stand in - and that
  * is what local mode is. What must not happen is synced mode leaving some of
  * them standing, which is the bug this replaced: byPanel, weeks and
  * avgMinutes survived every refresh and were then read as the school's own.
  */
 /**
- * The school's figures — for a role that may have them.
+ * The school's figures - for a role that may have them.
  *
  * `enabled` is the caller's *permission*, not a loading flag. Whole-school
  * figures are a supervisor's question: a Guru Biasa's dashboard is about their
  * own week, and it says nothing about anyone else's. Passing `false` fetches
- * nothing at all — least of all the bundled demo figures, which describe a
+ * nothing at all - least of all the bundled demo figures, which describe a
  * different school and would be shown as this one's.
  */
 export function useSchoolStats(
@@ -210,8 +210,8 @@ export function useSchoolStats(
 ): SchoolStatsView {
   const session = useSession();
   // Inside the hook, and subscribed. This used to be a module constant
-  // evaluated when the bundle loaded — which is before the school's declared
-  // weeks have been fetched — so a caller asking for "the current week" got the
+  // evaluated when the bundle loaded - which is before the school's declared
+  // weeks have been fetched - so a caller asking for "the current week" got the
   // term-start grid's answer while the dashboard beside it labelled the
   // declared one. `/minggu` and `/semakan` both call this with no range, so
   // their window defaults to whatever the week actually is now.
@@ -224,7 +224,7 @@ export function useSchoolStats(
     queryFn: async () => {
       // One week *before* the range is fetched and then dropped, so a
       // single-week view still has something to state a change against.
-      // Without it, "Minggu 5" could never say whether it beat week 4 —
+      // Without it, "Minggu 5" could never say whether it beat week 4 -
       // week 4 was never asked for.
       const res = await fetch(`/api/stats?first=${first - 1}&last=${last}`, {
         credentials: "same-origin",
@@ -234,7 +234,7 @@ export function useSchoolStats(
       if (!res.ok) return empty; // local mode (503), signed out (401), no school
       return (await res.json()) as { stats: WeekStatsRow | null; history: SchoolWeekPoint[] };
     },
-    // Not asked for at all when the role may not see it — a request that can
+    // Not asked for at all when the role may not see it - a request that can
     // only answer 403 is a request that should never have been made.
     enabled: supabaseConfigured && enabled,
     retry: false,
@@ -270,7 +270,7 @@ export function useSchoolStats(
     loading: remote.isLoading,
   };
 
-  // Local mode has no backend, so the bundled figures *are* the data — and
+  // Local mode has no backend, so the bundled figures *are* the data - and
   // local mode is a demo by construction.
   if (!supabaseConfigured) return base;
 
@@ -298,7 +298,7 @@ export function useSchoolStats(
       ? null
       : timed.reduce((total, w) => total + (w.avgMinutes ?? 0), 0) / timed.length;
 
-  // The headcount for the roster, and what the school actually owes — they
+  // The headcount for the roster, and what the school actually owes - they
   // stopped being the same number when the denominator was fixed. The
   // teaching headcount, not a tally of who has submitted.
   const teachers = weeks[0]?.teachers ?? 0;
@@ -314,8 +314,8 @@ export function useSchoolStats(
     // school's own weekly rule × the teachers × the weeks in view. Dividing by
     // the headcount alone is what made a finished week read as 500%, and a
     // school with two teachers and six approved plans between them as 300%.
-    // Capped at 100 for the same reason the SQL caps it — handing in more than
-    // the week requires has met the requirement, not exceeded it — and the
+    // Capped at 100 for the same reason the SQL caps it - handing in more than
+    // the week requires has met the requirement, not exceeded it - and the
     // counts on the same card still say exactly how many were approved.
     // Null rather than zero when there is no denominator: a school with no
     // active Guru Biasa has not scored 0%, it has not been scored.

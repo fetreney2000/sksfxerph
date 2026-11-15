@@ -8,7 +8,7 @@ const plan = (status: WeekDocument["status"], submittedAt?: number): WeekDocumen
   submittedAt,
 });
 
-describe("summariseWeek — one definition of the week", () => {
+describe("summariseWeek - one definition of the week", () => {
   it("returns a real empty week rather than division by zero", () => {
     expect(summariseWeek([], DEADLINE)).toEqual({
       total: 0,
@@ -25,7 +25,7 @@ describe("summariseWeek — one definition of the week", () => {
   });
 
   it("partitions the demo week into approved + waiting + action", () => {
-    // 2 approved, 1 waiting, 1 returned, 1 draft — the week shown on the
+    // 2 approved, 1 waiting, 1 returned, 1 draft - the week shown on the
     // dashboard. The cards used to show "Dihantar 1/5" while the bar under it
     // was 40% approved, and "Menunggu semakan" repeated the same 1.
     const summary = summariseWeek(

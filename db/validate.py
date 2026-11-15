@@ -6,7 +6,7 @@ from pglast.parser import ParseError
 
 SQL = open("db/schema.sql", encoding="utf-8").read()
 
-# Objects in this file may be schema-qualified (`erph.school`) — accept both.
+# Objects in this file may be schema-qualified (`erph.school`) - accept both.
 Q = r"(?:erph\.)?"
 
 
@@ -23,7 +23,7 @@ except ParseError as e:
 #
 # Split per `create or replace function`, then take the body as everything
 # between that function's `as $$` and the next `$$`. This handles BOTH body
-# styles (`language sql` ends at `$$`, `language plpgsql` at `end $$`) — the
+# styles (`language sql` ends at `$$`, `language plpgsql` at `end $$`) - the
 # earlier `as $$ … end $$` pairing swallowed SQL bodies into the next plpgsql
 # function and reported a phantom imbalance.
 funcs: list[tuple[str, str]] = []
@@ -62,7 +62,7 @@ for name, b in funcs:
         # plpgsql body: inner blocks close with `end;`, the body closes with
         # `end $$`; a handler may belong to the function-level block.
         ok = ok and end_blk == begins - 1 and exc_blk <= begins
-    # `language sql` bodies have no begin/end at all — the if/loop checks above
+    # `language sql` bodies have no begin/end at all - the if/loop checks above
     # are all that apply (and trivially pass).
 
     if not ok:
@@ -130,7 +130,7 @@ print(
 )
 
 # 8 · schema-specific: our tables/views/types must all live in `erph`
-# (triggers are matched on their `on <table>` clause — the token after
+# (triggers are matched on their `on <table>` clause - the token after
 # `create trigger` is the trigger's *name*, not a table.)
 stray_tables = re.findall(rf"create table\s+(?!erph\.)\w+", SQL)
 stray_types = re.findall(rf"create type\s+(?!erph\.)\w+", SQL)
@@ -145,13 +145,13 @@ print(f"[8] objects created outside erph: {stray or 'none'}")
 print(f"    schema declared: {'create schema if not exists erph' in SQL}")
 print(f"    grants present:  {'grant usage on schema erph' in SQL}")
 
-# 9 · the class of bug ONLY execution can catch — two halves, both of which
+# 9 · the class of bug ONLY execution can catch - two halves, both of which
 #    shipped once and were found by running the schema against real Postgres:
 #
 #    a) a type used unqualified in type position. `create type erph.member_role`
 #       puts it in the erph schema, so bare `member_role` fails with 42704 at
 #       runtime while still parsing fine. (A column that merely happens to be
-#       *named* the same as a type is fine — that's what the leading-token
+#       *named* the same as a type is fine - that's what the leading-token
 #       exception below allows.)
 #    b) a schema qualifier leaked INTO a string literal during the bulk
 #       qualification pass: enum values ('erph.school') and audit labels
@@ -169,7 +169,7 @@ def strip_block_comments(text: str) -> str:
     """Blank out `/* … */` without disturbing line numbers.
 
     A doc comment is prose, and prose contains the very words this check scans
-    for — "…the name and curriculum of a subject…" is not a type reference.
+    for - "…the name and curriculum of a subject…" is not a type reference.
     Only `--` lines were skipped before, so a `/** … */` comment could fail a
     schema that was perfectly correct. The replacement keeps every newline so
     the line numbers reported still point at the original file.
@@ -183,7 +183,7 @@ def strip_block_comments(text: str) -> str:
 
 SCAN = strip_block_comments(SQL)
 
-# A bare type name is a bug only in **type position** — immediately after an
+# A bare type name is a bug only in **type position** - immediately after an
 # identifier and whitespace (`role member_role`, `v_status rph_status`). A
 # column merely named `curriculum` never sits in that shape:
 #   `select s.curriculum, ...`        → preceded by `.`
@@ -200,13 +200,13 @@ for i, line in enumerate(SCAN.split("\n"), 1):
     code = line.split("--", 1)[0]
     hit = None
 
-    # `<identifier> <whitespace> <bare type>` — the shape of a column or
+    # `<identifier> <whitespace> <bare type>` - the shape of a column or
     # variable definition with its schema qualifier missing.
     for m in re.finditer(rf"\b\w+\s+({type_alt})\b", code):
         hit = m.group(0)
         break
 
-    # `<expr>::<bare type>` — a cast, where the type is not preceded by an
+    # `<expr>::<bare type>` - a cast, where the type is not preceded by an
     # identifier at all so the rule above cannot see it.
     if hit is None:
         for m in re.finditer(rf"::\s*({type_alt})\b", code):
@@ -227,4 +227,4 @@ for i, line in enumerate(SCAN.split("\n"), 1):
 print(f"[9] unqualified type refs: {unqualified_types or 'none'}")
 print(f"    schema qualifiers inside string literals: {leaked_literals or 'none'}")
 if unqualified_types or leaked_literals:
-    print("    ^ these parse cleanly and fail only at execution — see scripts/run_schema.py")
+    print("    ^ these parse cleanly and fail only at execution - see scripts/run_schema.py")

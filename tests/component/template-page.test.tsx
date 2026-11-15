@@ -10,7 +10,7 @@ import { UserProvider } from "@/components/shell/user-context";
  * Both of a template's two doors now open the penyunting: **Cipta** with
  * nothing behind it, **Sunting** with the row it is changing. What this pins
  * is that each card still leads where it says it leads, that a template you
- * do not own offers no handle on it, and that Padam — which never moved —
+ * do not own offers no handle on it, and that Padam - which never moved -
  * still asks before it deletes.
  *
  * What the penyunting does once it is open is covered by the e2e suite.
@@ -18,7 +18,7 @@ import { UserProvider } from "@/components/shell/user-context";
  */
 
 // The page gates on `supabaseConfigured`, which is false in this test
-// environment — and without it the create button is disabled by design.
+// environment - and without it the create button is disabled by design.
 vi.mock("@/lib/config", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/config")>();
   return { ...original, supabaseConfigured: true };

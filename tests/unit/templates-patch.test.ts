@@ -7,7 +7,7 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
  * PATCH /api/templates, and the payload it carries.
  *
  * The payload was absent from this route's schema, so a template could be
- * renamed but never *changed* — and a template's whole value is the plan it
+ * renamed but never *changed* - and a template's whole value is the plan it
  * starts from. Now that the penyunting saves a template back, the two halves
  * of that contract are worth pinning: a payload that arrives is written, and
  * one that does not leaves the plan exactly as it was, so a rename cannot

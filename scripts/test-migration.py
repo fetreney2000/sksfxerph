@@ -107,7 +107,7 @@ def main() -> int:
         """run_schema's splitter, with the same pg_trgm concession.
 
         A statement can carry a preceding comment line, so drop comment lines
-        rather than skipping the whole statement — otherwise `-- note` above
+        rather than skipping the whole statement - otherwise `-- note` above
         `create schema` would silently drop the schema.
         """
         for _offset, stmt in rs.split_statements(sql):
@@ -172,12 +172,12 @@ def main() -> int:
             run(delta, "001b")
             # 002 drops and recreates two functions whose shape changed. Applied
             # in the same session as 001b precisely because 001b now emits the
-            # *current* definitions — proving the pair works in sequence is the
+            # *current* definitions - proving the pair works in sequence is the
             # whole point of generating both from one source.
             run(delta2, "002")
             # 003 changed `admin_set_school`'s signature when the school code
             # became editable. `create or replace` does **not** replace across
-            # an arity change — it quietly adds a second function, and PostgREST
+            # an arity change - it quietly adds a second function, and PostgREST
             # then resolves the RPC by argument count rather than by intent,
             # which the callers would only ever notice as a function that
             # stopped validating. Install the pre-003 form first so the drop
@@ -272,13 +272,13 @@ def main() -> int:
     check("forwarded added to rph_status", "forwarded" in statuses, statuses)
     # `review_rph` was the pre-001 shape; `semak_rph` and `lulus_rph` were
     # retired by 004 when the GPK → Guru Besar hop disappeared. None may
-    # survive — a lingering one would still be callable through PostgREST and
+    # survive - a lingering one would still be callable through PostgREST and
     # would restore a flow the app no longer drives.
     check("review_rph / semak_rph / lulus_rph gone", old_fn == 0, f"found {old_fn}")
     check("17 functions present", new_fns == 17, f"found {new_fns}")
     # The exact bug the `drop` in 002 exists to prevent: an added parameter
     # makes Postgres treat the function as a *different* one, so `create or
-    # replace` silently leaves the old arity behind — and calls that omit the
+    # replace` silently leaves the old arity behind - and calls that omit the
     # new argument keep resolving to it, ignoring the session entirely.
     check(
         "admin_set_setting has exactly one overload",
@@ -311,7 +311,7 @@ def main() -> int:
 
     # The views key on status now. `v_school_compliance` asks
     # `school_week_stats` for the headcount, which answers only for a member of
-    # the school — so a member reads it and a stranger is refused outright.
+    # the school - so a member reads it and a stranger is refused outright.
     # Both halves are the behaviour to pin.
     try:
         with conn.cursor() as cur:
@@ -373,7 +373,7 @@ def main() -> int:
 
     # The same refusal for the *new* write path. A `security definer` function
     # bypasses RLS, so the role check inside it is the only thing between a
-    # teacher and the ability to mint accounts — executing it as nobody is the
+    # teacher and the ability to mint accounts - executing it as nobody is the
     # only way to prove the check fires rather than merely being present.
     try:
         with conn.cursor() as cur:
@@ -393,7 +393,7 @@ def main() -> int:
 
     # The session write must reach the row. This is the check that earns the
     # `drop` in 002: had the old four-argument form survived `create or replace`
-    # (it would — an added parameter makes Postgres see a *different* function),
+    # (it would - an added parameter makes Postgres see a *different* function),
     # the old arity would still be there and a caller omitting the session would
     # resolve to it, silently changing nothing.
     try:
@@ -443,7 +443,7 @@ def main() -> int:
                 str(sorted(cols)),
             )
 
-            # `create or replace` does *not* replace on a signature change — it
+            # `create or replace` does *not* replace on a signature change - it
             # quietly adds a second function. `admin_set_school` gained the
             # school code, so if the drop of the old arity were ever missing
             # this counts 2 and PostgREST would resolve the RPC by arity rather
@@ -504,7 +504,7 @@ def main() -> int:
 
             # The entire signing design rests on this pair. PostgreSQL cannot
             # verify ECDSA, so the database's only contribution is refusing to
-            # let anyone but service_role append — and that only works while
+            # let anyone but service_role append - and that only works while
             # the table carries no INSERT policy.
             cur.execute(
                 "select count(*) from pg_policies where schemaname='erph' "
@@ -759,7 +759,7 @@ def main() -> int:
 
             # A changed *return type* is the one thing `create or replace`
             # refuses outright, so the drop is what makes the new column
-            # readable — and both statistics functions gained one. The third
+            # readable - and both statistics functions gained one. The third
             # gained a parameter, which would otherwise leave the old arity
             # callable beside it.
             cur.execute(
@@ -825,7 +825,7 @@ def main() -> int:
         check("014 view rebuilt", False, str(e).splitlines()[0][:140])
 
     # `least(100, NULL)` is 100 in Postgres, so a school with no active Guru
-    # Biasa has no denominator at all and must come back unscored — otherwise
+    # Biasa has no denominator at all and must come back unscored - otherwise
     # an empty school reports full compliance.
     try:
         with conn.cursor() as cur:
@@ -861,7 +861,7 @@ def main() -> int:
         check("014 zero-denominator week", False, str(e).splitlines()[0][:140])
 
     # `admin_set_member` wrote only `school_member.role` until 012, so an
-    # account changed through the console before then carries two roles — and
+    # account changed through the console before then carries two roles - and
     # the route guard reads the stale one.
     try:
         with conn.cursor() as cur:
@@ -1011,7 +1011,7 @@ def main() -> int:
             )
             teacher = cur.fetchone()[0]
 
-            # Deactivating must take the membership with it — every policy
+            # Deactivating must take the membership with it - every policy
             # reads `school_member.is_active`, so a dismissed teacher left
             # active there stayed inside the roster and the review RPCs.
             cur.execute(
@@ -1258,7 +1258,7 @@ def main() -> int:
             conn.commit()
 
             # One malformed op must not take the batch with it. The op id is
-            # not a uuid, so the cast raises — and the good op beside it must
+            # not a uuid, so the cast raises - and the good op beside it must
             # still be applied.
             cur.execute(
                 "insert into erph.rph_document (school_id, owner_id, class_ids, subject_code, "
@@ -1297,7 +1297,7 @@ def main() -> int:
                 str(results)[:120],
             )
             # The claim on the failed op's id was rolled back with the rest of
-            # its work, so the id is still free — so only the *good* op left a
+            # its work, so the id is still free - so only the *good* op left a
             # claim behind, and the failed one can be retried with the very
             # same op id.
             cur.execute("select count(*) from erph.sync_op")
@@ -1313,7 +1313,7 @@ def main() -> int:
 
     # The column grant: a signed-in teacher may correct their own name and
     # address, and nothing else on their own row. `role` is the one that
-    # matters — the route guards read `erph.user.role`.
+    # matters - the route guards read `erph.user.role`.
     try:
         with conn.cursor() as cur:
             for column, expected in (("full_name", True), ("email", True), ("role", False)):
@@ -1352,7 +1352,7 @@ def main() -> int:
                 )
                 conn.commit()
 
-            # The Administrator still answers for the school — they hold the
+            # The Administrator still answers for the school - they hold the
             # same figures on /utama through admin_list_overview.
             cur.execute("select id from erph.user where username = 'pentadbir.sk'")
             admin_id = cur.fetchone()[0]
@@ -1398,7 +1398,7 @@ def main() -> int:
 
     # ── 019: the administrator decides which week a date range is ────────────
     # `academic_calendar` has been in the schema since the baseline and read
-    # by nothing. What is new is the writer — and the writer's real job is
+    # by nothing. What is new is the writer - and the writer's real job is
     # refusing two rows that are each fine on their own and together make
     # numbering run backwards.
     try:
@@ -1451,7 +1451,7 @@ def main() -> int:
             stored = cur.fetchall()
             check("019 a declared week is stored", stored == [(34,)], str(stored))
 
-            # 26 Oct follows 19 Oct, so 35 is owed to it — declaring 33 there
+            # 26 Oct follows 19 Oct, so 35 is owed to it - declaring 33 there
             # would put a later date behind an earlier one.
             msg = refuse_019(
                 "select erph.admin_set_calendar_week(%s, '2026/2027', 33::smallint, "
@@ -1534,7 +1534,7 @@ def main() -> int:
             check("020 the owner policies test the whole set", cur.fetchone()[0] == 2)
 
             # The seed's one submitted plan was written against a single class,
-            # so the backfill must have given it exactly that class — not an
+            # so the backfill must have given it exactly that class - not an
             # empty list, not both.
             cur.execute(
                 "select cardinality(class_ids), "
@@ -1626,7 +1626,7 @@ def main() -> int:
             cur.execute("select count(*) from erph.rph_document where id = %s", (doc_id,))
             check("020 …merged, not duplicated", cur.fetchone()[0] == 1)
 
-            # And a class outside the school is refused, element by element —
+            # And a class outside the school is refused, element by element -
             # not with an exception: the op comes back as a rejected verdict
             # the queue marks permanent.
             verdict = cur.execute(
@@ -1667,7 +1667,7 @@ def main() -> int:
 
     print()
     for label, ok, detail in checks:
-        print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" — {detail}" if detail else ""))
+        print(f"  [{'OK ' if ok else 'FAIL'}] {label}" + (f" - {detail}" if detail else ""))
         if not ok:
             errors += 1
 

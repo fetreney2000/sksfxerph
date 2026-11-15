@@ -1,16 +1,16 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 015 — edit what could only be created
+-- eRPH ▸ MIGRATION 015 - edit what could only be created
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010/011/012/013/014.
 -- Safe to run more than once.
 --
 -- Two things a school could create and never correct:
 --
---   · an account's name and email — the name printed on every RPH that person
+--   · an account's name and email - the name printed on every RPH that person
 --     writes, and the address Google sign-in links to on a first visit. A typo
 --     meant deleting the account and importing it again, taking their plans
 --     with them;
---   · a subject's name and curriculum — only Matikan/Hidupkan existed, so a
+--   · a subject's name and curriculum - only Matikan/Hidupkan existed, so a
 --     misnamed subject had to be hidden and a second one created beside it.
 --
 -- Both keep the thing that cannot be changed: the username (the sign-in
@@ -38,7 +38,7 @@ begin
   if nullif(trim(p_full_name), '') is null then
     raise exception 'Nama penuh diperlukan';
   end if;
-  -- Optional — an account with no address is allowed — but a value that is
+  -- Optional - an account with no address is allowed - but a value that is
   -- present has to be an address. `email` is what `resolveAccount` matches on
   -- the first time someone signs in with Google, so a malformed one would
   -- quietly deny them rather than fail anywhere they could see.

@@ -8,7 +8,7 @@ import { JAWATAN_BY_ROLE, type MemberRole } from "@/lib/types";
  * Seed credentials (db/seed.sql).
  *
  * The seed ships the plaintext password in a comment next to each hash so you
- * can log in as every role. That comment is a *claim* — this test verifies it
+ * can log in as every role. That comment is a *claim* - this test verifies it
  * against the actual scrypt hash, so a regenerated seed that quietly stops
  * matching its own documentation fails here rather than at someone's login
  * screen on a Monday morning.
@@ -61,7 +61,7 @@ describe("seeded accounts", () => {
   });
 
   // An office the account's role cannot hold would be printed on a cover sheet
-  // by someone who never held it — the exact failure `erph.jawatan_for`
+  // by someone who never held it - the exact failure `erph.jawatan_for`
   // refuses in SQL, checked here against the list the picker offers.
   it("only gives a seeded account an office its role may hold", () => {
     for (const u of users) {
@@ -78,11 +78,11 @@ describe("seeded accounts", () => {
     const byRole = Object.fromEntries(users.map((u) => [u.role, u.jawatan]));
     expect(byRole.guru_biasa).toBe("guru_biasa");
     expect(byRole.guru_besar).toBe("guru_besar");
-    // One GPK, so the seed may name the office — a school with several would
+    // One GPK, so the seed may name the office - a school with several would
     // have to be told which, and that is the point of the column.
     expect(byRole.gpk).toBe("pk_pentadbiran");
     // Neither the administrator's account nor the service account holds an
-    // office, and the cover sheet prints "—" rather than inventing one.
+    // office, and the cover sheet prints "-" rather than inventing one.
     expect(byRole.pentadbir).toBeNull();
     expect(byRole.system).toBeNull();
   });
@@ -99,7 +99,7 @@ describe("seeded accounts", () => {
   });
 
   // Every password checked against every *other* account is ~20 scrypt
-  // verifications, and scrypt is slow on purpose — that is what makes it
+  // verifications, and scrypt is slow on purpose - that is what makes it
   // worth using. The default 5s sits within a whisker of the honest cost on a
   // quiet machine and over it on a busy one, so this test was failing for
   // speed rather than for meaning.

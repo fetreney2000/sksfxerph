@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 
 const buttonVariants = cva(
   // §4.2(9) asks for ≥44px targets: md/lg hit 44/48px. `sm` (40px) is used
-  // only for inline row actions, which WCAG 2.2 AA rates at 24px minimum —
+  // only for inline row actions, which WCAG 2.2 AA rates at 24px minimum -
   // going to 44 there would inflate every table row.
   "inline-flex items-center justify-center gap-2 rounded-[10px] text-[13.5px] font-semibold transition-colors duration-150 select-none disabled:pointer-events-none disabled:opacity-50 active:translate-y-px whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
   {

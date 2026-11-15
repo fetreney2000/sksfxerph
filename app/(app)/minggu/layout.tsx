@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { requirePermission } from "@/lib/server/auth/page-guard";
 
 /**
- * `/minggu` — the teacher's dashboard, gated on `rph`.
+ * `/minggu` - the teacher's dashboard, gated on `rph`.
  *
  * Ungated until now, which was harmless while every role held `rph`. The
  * Administrator does not: they do not teach, so a dashboard of "your plans this

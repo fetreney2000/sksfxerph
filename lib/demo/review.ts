@@ -62,7 +62,7 @@ const suhaila = base({
   standard_pembelajaran: "2.2.1 Mengenal pasti maklumat penting dalam petikan",
   objektif: "Murid dapat mengenal pasti lima maklumat penting dalam petikan prosedur.",
   bidang: "Membaca dan Memahami",
-  tajuk: "Petikan prosedur — cara menjaga kesihatan",
+  tajuk: "Petikan prosedur - cara menjaga kesihatan",
   aktiviti: [
     { nama: "Bacaan suara berirama" },
     { nama: "Isi petak maklumat", sub: true },
@@ -130,11 +130,11 @@ export const QUEUE: QueueItem[] = [
   },
 ];
 
-/** Aggregates for the school dashboard — local stand-in for `school_week_stats`. */
+/** Aggregates for the school dashboard - local stand-in for `school_week_stats`. */
 /**
  * Local mode's figures.
  *
- * Local mode has no backend, so these stand in — and they are fine there
+ * Local mode has no backend, so these stand in - and they are fine there
  * because local mode *is* a demo. What was wrong before was that synced mode
  * replaced some fields and left the rest: `byPanel`, `weeks` and `avgMinutes`
  * stayed these constants and were then presented as the school's own. Every
@@ -145,7 +145,7 @@ export const SCHOOL_STATS = {
   submitted: 198,
   approved: 186,
   returned: 12,
-  // 42 teachers × 5 RPH — the same rule the real figures are measured
+  // 42 teachers × 5 RPH - the same rule the real figures are measured
   // against, so the demo numbers at least add up the way the school's do.
   compliancePct: 88.6,
   avgMinutes: 6.4,

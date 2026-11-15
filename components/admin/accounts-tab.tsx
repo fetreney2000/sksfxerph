@@ -34,11 +34,11 @@ import { ms } from "@/lib/i18n/ms";
 import { JAWATAN_BY_ROLE, type Jawatan, MEMBER_ROLES, type MemberRole } from "@/lib/types";
 
 /**
- * Tab 1 — accounts and roles.
+ * Tab 1 - accounts and roles.
  *
  * Three writes the administrator could not do before: create an account, reset a
  * forgotten password, and lift a brute-force lock. Each exists because the
- * alternative was worse — a locked-out teacher had to wait fifteen minutes or
+ * alternative was worse - a locked-out teacher had to wait fifteen minutes or
  * someone with database access had to run SQL.
  *
  * The lockout state is derived, not a stored flag: `locked_until` in the future
@@ -47,7 +47,7 @@ import { JAWATAN_BY_ROLE, type Jawatan, MEMBER_ROLES, type MemberRole } from "@/
  * into one "inactive" badge would hide which one applies.
  */
 
-/** Roles an administrator may hand out — `system` is a service account. */
+/** Roles an administrator may hand out - `system` is a service account. */
 const ASSIGNABLE = MEMBER_ROLES.filter((r) => r !== "system");
 
 /**
@@ -80,11 +80,11 @@ const STATUS: Record<LockState, { label: string; variant: "success" | "warning" 
     inactive: { label: "Dinyahaktif", variant: "neutral" },
   };
 
-/** `2026-10-05T08:12:00+00:00` → `5 Okt 2026, 4:12 ptg` — never a raw ISO string. */
+/** `2026-10-05T08:12:00+00:00` → `5 Okt 2026, 4:12 ptg` - never a raw ISO string. */
 function when(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return formatMyt({
     day: "numeric",
     month: "short",
@@ -95,7 +95,7 @@ function when(iso: string | null): string {
 }
 
 /**
- * Who may be this member's penyelia — the level above, and only the level
+ * Who may be this member's penyelia - the level above, and only the level
  * above.
  *
  * A Guru Biasa's work is overseen by a GPK or the Guru Besar. A GPK's own RPH
@@ -105,7 +105,7 @@ function when(iso: string | null): string {
  * theirs has nobody and says so.
  *
  * That the Guru Besar already reaches every plan in the school is the reason
- * assigning one to a GPK changes no access — it records who reviews that
+ * assigning one to a GPK changes no access - it records who reviews that
  * person's work, which is what the column is for, rather than granting it.
  */
 function supervisorsFor(m: Member, items: Member[]): Member[] {
@@ -123,19 +123,19 @@ function supervisorsFor(m: Member, items: Member[]): Member[] {
 
 /** What the row says when there is nobody above this one to choose. */
 function noSupervisorText(role: MemberRole): string {
-  if (role === "guru_biasa") return "Tiada GPK — hanya Guru Besar";
+  if (role === "guru_biasa") return "Tiada GPK - hanya Guru Besar";
   if (role === "gpk") return "Tiada Guru Besar";
   if (role === "guru_besar") return "Tiada Guru Besar lain";
-  return "—";
+  return "-";
 }
 
 /** The unassigned option. For a teacher it means the Guru Besar alone. */
 const UNASSIGNED: Record<MemberRole, string> = {
-  guru_biasa: "— Guru Besar sahaja —",
-  gpk: "— belum ditetapkan —",
-  guru_besar: "— belum ditetapkan —",
-  pentadbir: "—",
-  system: "—",
+  guru_biasa: "- Guru Besar sahaja -",
+  gpk: "- belum ditetapkan -",
+  guru_besar: "- belum ditetapkan -",
+  pentadbir: "-",
+  system: "-",
 };
 
 export function AccountsTab() {
@@ -155,7 +155,7 @@ export function AccountsTab() {
   const items = accounts.data?.items ?? [];
 
   // Seventy-odd cards is a list to search rather than to scroll. Matches the
-  // name, the username or the email — the three things someone is holding when
+  // name, the username or the email - the three things someone is holding when
   // they come here looking for one person.
   const [q, setQ] = React.useState("");
   const needle = q.trim().toLowerCase();
@@ -218,11 +218,11 @@ export function AccountsTab() {
             const changeRole = (role: MemberRole) =>
               save(
                 () => setMember(m.user_id, role, m.is_active),
-                // A role change can take an office away with it — SQL
+                // A role change can take an office away with it - SQL
                 // clears a jawatan the new role cannot hold, so say so
                 // rather than let the row quietly empty itself.
                 m.jawatan !== null && !(JAWATAN_BY_ROLE[role] ?? []).includes(m.jawatan)
-                  ? `Peranan ${m.full_name} dikemas kini — jawatan lama ditanggalkan`
+                  ? `Peranan ${m.full_name} dikemas kini - jawatan lama ditanggalkan`
                   : `Peranan ${m.full_name} dikemas kini`,
                 () => void accounts.refetch(),
               );
@@ -338,14 +338,14 @@ export function AccountsTab() {
                     ))}
                   </Select>
                 </CardField>
-                {/* The office, not the permission — it is what the cover
+                {/* The office, not the permission - it is what the cover
                             sheet prints under the signer's name, which is why it
                             is chosen per person instead of being derived from the
                             role beside it: one GPK role covers three different
                             Penolong Kanan offices. */}
                 <CardField label="Jawatan">
                   {offices.length === 0 ? (
-                    <p className="py-1.5 text-[12.5px] text-ink-4">—</p>
+                    <p className="py-1.5 text-[12.5px] text-ink-4">-</p>
                   ) : (
                     <Select
                       aria-label={`Jawatan ${m.full_name}`}
@@ -356,7 +356,7 @@ export function AccountsTab() {
                         changeJawatan((e.target.value || null) as Jawatan | null)
                       }
                     >
-                      <option value="">— belum ditetapkan —</option>
+                      <option value="">- belum ditetapkan -</option>
                       {offices.map((j) => (
                         <option key={j} value={j}>
                           {ms.jawatan[j]}
@@ -367,7 +367,7 @@ export function AccountsTab() {
                 </CardField>
                 {/* Scope, not decoration: this decides who may open and
                             review this person's RPH. The list is the level
-                            above — a GPK's own work is reviewed by the Guru
+                            above - a GPK's own work is reviewed by the Guru
                             Besar, and a Guru Besar by another Guru Besar if the
                             school has one. */}
                 <CardField label="Penyelia">
@@ -540,7 +540,7 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              {/* Login now prefers the email — an account without one falls
+              {/* Login now prefers the email - an account without one falls
                   back to its username, so the field is advice, not a gate. */}
               <p className="mt-1.5 text-[11.5px] text-ink-4">
                 Yang guru akan taip pada skrin log masuk. Kosongkan untuk log masuk dengan nama
@@ -559,7 +559,7 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
                 value={jawatan ?? ""}
                 onChange={(e) => setJawatan((e.target.value || null) as Jawatan | null)}
               >
-                <option value="">— belum ditetapkan —</option>
+                <option value="">- belum ditetapkan -</option>
                 {offices.map((j) => (
                   <option key={j} value={j}>
                     {ms.jawatan[j]}
@@ -679,9 +679,9 @@ function ResetPasswordDialog({
 /**
  * Correct what an account was created with.
  *
- * The name and the address were both frozen at creation — the name printed on
+ * The name and the address were both frozen at creation - the name printed on
  * every RPH this person writes, and the one Google sign-in matches on a first
- * visit — so a typo used to mean deleting the account and importing it again,
+ * visit - so a typo used to mean deleting the account and importing it again,
  * taking that teacher's plans with them.
  *
  * The username is deliberately absent: it is what every device is already
@@ -703,7 +703,7 @@ function EditAccountDialog({
   const [email, setEmail] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
-  // Adopt the member's values only when the dialog changes identity — reading
+  // Adopt the member's values only when the dialog changes identity - reading
   // them on every render would fight the person typing into the fields.
   React.useEffect(() => {
     if (!member) return;
@@ -767,7 +767,7 @@ function EditAccountDialog({
             />
             <p className="mt-1.5 text-[11.5px] text-ink-4">
               Alamat yang guru taip pada skrin log masuk, dan yang dipautkan pada log masuk
-              Google pertama kali. Nama pengguna tidak ditukar di sini — ia yang peranti sudah
+              Google pertama kali. Nama pengguna tidak ditukar di sini - ia yang peranti sudah
               log masuk dengannya.
             </p>
           </div>

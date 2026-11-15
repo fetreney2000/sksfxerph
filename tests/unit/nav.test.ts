@@ -5,7 +5,7 @@ import { MEMBER_ROLES } from "@/lib/types";
 const hrefsFor = (role: string) =>
   navFor(role).flatMap((group) => group.items.map((item) => item.href));
 
-describe("navigation — the editor is an action, not a destination", () => {
+describe("navigation - the editor is an action, not a destination", () => {
   it("removes /editor from every role's navigation", () => {
     for (const role of MEMBER_ROLES) {
       expect(hrefsFor(role)).not.toContain("/editor");
@@ -28,7 +28,7 @@ describe("navigation — the editor is an action, not a destination", () => {
   });
 });
 
-describe("navigation — the home matches the role", () => {
+describe("navigation - the home matches the role", () => {
   it("puts the reviewer screens under Penyeliaan, not Pentadbiran", () => {
     const groups = navFor("gpk");
     const supervision = groups.find((g) => g.label === "Penyeliaan");
@@ -59,7 +59,7 @@ describe("navigation — the home matches the role", () => {
   });
 });
 
-describe("mobile navigation — four tabs, then Lagi", () => {
+describe("mobile navigation - four tabs, then Lagi", () => {
   it("keeps the reviewer's four main screens and puts the rest behind Lagi", () => {
     const { primary, secondary } = mobileNavFor("gpk");
 
@@ -103,7 +103,7 @@ describe("mobile navigation — four tabs, then Lagi", () => {
   });
 });
 
-describe("routeMetaFor — nested editor routes keep their name", () => {
+describe("routeMetaFor - nested editor routes keep their name", () => {
   it("resolves an exact route", () => {
     expect(routeMetaFor("/minggu").title).toBe("Minggu Ini");
   });
@@ -120,7 +120,7 @@ describe("routeMetaFor — nested editor routes keep their name", () => {
 
   it("tells the template authoring screen apart from the library it lives under", () => {
     // The penyunting is not a library screen, so it does not inherit the
-    // library's crumb — a teacher should be able to tell which of the two
+    // library's crumb - a teacher should be able to tell which of the two
     // they are on from the title bar.
     expect(routeMetaFor("/templat/baru").crumb).toBe("Templat baharu");
     expect(routeMetaFor("/templat").crumb).toBe("Templat tersedia");

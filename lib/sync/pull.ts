@@ -9,8 +9,8 @@ import type { RphDocument } from "@/lib/types";
  * The other half of sync: pull what the server has.
  *
  * Documents have only ever gone *up*. A teacher who created a plan at school
- * saw an empty archive on their phone, and the signature seal — which is
- * rendered from the local document — could not appear on any machine but the
+ * saw an empty archive on their phone, and the signature seal - which is
+ * rendered from the local document - could not appear on any machine but the
  * one that wrote it. `flushQueue()` sends; this receives.
  *
  * ## The merge rule is the whole point
@@ -82,7 +82,7 @@ function toLocal(row: DocumentRow): RphDocument {
   return {
     id: row.id,
     schoolCode,
-    // The server's own owner id — the same one every screen filters on
+    // The server's own owner id - the same one every screen filters on
     // (`[ownerId+session]`). It used to be a shared placeholder, and that is
     // how one teacher's plans reached another's dashboard: the pull writes
     // rows but never deletes one the server did not return, so a plan pulled
@@ -96,7 +96,7 @@ function toLocal(row: DocumentRow): RphDocument {
     session: row.session || currentSession(),
     weekNo: row.week_no,
     planDate: row.plan_date,
-    // `07:30:00` on the server, `07:30` in the document — the editor's time
+    // `07:30:00` on the server, `07:30` in the document - the editor's time
     // input takes the short form.
     slotTime: (row.slot_time ?? "07:30").slice(0, 5),
     slotTimeEnd: (row.slot_time_end ?? "12:40").slice(0, 5),

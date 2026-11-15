@@ -16,7 +16,7 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   /**
-   * Permission needed to see this entry. Read by `navFor()` — the sidebar,
+   * Permission needed to see this entry. Read by `navFor()` - the sidebar,
    * the mobile bar and the command palette all go through it, so an item a
    * role cannot reach disappears everywhere at once instead of surviving in
    * one surface (the old `scope` field was declared and never read).
@@ -28,7 +28,7 @@ export interface NavItem {
    * Abbreviation for the bottom bar.
    *
    * Five destinations across 375px is ~75px each, and "Perpustakaan Templat"
-   * measures 126px — so without this the label either truncates to something
+   * measures 126px - so without this the label either truncates to something
    * unreadable or pushes the bar past the viewport, which is exactly what it
    * was doing. The sidebar keeps the full label; only the mobile bar uses this.
    */
@@ -107,7 +107,7 @@ export const NAV: NavGroup[] = [
   },
   {
     // The template library is a resource for every role, not part of a
-    // teacher's group — otherwise the Administrator's only "Guru" item was a
+    // teacher's group - otherwise the Administrator's only "Guru" item was a
     // library they administer but do not use to plan.
     label: ms.nav.sumber,
     items: [
@@ -122,7 +122,7 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-/** Navigation for a role — groups with nothing permitted in them disappear. */
+/** Navigation for a role - groups with nothing permitted in them disappear. */
 export function navFor(role: string | null | undefined): NavGroup[] {
   return NAV.map((group) => ({
     ...group,
@@ -162,10 +162,10 @@ export interface MobileNav {
 /**
  * Split a role's navigation into bottom-bar tabs and the "Lagi" sheet.
  *
- * A role with four or fewer destinations has no sheet — a "Lagi" tab that opens
+ * A role with four or fewer destinations has no sheet - a "Lagi" tab that opens
  * an empty drawer is worse than no tab at all. A GPK gets their four main
  * screens (Minggu, Semakan, Sekolah, Laporan) and finds Arkib, RPT and Templat
- * under Lagi; a Guru Besar — who teaches no class and has no Minggu or Arkib —
+ * under Lagi; a Guru Besar - who teaches no class and has no Minggu or Arkib -
  * sees Semakan, Sekolah, Laporan and Templat directly; a Guru Biasa sees all
  * four of their destinations directly.
  */
@@ -197,7 +197,7 @@ export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/templat": { title: ms.nav.templat, crumb: "Templat tersedia" },
   "/rpt": { title: ms.nav.rpt, crumb: "Pautan Drive" },
   // The wizard is not a library screen, so it does not inherit the library's
-  // crumb — a teacher authoring a plan should be able to tell from the title
+  // crumb - a teacher authoring a plan should be able to tell from the title
   // bar which of the two screens they are on.
   "/templat/baru": { title: ms.nav.templat, crumb: "Templat baharu" },
   "/arkib": { title: ms.nav.arkib, crumb: "Rekod sesi" },

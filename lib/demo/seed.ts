@@ -8,7 +8,7 @@ import type { RphDocument, SchoolClass } from "@/lib/types";
  * Local-mode seed.
  *
  * When Supabase is not configured the app still has to *look* like a real
- * school on Monday morning — otherwise the dashboard, editor and review queue
+ * school on Monday morning - otherwise the dashboard, editor and review queue
  * are four empty rectangles and nobody can evaluate the product.
  *
  * Runs once, only when the document store is empty, and never overwrites
@@ -27,7 +27,7 @@ export const SUBJECTS = [
   { code: "SAIN", nama: "Sains", curriculum: "KSSR" as const },
 ];
 
-/** A complete plan — completeness = 100, ready to demonstrate the submit gate. */
+/** A complete plan - completeness = 100, ready to demonstrate the submit gate. */
 const completePayload = () => ({
   ...emptyPayload(),
   fasa_tema: "Nombor dan Operasi",
@@ -55,7 +55,7 @@ const completePayload = () => ({
 });
 
 /**
- * A partial plan — completeness = 25, so the submit gate blocks on it.
+ * A partial plan - completeness = 25, so the submit gate blocks on it.
  *
  * Only the two DSKP rows are filled. That is deliberate: it is the fixture
  * that proves `submit_rph` refuses an incomplete plan, and a half-filled plan
@@ -164,7 +164,7 @@ export async function seedLocalData(weekNo: number): Promise<void> {
 
     const docs: RphDocument[] = PLAN_SEED.map((seed, i) => {
       // `schoolDays` always returns five dates; the second fallback is the
-      // backstop, never the path — and an empty week must not seed at all.
+      // backstop, never the path - and an empty week must not seed at all.
       const planDate = days[seed.dayIndex] ?? days[0];
       if (!planDate) throw new Error("seed week has no days");
       return {

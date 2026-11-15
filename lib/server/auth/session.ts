@@ -16,7 +16,7 @@ import type { MemberRole } from "@/lib/types";
  * Cookie session → authenticated user.
  *
  * Verification is two-stage:
- *   1. HMAC + expiry (pure, no I/O) — `lib/server/auth/token.ts`;
+ *   1. HMAC + expiry (pure, no I/O) - `lib/server/auth/token.ts`;
  *   2. a live read of `erph.user`, which is what makes these checks *stick*:
  *        • `is_active = false`   → out immediately, not when the cookie expires
  *        • `iat < password_changed_at` → every previously issued cookie dies
@@ -70,7 +70,7 @@ export async function resolveUser(
   if (!session) return null;
 
   if (!supabaseConfigured) {
-    // Resolved by the cookie's subject, not "whoever is demoing" — local mode
+    // Resolved by the cookie's subject, not "whoever is demoing" - local mode
     // has more than one account precisely so role separation can be exercised.
     const account = localAccountById(session.sub);
     if (!account) return null;

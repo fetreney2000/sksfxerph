@@ -22,7 +22,7 @@ const DAY = 86_400_000;
 const mytDate = (y: number, m: number, d: number, h = 12) =>
   new Date(Date.UTC(y, m - 1, d, h) - MYT);
 
-describe("school calendar — one definition, used everywhere", () => {
+describe("school calendar - one definition, used everywhere", () => {
   it("term 1 starts Monday 16 March 2026 → week 1", () => {
     expect(weekMondayIso(1)).toBe("2026-03-16");
     expect(currentWeek(mytDate(2026, 3, 16))).toBe(1);
@@ -70,7 +70,7 @@ describe("school calendar — one definition, used everywhere", () => {
   });
 });
 
-describe("weekDeadline — Friday 16:00 MYT, inside the same school week", () => {
+describe("weekDeadline - Friday 16:00 MYT, inside the same school week", () => {
   it("falls on a Friday", () => {
     for (const w of [1, 10, 30, 40]) {
       expect(weekdayIndex(toIso(weekDeadline(w)))).toBe(5);
@@ -109,13 +109,13 @@ describe("labels", () => {
   });
 
   it("writes both months when the week crosses one", () => {
-    // Week 38 is 30 November — 4 December 2026. Printing only the ending
+    // Week 38 is 30 November - 4 December 2026. Printing only the ending
     // month put "29–2 Nov" on the header of the statutory sheet: two numbers
     // and one month.
     expect(weekRangeLabel(38)).toBe("30 Nov–4 Dis 2026");
   });
 
-  it("numbers the day as the school's form does — Ahad = 1", () => {
+  it("numbers the day as the school's form does - Ahad = 1", () => {
     // 12 Januari 2026 is a Monday, and the school's own form writes "2. Isnin"
     // against it. `weekdayIndex` counts from zero, so it is off by one here.
     expect(printedDayNumber("2026-01-12")).toBe(2);
@@ -150,7 +150,7 @@ describe("the weeks a plan may be filed under", () => {
     }
   });
 
-  it("counts a Sunday the way currentWeek does — as the week ahead", () => {
+  it("counts a Sunday the way currentWeek does - as the week ahead", () => {
     // A teacher planning on Sunday evening is planning the week starting the
     // next day, so the Sunday and that Monday are the same week. Whoever
     // picks the date and whoever stamps the week must not disagree.
@@ -177,7 +177,7 @@ describe("the weeks a plan may be filed under", () => {
  * The school's clock, not the machine's.
  *
  * Every instant in this app is rendered for a school in Kuala Lumpur. A laptop
- * set to another country must not change what its owner's own documents say —
+ * set to another country must not change what its owner's own documents say -
  * and the greeting, which used to be the fixed string "Selamat pagi", is the
  * most visible place where it could.
  */
@@ -198,7 +198,7 @@ describe("Asia/Kuala_Lumpur, everywhere", () => {
   });
 
   it("renders the school's hour, not the browser's", () => {
-    // 16:20 UTC is 00:20 the next day in MYT — the date rolls over as well as
+    // 16:20 UTC is 00:20 the next day in MYT - the date rolls over as well as
     // the hour, which is what a browser-local formatter gets wrong.
     const d = new Date("2026-10-12T16:20:00Z");
     expect(mytFields(d)).toMatchObject({ date: 13, hour: 0, minute: 20 });
@@ -216,7 +216,7 @@ describe("Asia/Kuala_Lumpur, everywhere", () => {
     // and a record the school has to file must say so.
     expect(longDateOf("2026-10-12T17:30:00Z")).toBe("Selasa, 13 Oktober 2026");
     expect(longDateOf(Date.UTC(2026, 9, 12, 17, 30))).toBe("Selasa, 13 Oktober 2026");
-    expect(longDateOf("bukan tarikh")).toBe("—");
+    expect(longDateOf("bukan tarikh")).toBe("-");
   });
 });
 

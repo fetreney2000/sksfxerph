@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { supabaseConfigured } from "@/lib/config";
 
 /**
- * The session cookie's wire format — pure crypto, no Next.js imports, so it
+ * The session cookie's wire format - pure crypto, no Next.js imports, so it
  * can be unit-tested outside a request.
  *
  *   base64url(user id) . issued-at . expires-at . base64url(HMAC-SHA256)
@@ -10,7 +10,7 @@ import { supabaseConfigured } from "@/lib/config";
  * Why stateless instead of a session table: a single-school tool does not need
  * server-side session storage to be correct. Revocation still works, because
  * `resolveUser` additionally checks `is_active` and `iat >=
- * password_changed_at` against the live row — deactivate a teacher or change a
+ * password_changed_at` against the live row - deactivate a teacher or change a
  * password and the cookie dies on the next request.
  */
 
@@ -30,7 +30,7 @@ function signingSecret(): string {
   if (s && s.length >= 32) return s;
   if (supabaseConfigured) {
     throw new Error(
-      "SESSION_SECRET must be set (≥32 chars) when Supabase is configured — " +
+      "SESSION_SECRET must be set (≥32 chars) when Supabase is configured - " +
         "signing sessions with a default would let anyone forge a cookie.",
     );
   }
@@ -64,7 +64,7 @@ export function parseSession(value: string | undefined | null): DecodedSession |
   try {
     secret = signingSecret();
   } catch {
-    // Misconfigured deployment — refuse every session rather than fall back.
+    // Misconfigured deployment - refuse every session rather than fall back.
     return null;
   }
 

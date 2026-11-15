@@ -6,7 +6,7 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
  * GET /api/stats, and who may ask for it.
  *
  * The dashboard hid the school's totals from a Guru Biasa while this endpoint
- * served them to anyone signed in — a card removed without the request behind
+ * served them to anyone signed in - a card removed without the request behind
  * it being removed is a hidden door, not a closed one. Whole-school figures are
  * a supervisor's question, and this is the boundary that now says so.
  */

@@ -2,7 +2,7 @@
  * Canonical JSON and the SHA-256 over it.
  *
  * A signature over `JSON.stringify(payload)` would be worthless the moment two
- * implementations disagreed about key order or number formatting — which they
+ * implementations disagreed about key order or number formatting - which they
  * do, routinely. RFC 8785 (JCS) fixes the byte sequence a JSON value maps to,
  * so the browser that signed and the Node process verifying produce identical
  * bytes from the same data model.
@@ -12,12 +12,12 @@
  * The number rule is the awkward one (ECMAScript's Number::toString, which is
  * not the same as what every language does by default).
  *
- * Our envelopes carry strings, one integer, booleans and null — I-JSON, and no
+ * Our envelopes carry strings, one integer, booleans and null - I-JSON, and no
  * fractional or non-finite numbers at all. For that subset, sorting keys
  * recursively and handing the result to `JSON.stringify` is exactly JCS:
  * `JSON.stringify` already implements the required number formatting, and it
  * emits no whitespace. If a fractional number is ever added to an envelope,
- * this stops being true and needs a real canonicaliser — the check in
+ * this stops being true and needs a real canonicaliser - the check in
  * `envelope` asserts the invariant rather than assuming it.
  */
 
@@ -44,7 +44,7 @@ export async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** base64url without padding — the encoding JWS/WebAuthn use, and what we store. */
+/** base64url without padding - the encoding JWS/WebAuthn use, and what we store. */
 export function toBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -55,7 +55,7 @@ export function toBase64Url(bytes: Uint8Array): string {
  * Returns `Uint8Array<ArrayBuffer>` on purpose rather than the plain alias.
  *
  * TS 5.9 tightened `BufferSource` to exclude views over a `SharedArrayBuffer`,
- * and `atob`'s result would otherwise infer `ArrayBufferLike` — which makes
+ * and `atob`'s result would otherwise infer `ArrayBufferLike` - which makes
  * `crypto.subtle.verify(...)` refuse the argument. Copying into a fresh
  * `ArrayBuffer` keeps the value identical and the type accepted.
  */

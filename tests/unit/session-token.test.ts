@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mintSession, parseSession, SESSION_TTL_SECONDS } from "@/lib/server/auth/token";
 
 /**
- * Session cookie (Supabase Auth removed — sessions are ours).
+ * Session cookie (Supabase Auth removed - sessions are ours).
  *
  * The invariant that matters: a cookie is only ever accepted if its HMAC
  * verifies *and* it hasn't expired. Everything else (active flag, password

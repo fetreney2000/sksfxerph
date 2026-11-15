@@ -7,7 +7,7 @@ import { RphCover } from "@/components/rph/rph-cover";
 /**
  * The cover sheet is the page a district reads first, and the only one that
  * carries the week's approval. Its labels are the ones printed on the school's
- * form, so — as with RphPaper — asserting them is the point: a heading the
+ * form, so - as with RphPaper - asserting them is the point: a heading the
  * reviewer does not recognise is a document that cannot be filed.
  */
 const SESSION = "2026/2027";
@@ -31,7 +31,7 @@ const BASE = {
 
 afterEach(cleanup);
 
-describe("RphCover — the weekly summary", () => {
+describe("RphCover - the weekly summary", () => {
   it("renders every row the printed form has", () => {
     render(<RphCover {...BASE} />);
     for (const label of [
@@ -60,7 +60,7 @@ describe("RphCover — the weekly summary", () => {
     // 01:06 UTC is 09:06 in Kuala Lumpur, and nine in the morning is what the
     // school's record says. Asserting the exact instant rather than merely the
     // shape is what notices a stamp that has gone back to the printing
-    // machine's clock — which would read 01:06 and be wrong for everyone there.
+    // machine's clock - which would read 01:06 and be wrong for everyone there.
     expect(screen.getByText("19-01-2026 | 09:06 AM")).toBeTruthy();
   });
 
@@ -69,12 +69,12 @@ describe("RphCover — the weekly summary", () => {
     for (const field of ["Bob Edrem bin Pemin", "Penolong Kanan HEM"]) {
       expect(screen.queryByText(field), field).toBeNull();
     }
-    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText("-").length).toBeGreaterThanOrEqual(3);
   });
 
   it("names the signer, their jawatan and the date they confirmed it", () => {
     render(<RphCover {...BASE} signature={SEAL} signatureState="valid" status="approved" />);
-    // Twice: once inside the seal, once in NAMA PENTADBIR. The form has both —
+    // Twice: once inside the seal, once in NAMA PENTADBIR. The form has both -
     // the seal is what makes it trustworthy, the row is what a reader scans.
     expect(screen.getAllByText("Bob Edrem bin Pemin").length).toBe(2);
     // Twice for the same reason: the seal puts the office under the name, and
@@ -93,14 +93,14 @@ describe("RphCover — the weekly summary", () => {
       <RphCover {...BASE} signature={{ ...SEAL, signerTitle: null }} signatureState="valid" />,
     );
     const jawatan = screen.getByText("JAWATAN").closest("tr");
-    expect(jawatan?.textContent).toBe("JAWATAN—");
+    expect(jawatan?.textContent).toBe("JAWATAN-");
   });
 
   it("prints CATATAN PENTADBIR as a box to write in, not a dash", () => {
     const { container } = render(<RphCover {...BASE} />);
     const row = screen.getByText("CATATAN PENTADBIR").closest("tr");
     expect(row?.textContent).toBe("CATATAN PENTADBIR");
-    expect(container.textContent).not.toMatch(/CATATAN PENTADBIR—/);
+    expect(container.textContent).not.toMatch(/CATATAN PENTADBIR-/);
   });
 
   it("shows the reviewer's comment when there is one", () => {
@@ -109,7 +109,7 @@ describe("RphCover — the weekly summary", () => {
   });
 
   it("prints the status in the paper form's words, not the grader's mark", () => {
-    // The grade — `(1)` and `(0)` — is the reviewer's marking, and it belongs
+    // The grade - `(1)` and `(0)` - is the reviewer's marking, and it belongs
     // on the screens where they make it. A reader of a stapled stack needs
     // the word, which is what the paper form has, so the printed cover says
     // "Lengkap" while the in-app badge uses the teacher-facing "Disahkan".

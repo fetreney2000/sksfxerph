@@ -12,7 +12,7 @@ import type { SyncResult } from "@/lib/types";
  * natural-key merge, idempotency via `sync_op`, revision history, the
  * status-change guard) lives in the `erph.sync_rph` SECURITY DEFINER RPC in
  * db/schema.sql. This handler authenticates the session cookie, forwards the
- * batch with the acting user id attached, and maps the response — so a bug here
+ * batch with the acting user id attached, and maps the response - so a bug here
  * cannot bypass a rule there.
  *
  * Auth shape changed with the removal of Supabase Auth: there is no user JWT
@@ -25,14 +25,14 @@ import type { SyncResult } from "@/lib/types";
 export async function POST(request: NextRequest) {
   if (!supabaseConfigured) {
     // The client never calls this in local mode (hasBackend() gates it), so
-    // reaching here means a stale build talking to a stripped env — fail loudly.
+    // reaching here means a stale build talking to a stripped env - fail loudly.
     return NextResponse.json({ error: "Penyegerakan tidak disediakan" }, { status: 503 });
   }
 
   // Sync carries plan writes, and only a plan-writing role has writes to
   // carry. The client never sends an empty batch (`flushQueue` returns before
   // the fetch), so gating the whole handler cannot turn a reviewer's idle
-  // poll into a 403 — and a Guru Besar's browser holds no documents to queue.
+  // poll into a 403 - and a Guru Besar's browser holds no documents to queue.
   // Review decisions travel through `/api/rpc/review`, untouched by this.
   const gate = await requirePermission(request, "rph");
   if ("error" in gate) return gate.error;
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
     );
   }
   // Structural gate before anything reaches SQL: every op names its own row by
-  // UUID under the one entity this endpoint carries. Anything deeper — week
-  // numbers, dates, class membership — stays SQL's job, and its refusals come
+  // UUID under the one entity this endpoint carries. Anything deeper - week
+  // numbers, dates, class membership - stays SQL's job, and its refusals come
   // back per-op in `results` rather than as a batch rejection. Without this, a
   // malformed op_id died inside `(v_op->>'op_id')::uuid` and the 22P02 text
   // went straight to the client.
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       // The 401 test reads the raw text server-side; the client only ever sees
-      // what `toClientError` passes — an authored raise, or nothing at all.
+      // what `toClientError` passes - an authored raise, or nothing at all.
       const status =
         error.code === "PGRST301" || /belum log masuk/i.test(error.message) ? 401 : 422;
       return toClientError("[sync] rpc failed:", error, status);

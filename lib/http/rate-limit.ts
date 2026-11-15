@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
  * Sliding-window rate limiter for anon-key endpoints (backend §5 checklist:
  * "rate limiting isn't provided by Supabase").
  *
- * In-memory and per-instance — correct for this deployment (one school, one
+ * In-memory and per-instance - correct for this deployment (one school, one
  * Vercel instance, no horizontal scaling) and it costs no dependency and no
  * extra service on the free tier. If the app is ever scaled across instances
  * this must move to a shared store (Upstash Rate Limit, stack §11); the call
@@ -25,14 +25,14 @@ export function rateLimit(key: string): NextResponse | null {
 
   if (!entry || entry.resetAt <= now) {
     hits.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    // Opportunistic prune so a long-lived process doesn't accumulate keys —
+    // Opportunistic prune so a long-lived process doesn't accumulate keys -
     // without a cap an attacker cycling IPs grows this map without bound, and
     // a full scan on every request would turn the limiter itself into the DoS.
     if (hits.size > 5_000) {
       for (const [k, v] of hits) if (v.resetAt <= now) hits.delete(k);
       // Still over budget (a flood of distinct keys inside one window): drop
       // the whole table rather than scanning it on every request. Failing open
-      // is safe here — the per-account bucket and the lockout still hold.
+      // is safe here - the per-account bucket and the lockout still hold.
       if (hits.size > 20_000) hits.clear();
     }
     return null;
@@ -52,15 +52,15 @@ export function rateLimit(key: string): NextResponse | null {
  * Best-effort client identity: the caller's network address.
  *
  * This used to read the `Authorization` header and key on the JWT's `sub`.
- * Nothing here verifies that JWT — it was decoded and trusted — so `sub` was
+ * Nothing here verifies that JWT - it was decoded and trusted - so `sub` was
  * simply whatever the caller put inside it. A caller could send
  * `Authorization: Bearer <base64url of {"sub":"1"}>` and land in a fresh bucket
  * on every request, which is precisely what the limiter exists to prevent: the
  * login route's account lockout became a one-request-per-window denial of
  * service against every account in the school.
  *
- * The browser never sends an Authorization header at all — sessions are
- * httpOnly cookies and the publishable key is never used as a bearer token —
+ * The browser never sends an Authorization header at all - sessions are
+ * httpOnly cookies and the publishable key is never used as a bearer token -
  * so the JWT branch had no legitimate caller to serve. The limit that cannot
  * be forged is the one keyed on the account: the login route adds a second
  * bucket from the username in the request body, which no header can rotate.
@@ -72,8 +72,8 @@ export function clientKey(request: Request, fallback: string): string {
 /**
  * The caller's network address.
  *
- * The first hop of `x-forwarded-for` — the original client in the standard
- * chain — then `x-real-ip`, then whatever the caller passed as the fallback.
+ * The first hop of `x-forwarded-for` - the original client in the standard
+ * chain - then `x-real-ip`, then whatever the caller passed as the fallback.
  * The first hop rather than the last because a school behind a shared proxy
  * would otherwise put every teacher in one bucket, and one noisy teacher's
  * retries would then lock the whole school out of logging in for a minute.
@@ -84,7 +84,7 @@ export function clientKey(request: Request, fallback: string): string {
  */
 export function clientIp(request: Request, fallback: string): string {
   // Bounded and charset-checked: the header is attacker-controlled and becomes
-  // a map key, so a megabyte of garbage must not become a megabyte of memory —
+  // a map key, so a megabyte of garbage must not become a megabyte of memory -
   // and anything that is not an address-like token tells us nothing anyway.
   const clean = (value: string | null): string | null => {
     const token = value?.split(",")[0]?.trim() ?? "";

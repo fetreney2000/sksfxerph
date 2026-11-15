@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 
 /**
  * Contextual "?" popover (frontend research §4.2(12): "progressive/zero-training
- * help — contextual ? popovers … teachers must be able to self-serve").
+ * help - contextual ? popovers … teachers must be able to self-serve").
  *
  * A disclosure, not a hover tooltip: hover-only help is unusable on the phones
  * most teachers plan on, and unreachable by keyboard. Click/Enter toggles,

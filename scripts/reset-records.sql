@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ RESET — every plan, every account except the pentadbir's
+-- eRPH ▸ RESET - every plan, every account except the pentadbir's
 -- ============================================================================
 --
 --   ⚠  TAKE A BACKUP FIRST. This cannot be undone.
@@ -17,7 +17,7 @@
 --   · the pentadbir's own account, membership and jawatan.
 --
 -- WHAT TO CHANGE FIRST
---   · Want to keep the templates?  Comment out the `rph_template` line —
+--   · Want to keep the templates?  Comment out the `rph_template` line -
 --     they are teacher-made content, not records of a school year.
 --   · The account kept is identified by ROLE, not by username, so hold on to
 --     whichever row `role = 'pentadbir'` names. Delete the section-3 select
@@ -25,7 +25,7 @@
 --
 -- Peraturan 8 of the Akta Pendidikan 1996 makes these statutory records; this
 -- script deletes them outright rather than soft-deleting. That is what "start
--- fresh" means, and it is your call — but the backup is not optional.
+-- fresh" means, and it is your call - but the backup is not optional.
 --
 -- Safe to run twice: every statement below is a delete with no rows left to
 -- remove the second time.
@@ -35,7 +35,7 @@ begin;
 
 -- ── 0 · unlock the append-only tables ───────────────────────────────────────
 -- `rph_revision`, `rph_review` and `audit_log` are guarded against DELETE by
--- `erph.forbid_mutation()` — that is what makes them a record rather than a
+-- `erph.forbid_mutation()` - that is what makes them a record rather than a
 -- log someone can edit. The guard honours this switch, which is how the
 -- five-year retention job clears old rows: set for this transaction only, so
 -- it cannot outlive the wipe it is here for. Without it, section 1 stops on
@@ -45,7 +45,7 @@ select set_config('app.purge', '1', true);
 -- ── 1 · everything that hangs off a plan ─────────────────────────────────────
 -- Order matters. `rph_review.reviewer_id` and `rph_signature.signer_id` point
 -- at erph.user with no cascade, so a signature has to be gone before the
--- person who made it can be — and `rph_document.owner_id` is the same story.
+-- person who made it can be - and `rph_document.owner_id` is the same story.
 delete from erph.export_file;    -- rows with document_id NULL are ad-hoc exports
 delete from erph.audit_log;
 delete from erph.notification;

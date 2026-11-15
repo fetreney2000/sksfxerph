@@ -9,7 +9,7 @@ const scryptAsync = promisify(scryptCallback) as (
 ) => Promise<Buffer>;
 
 /**
- * Password hashing — scrypt from Node's stdlib.
+ * Password hashing - scrypt from Node's stdlib.
  *
  * No bcrypt/argon2 dependency: scrypt is memory-hard, in the standard library,
  * and adequate here (one school, tens of users). Parameters follow the RFC 7914
@@ -70,7 +70,7 @@ export async function verifyPassword(plain: string, stored: string): Promise<boo
     // Same length is guaranteed by passing expected.length to scrypt.
     return timingSafeEqual(actual, expected);
   } catch {
-    // Malformed stored hash or absurd parameters — deny, don't throw.
+    // Malformed stored hash or absurd parameters - deny, don't throw.
     return false;
   }
 }

@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 011 — the fix rate, after a return
+-- eRPH ▸ MIGRATION 011 - the fix rate, after a return
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005/006/007/008/009/010. Safe to run more
 -- than once.
@@ -9,7 +9,7 @@
 --
 -- The pair exists because neither number means much alone. A count of who is
 -- *currently* returned cannot separate a teacher who acts on feedback from
--- one who ignores it — a teacher who fixes everything and one who never does
+-- one who ignores it - a teacher who fixes everything and one who never does
 -- look identical the moment the first is caught up. Read from rph_review
 -- rather than the document, because the document carries only the latest
 -- decision, and the history of a plan that was returned and then approved is
@@ -46,7 +46,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- ignores every return look identical once the first is caught up.
          --
          -- Read from rph_review rather than the document, because the document
-         -- only ever carries the latest decision — the history of a plan that
+         -- only ever carries the latest decision - the history of a plan that
          -- was returned and then approved is exactly what makes it "fixed".
          (select count(*) from erph.rph_document d2
            where d2.owner_id = m.user_id and d2.school_id = p_school
@@ -64,7 +64,7 @@ language sql stable security definer set search_path = erph, public as $$
          -- Classes per teacher, as a self-contained subquery rather than a
          -- join: a plan now covers several classes, so joining class onto the
          -- document would multiply every row of it and inflate the counts
-         -- above — and the function body is SQL with a GROUP BY on the
+         -- above - and the function body is SQL with a GROUP BY on the
          -- teacher, which an outer reference to d.class_ids cannot survive.
          (select string_agg(distinct c.nama, ', ' order by c.nama)
             from erph.rph_document d2

@@ -5,12 +5,12 @@ import type { adminDb } from "@/lib/server/db";
 import { toClientError } from "@/lib/server/http/errors";
 
 /**
- * GET / PATCH /api/admin/school — the school's own identity.
+ * GET / PATCH /api/admin/school - the school's own identity.
  *
  * One multipart PATCH rather than two endpoints: the code, name, district,
  * motto and crest are a single form in the UI, and splitting them would leave a
- * window where the new name had saved but the new crest had not — or vice
- * versa — giving the sidebar one school and the login screen another.
+ * window where the new name had saved but the new crest had not - or vice
+ * versa - giving the sidebar one school and the login screen another.
  *
  * Written through `erph.admin_set_school`, which re-checks
  * `has_role(..., 'pentadbir')` inside the function: this handler holds the
@@ -19,15 +19,15 @@ import { toClientError } from "@/lib/server/http/errors";
  * ## Why the school code is writable
  *
  * It is `school`'s UNIQUE natural key, so it looks like the one field that must
- * not move. It isn't: nothing in the database references it — `school_id` is
+ * not move. It isn't: nothing in the database references it - `school_id` is
  * the foreign key on `rph_document`, `class`, `school_member` and every other
- * table — and `sync_rph` derives the school from `school_member`. The single
+ * table - and `sync_rph` derives the school from `school_member`. The single
  * place that ever looked a school up *by* its code was `resolveSchool()`, and
  * that now reads the active row instead, precisely so this field can be edited
  * without stranding the branding on a code no row has any more.
  *
- * Validation is duplicated here rather than left to SQL so the common case —
- * an admin typing a code with a space in it — is answered in the form, without
+ * Validation is duplicated here rather than left to SQL so the common case -
+ * an admin typing a code with a space in it - is answered in the form, without
  * a round trip, in the same message the server would have given.
  */
 
@@ -62,12 +62,12 @@ const EXT: Record<string, string> = {
 
 const textSchema = z.object({
   // Trimming happens before validation so a stray space is corrected rather
-  // than rejected — but a code that is *only* whitespace still has to fail.
+  // than rejected - but a code that is *only* whitespace still has to fail.
   kod_sekolah: z
     .string()
     .min(1, "Kod sekolah diperlukan")
     .max(24, "Kod sekolah terlalu panjang (maksimum 24 aksara)")
-    // Mirrors the check in `erph.admin_set_school` — same pattern, same words,
+    // Mirrors the check in `erph.admin_set_school` - same pattern, same words,
     // so the form and the server can never disagree about what is allowed.
     .regex(
       /^[A-Za-z0-9][A-Za-z0-9._-]*$/,
@@ -83,7 +83,7 @@ const textSchema = z.object({
 
 /**
  * Administrator + school, or the response to send back. The two arms must be
- * genuinely disjoint — if both mention `error`, `"error" in gate` narrows to
+ * genuinely disjoint - if both mention `error`, `"error" in gate` narrows to
  * nothing useful and `gate.error` arrives as `NextResponse | undefined`.
  */
 type AdminGate = { error: NextResponse } | { db: ReturnType<typeof adminDb>; schoolId: string };
@@ -177,7 +177,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (error) {
     // The state this deployment is in between shipping the code and running
     // the migration. PostgREST would otherwise hand them "could not find the
-    // function erph.admin_set_school(…) in the schema cache" — a schema dump
+    // function erph.admin_set_school(…) in the schema cache" - a schema dump
     // for a problem with a one-line remedy. Everything else goes through the
     // central sanitizer: authored raises pass, infrastructure does not.
     if (/schema cache|could not find the function/i.test(error.message)) {

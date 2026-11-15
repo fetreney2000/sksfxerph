@@ -49,8 +49,8 @@ export default function ArkibPage() {
     : archive;
 
   /**
-   * The flat list is a year of teaching — a full-time teacher is past a
-   * hundred plans by December — and it used to render every one of them at
+   * The flat list is a year of teaching - a full-time teacher is past a
+   * hundred plans by December - and it used to render every one of them at
    * once. The newest page is what anyone opening this screen wants; the rest
    * is one press away, and searching starts the window again from the top.
    */
@@ -61,7 +61,7 @@ export default function ArkibPage() {
    *
    * Adjusted during render rather than in an effect: the effect version
    * depends on `needle` without reading it, which is exactly the shape a
-   * linter warns about — and clearing one render late is a row of the wrong
+   * linter warns about - and clearing one render late is a row of the wrong
    * week's results on screen while it catches up.
    */
   const [searched, setSearched] = React.useState(needle);
@@ -82,7 +82,7 @@ export default function ArkibPage() {
    * Every week that has happened, not only the weeks with plans in them.
    *
    * A week with nothing filed under it used not to appear here at all, which
-   * made the one week a teacher most needs to see — the one they missed — the
+   * made the one week a teacher most needs to see - the one they missed - the
    * one the archive hid. It is now a row like any other, empty and with a way
    * to fill it in.
    *
@@ -169,7 +169,7 @@ export default function ArkibPage() {
                       <b className="num">Minggu {w}</b>
                     </TD>
                     <TD className="num whitespace-nowrap text-ink-3">
-                      {range[0] ? weekRangeLabel(w) : "—"}
+                      {range[0] ? weekRangeLabel(w) : "-"}
                     </TD>
                     <TD className="num">
                       {rows.length === 0 ? (
@@ -198,12 +198,12 @@ export default function ArkibPage() {
                       )}
                     </TD>
                     <TD>
-                      {/* Name and date from the same document — the week's
+                      {/* Name and date from the same document - the week's
                           most recent review. The reviewer is whoever wrote the
                           newest `rph_review` row, which for a plan returned
                           and then approved is the approver. */}
                       {rows.length === 0 ? (
-                        <span className="text-[12.5px] text-ink-4">—</span>
+                        <span className="text-[12.5px] text-ink-4">-</span>
                       ) : reviewer || reviewed ? (
                         <div className="min-w-0">
                           {reviewer && (
@@ -257,7 +257,7 @@ export default function ArkibPage() {
 
         <CardFooter>
           <span className="text-[12.5px] text-ink-3">
-            Rekod disimpan mengikut Peraturan 8, Akta Pendidikan 1996 — memadam menyembunyikan
+            Rekod disimpan mengikut Peraturan 8, Akta Pendidikan 1996 - memadam menyembunyikan
             rancangan daripada aplikasi, tetapi rekod kekal dalam pangkalan data.
           </span>
         </CardFooter>
@@ -298,7 +298,7 @@ export default function ArkibPage() {
                   </TD>
                   <TD>
                     <span className="ellip block max-w-[280px] text-ink-3">
-                      {d.payload.standard_kandungan || "—"}
+                      {d.payload.standard_kandungan || "-"}
                     </span>
                   </TD>
                   <TD>
@@ -314,7 +314,7 @@ export default function ArkibPage() {
                         Buka
                       </Button>
                       {/* Salin: open the penyunting with this plan's content
-                          pre-filled as an unsaved draft — nothing is written
+                          pre-filled as an unsaved draft - nothing is written
                           until the teacher saves it under a week of their
                           choosing. */}
                       <Button

@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH · MIGRATION 004 — supervision scope and the signed single-stage review
+-- eRPH · MIGRATION 004 - supervision scope and the signed single-stage review
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003. Safe to run more than once.
 --
@@ -8,7 +8,7 @@
 --   · erph.semak_rph and erph.lulus_rph are retired. There is no longer a
 --     GPK → Guru Besar hop: a GPK approves directly, and a Guru Besar can do
 --     everything a GPK can on any teacher's plan.
---   · erph.rph_signature is new, and only the server can write to it —
+--   · erph.rph_signature is new, and only the server can write to it -
 --     approval is impossible without a signature already on file.
 --
 -- `forwarded` stays in the rph_status enum: Postgres cannot drop a value, and
@@ -84,7 +84,7 @@ begin
 
   -- Reassigning a supervisor orphans nothing, but a teacher moved from one GPK
   -- to another must not leave the previous GPK holding a plan they can no
-  -- longer open. Nothing is rewritten — plans keep who signed them — only the
+  -- longer open. Nothing is rewritten - plans keep who signed them - only the
   -- *forward* scope changes, which is exactly what the UPDATE above does.
 end $$;
 
@@ -148,7 +148,7 @@ begin
   --
   -- So an approval needs the same completeness the school asked for at
   -- submission. A school that has turned the requirement off may still approve
-  -- an incomplete plan — that is its own policy, set by the administrator who
+  -- an incomplete plan - that is its own policy, set by the administrator who
   -- answers for it.
   v_pct := erph.rph_completeness(v_doc.payload);
   select coalesce(
@@ -157,7 +157,7 @@ begin
            true)
     into v_require;
   if v_pct < 100 and v_require then
-    raise exception 'RPH belum lengkap untuk disahkan — kembalikan kepada guru';
+    raise exception 'RPH belum lengkap untuk disahkan - kembalikan kepada guru';
   end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)

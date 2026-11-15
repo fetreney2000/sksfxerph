@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/server/auth/session";
 
-/** GET /api/auth/me — who am I? 401 when signed out (the login form uses it). */
+/** GET /api/auth/me - who am I? 401 when signed out (the login form uses it). */
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

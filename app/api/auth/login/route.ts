@@ -8,7 +8,7 @@ import { adminDb } from "@/lib/server/db";
 import type { MemberRole } from "@/lib/types";
 
 /**
- * POST /api/auth/login — email (or username) + password against `erph.user`.
+ * POST /api/auth/login - email (or username) + password against `erph.user`.
  *
  * Supabase Auth (GoTrue) is deliberately not used: accounts and password
  * hashes live in our own table and are verified here with scrypt.
@@ -17,12 +17,12 @@ import type { MemberRole } from "@/lib/types";
  * no school email to rely on and signs in with their username. One field
  * serves both: an identifier shaped like an address is matched against
  * `email`, anything else against `username`. An account with no email on file
- * is still reachable by its username — the split is guidance, not a lockout.
+ * is still reachable by its username - the split is guidance, not a lockout.
  *
  * Defences, in the order they apply:
  *   1. rate limit per IP+identifier (one runaway client can't spray passwords)
  *   2. account lockout after 5 failures (15 minutes)
- *   3. constant-time-ish verification — a missing user still pays the scrypt
+ *   3. constant-time-ish verification - a missing user still pays the scrypt
  *      cost via verifyAgainstDummy, so timing doesn't enumerate accounts
  *   4. generic error message ("… atau kata laluan salah") for every case
  */
@@ -39,7 +39,7 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  * `.ilike()` passes its value straight into `email ILIKE <pattern>`, so an
  * identifier of `%` would match every account (and `_` would match any single
  * character). Combined with `.limit(1)` that means an attacker could aim the
- * lookup at an arbitrary row. Escaping makes the match literal — case-
+ * lookup at an arbitrary row. Escaping makes the match literal - case-
  * insensitive, but exact.
  */
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, (m) => `\\${m}`);
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     );
   }
   // One field, two doors: an address matches `email`, anything else matches
-  // `username`. The body key stays `username` — it is the identifier the
+  // `username`. The body key stays `username` - it is the identifier the
   // client typed, and renaming it would buy nothing.
   const byEmail = EMAIL_RE.test(identifier);
 
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
   //
   // The one above bounds the total; this one bounds the guesses against a
   // single account. It is derived from the request body, so no header can
-  // rotate it — which is what makes it the control that holds when the
+  // rotate it - which is what makes it the control that holds when the
   // network key is forged. It applies to every identifier, existent or not, so
   // the 429 says nothing about whether an account is real.
   const accountLimited = rateLimit(`login:acct:${identifier.toLowerCase()}`);
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
   // ── local mode: same code path, demo accounts, no database ────────────────
   if (!supabaseConfigured) {
     // Matched by the same rule as a real lookup: an email finds its account,
-    // a bare name finds its username — accepting any identifier against a
+    // a bare name finds its username - accepting any identifier against a
     // single hash would hand out the wrong one.
     const account = byEmail
       ? localAccountByEmail(identifier)
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
    * A lock that has run out starts the count again.
    *
    * Carrying the old total forward would re-arm the lock on the very next
-   * guess, so one request per window could hold an account locked for good —
+   * guess, so one request per window could hold an account locked for good -
    * and the account owner could do nothing about it, because the counter is
    * only cleared by a successful sign-in. The lock below is not extended
    * while it stands; this is the other half of that promise: the counter
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
   const ok = await verifyPassword(password, user.password_hash);
 
   if (!ok) {
-    // A locked account gets the *same* generic 401 as an unknown one — telling
+    // A locked account gets the *same* generic 401 as an unknown one - telling
     // a caller "this account is locked" would confirm the account exists.
     // The lock is also not extended here: otherwise a flood of guesses could
     // keep a teacher locked out indefinitely.
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
     return badCredentials();
   }
 
-  // Password proved correct — *now* the lock message is safe to reveal, and it
+  // Password proved correct - *now* the lock message is safe to reveal, and it
   // is what the legitimate owner needs to hear (rather than "wrong password").
   if (locked) {
     return NextResponse.json(

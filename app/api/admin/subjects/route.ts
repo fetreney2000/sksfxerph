@@ -5,10 +5,10 @@ import type { adminDb } from "@/lib/server/db";
 import { toClientError } from "@/lib/server/http/errors";
 
 /**
- * GET / POST / PATCH /api/admin/subjects — the administrator's view of the
+ * GET / POST / PATCH /api/admin/subjects - the administrator's view of the
  * subject list: everything, active or not, with the plan count each carries.
  *
- * Split from `GET /api/subjects` because they answer different questions —
+ * Split from `GET /api/subjects` because they answer different questions -
  * "what may a teacher pick?" versus "what does this school teach, and how much
  * work sits against each?". The count is what turns `is_active` from a switch
  * into a decision.
@@ -18,17 +18,17 @@ import { toClientError } from "@/lib/server/http/errors";
  * would take every plan already written against it.
  *
  * Writes go through `erph.admin_set_subject` / `erph.admin_create_subject`,
- * which re-check `has_role(..., 'pentadbir')` inside the function — this
+ * which re-check `has_role(..., 'pentadbir')` inside the function - this
  * handler holds the secret key, so RLS would not stop it on its own.
  */
 
 /**
- * Matikan/Hidupkan, or correcting a subject that already exists — one shape,
+ * Matikan/Hidupkan, or correcting a subject that already exists - one shape,
  * told apart by which field came in.
  *
  * `code` is never editable: it is a foreign key on every plan, DSKP standard
  * and teaching assignment, so the two things that *can* be wrong with a
- * subject — what it is called, and which curriculum it belongs to — are the
+ * subject - what it is called, and which curriculum it belongs to - are the
  * two this accepts.
  */
 const patchSchema = z
@@ -58,7 +58,7 @@ const createSchema = z.object({
  * The two arms must be genuinely disjoint for `"error" in gate` to narrow: the
  * moment arm two carries `error?: undefined`, TypeScript still sees the property
  * as present-but-possibly-undefined and `gate.error` arrives as
- * `NextResponse | undefined` — which is exactly the error this replaced. Arm two
+ * `NextResponse | undefined` - which is exactly the error this replaced. Arm two
  * therefore does not mention `error` at all.
  */
 type AdminGate = { error: NextResponse } | { db: ReturnType<typeof adminDb>; schoolId: string };

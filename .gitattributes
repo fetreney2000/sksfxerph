@@ -3,7 +3,7 @@
 # out CRLF and every diff becomes a whole-file rewrite on another platform.
 * text=auto eol=lf
 
-# Explicitly binary — never normalise these.
+# Explicitly binary - never normalise these.
 *.png  binary
 *.jpg  binary
 *.jpeg binary

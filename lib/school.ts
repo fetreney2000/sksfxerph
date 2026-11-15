@@ -1,14 +1,14 @@
 import { SCHOOL } from "@/lib/config";
 
 /**
- * The school's identity — name, place, motto, crest — as the app currently
+ * The school's identity - name, place, motto, crest - as the app currently
  * knows it.
  *
  * It began as the `SCHOOL` constant in `lib/config.ts`, which meant a school
  * could not describe itself without a redeploy. The administrator now edits it
  * from `/pentadbiran`, so it has to be readable at runtime by ordinary
  * components: a module store, exactly like `lib/session.ts`, for the same
- * reason — plain functions (`rph-paper`'s default, the export route) need the
+ * reason - plain functions (`rph-paper`'s default, the export route) need the
  * value and cannot use a hook.
  *
  * `DEFAULT_SCHOOL` is what local mode shows and what the first paint uses
@@ -34,8 +34,8 @@ export function currentSchool(): SchoolBrand {
 }
 
 /**
- * Adopt a school identity. Idempotent — called from a layout effect on every
- * navigation — and it only fires a notification when something actually
+ * Adopt a school identity. Idempotent - called from a layout effect on every
+ * navigation - and it only fires a notification when something actually
  * changed, so a normal navigation does not re-render the shell for nothing.
  */
 export function setSchool(next: SchoolBrand): void {
@@ -51,7 +51,7 @@ export function setSchool(next: SchoolBrand): void {
   for (const listener of listeners) listener();
 }
 
-/** Subscribe — the shape `useSyncExternalStore` expects. */
+/** Subscribe - the shape `useSyncExternalStore` expects. */
 export function subscribeSchool(listener: () => void): () => void {
   listeners.add(listener);
   return () => {

@@ -36,8 +36,8 @@ import type { MemberRole } from "@/lib/types";
  * so beats offering a week that does not exist.
  *
  * A function of the week rather than a constant, because the week is now the
- * school's own number — declared by an administrator, fetched after this module
- * has already loaded — and a list built here at module scope would offer pills
+ * school's own number - declared by an administrator, fetched after this module
+ * has already loaded - and a list built here at module scope would offer pills
  * for the term-start grid whatever the school had said. `RangeKey` is still
  * derived from the return type, so the keys cannot drift from the pills.
  */
@@ -70,7 +70,7 @@ interface Row {
   returned: number;
   fixed: number;
   last: string;
-  /** The teacher's RPT links for the session — Drive only, view-only. */
+  /** The teacher's RPT links for the session - Drive only, view-only. */
   rptLinks: { title: string; url: string }[];
 }
 
@@ -139,7 +139,7 @@ function fromApi(r: TeacherRow): Row {
     initials: initialsOf(r.fullName),
     tone: "blue",
     role: ms.roles[r.role as MemberRole] ?? r.role,
-    classes: r.classes ?? "—",
+    classes: r.classes ?? "-",
     week: weekState(r.weekTotal, r.weekDone),
     compliance: r.sessionTotal === 0 ? 0 : Math.round((r.sessionDone / r.sessionTotal) * 100),
     returned: r.returnedTotal,
@@ -169,7 +169,7 @@ export default function SekolahPage() {
   const maxPct = Math.max(1, ...s.weeks.map((w) => w.compliance ?? 0));
 
   // Gated on `pantau`, and narrowed again inside erph.pantau_teachers to the
-  // teachers this reviewer actually supervises — so a GPK's table is their
+  // teachers this reviewer actually supervises - so a GPK's table is their
   // own teachers and nobody else's, while the aggregate cards above stay
   // school-wide for both roles. Same window as the cards: a roster for one
   // week under a total for four is a table that contradicts its own header.
@@ -199,7 +199,7 @@ export default function SekolahPage() {
         compliance: t.compliance,
         // The bundled rows carry no review history, so the pair is shown as
         // absent rather than as a teacher who was never sent anything back.
-        // The bundled rows carry no RPT links — demo fixtures name no Drive
+        // The bundled rows carry no RPT links - demo fixtures name no Drive
         // files, and reviewers in local mode have nothing to open.
         returned: 0,
         fixed: 0,
@@ -209,11 +209,11 @@ export default function SekolahPage() {
 
   // Worst first. `pantau_teachers` returns them alphabetically, which is the
   // one order that makes a supervisor read all forty rows to find the three
-  // that need them — and the three that need them are the three at the top of
+  // that need them - and the three that need them are the three at the top of
   // a supervisor's mind, not the top of the alphabet.
   const rows = [...roster].sort(bySeverity);
 
-  // Not "not submitted" — "Lewat" means their plan exists but is not approved,
+  // Not "not submitted" - "Lewat" means their plan exists but is not approved,
   // and "Tiada" means this week has nothing at all. Both need a nudge; neither
   // is the same as a teacher who is simply mid-task, which is Menunggu.
   const lateCount = rows.filter((r) => r.week === "Lewat" || r.week === "Tiada").length;
@@ -223,7 +223,7 @@ export default function SekolahPage() {
   const pct = rows.length === 0 ? 0 : Math.round((done / rows.length) * 100);
 
   // A trend is two measurements. With only one there is nothing to compare,
-  // so the card says nothing rather than inventing a direction — the
+  // so the card says nothing rather than inventing a direction - the
   // "▼ 2.1 minit sejak guna templat" it replaced was a constant, and it
   // attributed the change to a feature rather than to a clock.
   const trendLabel =
@@ -237,7 +237,7 @@ export default function SekolahPage() {
 
   // The trend the chart beside it actually shows. A fixed "▲ 6% sejak M1"
   // badge sat here while the bars changed underneath it, so on any school
-  // whose session was flat or falling it still claimed an improvement — and
+  // whose session was flat or falling it still claimed an improvement - and
   // it did so next to a chart that plainly said otherwise.
   const firstWeek = s.weeks[0];
   const lastWeek = s.weeks[s.weeks.length - 1];
@@ -250,8 +250,8 @@ export default function SekolahPage() {
    * Nudge the teachers who are late.
    *
    * The server decides who that is and reports how many it reached. Both
-   * buttons used to print a count the client had guessed — "3 peringatan
-   * dihantar" — and send nothing, so a Guru Besar was told their staff had
+   * buttons used to print a count the client had guessed - "3 peringatan
+   * dihantar" - and send nothing, so a Guru Besar was told their staff had
    * been reminded while the staff heard nothing at all. Reporting the
    * server's number also means a second tap against the same week says
    * "tiada guru perlu diberi peringatan" rather than claiming a second round.
@@ -291,7 +291,7 @@ export default function SekolahPage() {
               type="button"
               // Reflects which window is actually loaded. This was hardcoded to
               // the first pill, so the filter always *looked* set to "Minggu N"
-              // whether or not anything had been chosen — and clicking did
+              // whether or not anything had been chosen - and clicking did
               // nothing at all.
               aria-pressed={rangeKey === r.key}
               onClick={() => setRangeKey(r.key)}
@@ -309,7 +309,7 @@ export default function SekolahPage() {
         <span className="ml-auto flex gap-2">
           {/* Deliberately not disabled off the roster's count. A reminder is
               always about the *current* week, and lateCount now describes
-              whichever window is loaded — so a "Sepanjang sesi" view would
+              whichever window is loaded - so a "Sepanjang sesi" view would
               enable a button about a week nobody is late in, and a single-week
               view would silence one where someone is. The server decides and
               reports how many it reached. */}
@@ -329,7 +329,7 @@ export default function SekolahPage() {
         />
         <Stat
           // Follows the window. "RPH minggu ini" beside a four-week total is
-          // the same lie the fixed badge was — a label describing one thing
+          // the same lie the fixed badge was - a label describing one thing
           // over a number describing another.
           label={`RPH · ${scope}`}
           value={String(s.submitted)}
@@ -340,7 +340,7 @@ export default function SekolahPage() {
           label="Kadar pematuhan"
           // The same wording as the teacher's own card: the percentage is
           // only checkable beside what it divides.
-          value={s.compliancePct === null ? "—" : String(s.compliancePct)}
+          value={s.compliancePct === null ? "-" : String(s.compliancePct)}
           sub={
             s.expected === 0 ? "tiada RPH dijangka" : `${s.approved} daripada ${s.expected} RPH`
           }
@@ -348,8 +348,8 @@ export default function SekolahPage() {
         />
         <Stat
           label={range.first === range.last ? "Purata masa siap" : "Purata mingguan"}
-          value={s.avgMinutes === null ? "—" : String(s.avgMinutes)}
-          // A weekly mean over a window, not the average plan — the RPC
+          value={s.avgMinutes === null ? "-" : String(s.avgMinutes)}
+          // A weekly mean over a window, not the average plan - the RPC
           // returns a per-week figure and nothing to weight it by.
           sub={range.first === range.last ? " minit" : " minit / minggu"}
           // Stated only when both windows have a figure. A trend is two
@@ -381,7 +381,7 @@ export default function SekolahPage() {
             {/*
               Hand-rolled bar chart: six columns do not justify a chart library,
               and divs give us the exact styling control the mockup specified
-              (erph-frontend-stack.md §9 — chart libs are on the excluded list).
+              (erph-frontend-stack.md §9 - chart libs are on the excluded list).
             */}
             <div
               className="relative flex h-45 items-end gap-3 border-b border-border-strong px-1 pb-0"
@@ -433,7 +433,7 @@ export default function SekolahPage() {
           <CardContent className="flex flex-col gap-4">
             {/* Derived from the rows in the table below. The card this
                 replaces was titled "Mengikut bidang" and showed Prasekolah,
-                Sekolah Rendah and Sekolah Menengah at 100 / 95 / 88 percent —
+                Sekolah Rendah and Sekolah Menengah at 100 / 95 / 88 percent -
                 bundled demo figures that no query ever overrode, describing
                 groupings this school does not hold, and addressing a Guru
                 Besar as "bidang anda" when they oversee the whole school. */}
@@ -452,7 +452,7 @@ export default function SekolahPage() {
                 {lateCount > 0 ? (
                   <>
                     {lateCount} guru belum lengkap dalam tempoh ini. Peringatan sentiasa merujuk{" "}
-                    <b>minggu semasa</b> — itulah yang perlu diselesaikan.
+                    <b>minggu semasa</b> - itulah yang perlu diselesaikan.
                   </>
                 ) : (
                   <>Semua guru di bawah seliaan anda lengkap untuk {scope.toLowerCase()}.</>
@@ -469,7 +469,7 @@ export default function SekolahPage() {
         <span className="h-px flex-1 bg-border" />
         <span className="num text-xs text-ink-3">
           {/* Not "…daripada 42 guru". That denominator came from the bundled
-              demo figure, which `useSchoolStats` never overrode — so it sat
+              demo figure, which `useSchoolStats` never overrode - so it sat
               beside live rows claiming a school-wide total, and for a GPK it
               was wrong twice over: not the school, and not their scope either.
               `pantau_teachers` returns the full set this reviewer may see, so
@@ -498,7 +498,7 @@ export default function SekolahPage() {
                       its word was asking for the two to be read as one. */}
                   <HelpHint label="Pematuhan sesi">
                     Peratus rancangan guru ini yang telah disahkan, daripada semua rancangan
-                    yang ditulis sepanjang sesi — termasuk yang masih draf. Bukan kadar
+                    yang ditulis sepanjang sesi - termasuk yang masih draf. Bukan kadar
                     pematuhan sekolah, yang membaca RPH disahkan berbanding RPH wajib (guru ×
                     RPH seminggu).
                   </HelpHint>
@@ -538,13 +538,13 @@ export default function SekolahPage() {
                   <TD>
                     {/* Of the plans sent back, how many are approved now. The
                         pair is what separates a teacher who acts on feedback
-                        from one who does not — a count of who is *currently*
+                        from one who does not - a count of who is *currently*
                         returned cannot, because a teacher who fixes everything
                         and one who ignores every return look identical once
                         the first is caught up. Absent when nothing has ever
                         been returned, rather than a flat 0/0. */}
                     {t.returned === 0 ? (
-                      <span className="text-[12.5px] text-ink-4">—</span>
+                      <span className="text-[12.5px] text-ink-4">-</span>
                     ) : (
                       <span className="num text-[12.5px]">
                         {t.fixed} / {t.returned}
@@ -562,7 +562,7 @@ export default function SekolahPage() {
                         View-only by design: verifying happens outside the app,
                         so there is no state here to approve, only links to open. */}
                     {t.rptLinks.length === 0 ? (
-                      <span className="text-[12.5px] text-ink-4">—</span>
+                      <span className="text-[12.5px] text-ink-4">-</span>
                     ) : (
                       <span className="flex flex-wrap gap-1.5">
                         {t.rptLinks.map((link) => (
@@ -589,7 +589,7 @@ export default function SekolahPage() {
                     {/* Offered only where it does something. A teacher who is
                         up to date has nothing to nudge, and the branch this
                         replaced printed a toast about calling up their plans
-                        and fetched nothing — so the control is absent rather
+                        and fetched nothing - so the control is absent rather
                         than present and inert. */}
                     {(t.week === "Lewat" || t.week === "Tiada") && (
                       <Button size="sm" variant="ghost" onClick={() => void remind([t.id])}>

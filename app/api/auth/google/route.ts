@@ -13,13 +13,13 @@ import { adminDb } from "@/lib/server/db";
 import type { MemberRole } from "@/lib/types";
 
 /**
- * POST /api/auth/google — sign in with a KPM Google account.
+ * POST /api/auth/google - sign in with a KPM Google account.
  *
  * Not a second identity system. Google proves *who is holding this browser*;
  * the session it results in is the same HMAC cookie the password route mints,
  * so `schoolIdFor`, the RLS layer and the supervision scope downstream never
  * learn that anything different happened. Supabase Auth is still deliberately
- * unused — partly because it cannot restrict sign-in to a Workspace domain
+ * unused - partly because it cannot restrict sign-in to a Workspace domain
  * (the `hd` query parameter is advisory, not enforced), which is the entire
  * point here.
  *
@@ -30,9 +30,9 @@ import type { MemberRole } from "@/lib/types";
  *      the browser refuses to send it. This is the pattern Google recommends
  *      for submitting a credential by `XMLHttpRequest` rather than by their
  *      button's full-page POST (which instead uses the double-submit cookie).
- *   3. `verifyIdToken` — signature against Google's rotating keys, `aud`, `iss`
- *   4. `checkGoogleClaims` — `hd`, `email_verified`, expiry
- *   5. `resolveAccount` — which account, if any, this identity may become
+ *   3. `verifyIdToken` - signature against Google's rotating keys, `aud`, `iss`
+ *   4. `checkGoogleClaims` - `hd`, `email_verified`, expiry
+ *   5. `resolveAccount` - which account, if any, this identity may become
  *   6. the same `is_active` and lockout checks the password route applies
  *
  * A failed Google sign-in never touches `failed_logins`. There is no secret to
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (resolved.kind === "not-registered") {
     // Deliberately not a generic failure: the teacher needs to know this is an
     // administrator's problem, not something retrying will fix. It reveals
-    // nothing an attacker could use — the address had to be verified and inside
+    // nothing an attacker could use - the address had to be verified and inside
     // the school's Workspace domain to get this far.
     return NextResponse.json(
       { error: "Akaun Google ini belum didaftarkan di sini. Sila hubungi pentadbir sekolah." },
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  * Fire-and-forget audit write.
  *
  * A failure here must not turn a successful sign-in into an error the teacher
- * sees — but it is logged, so the gap stays visible rather than becoming a
+ * sees - but it is logged, so the gap stays visible rather than becoming a
  * silent hole in the record.
  */
 async function audit(

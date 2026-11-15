@@ -1,12 +1,12 @@
 -- ============================================================================
--- eRPH · MIGRATION 006 — sign in with a KPM Google account
+-- eRPH · MIGRATION 006 - sign in with a KPM Google account
 -- ============================================================================
 -- Run AFTER 001a/001b/002/003/004/005. Safe to run more than once.
 --
 -- Two columns that bind an existing account to a Google identity. Nothing is
 -- populated here: linking happens on a teacher's first successful Google
 -- sign-in, and only for an account the pentadbir has already created. There is
--- deliberately no auto-provision — every teacher in the ministry has an
+-- deliberately no auto-provision - every teacher in the ministry has an
 -- @moe-dl.edu.my address, so "create one if none exists" would let any of them
 -- walk into this school's records by typing its URL.
 --

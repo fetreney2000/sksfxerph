@@ -24,7 +24,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   // Inside the component, so a calendar fetched after load can change it. It is
-  // also a dependency of the badge query below — a module constant could not
+  // also a dependency of the badge query below - a module constant could not
   // have been one, because it never changed.
   const WEEK = useCurrentWeek();
   const initials =
@@ -56,7 +56,7 @@ export function Sidebar({
    * How many plans are waiting to be reviewed.
    *
    * It was the constant 4, printed on every reviewer's sidebar whatever the
-   * school had actually sent in — a badge reporting work that may not exist,
+   * school had actually sent in - a badge reporting work that may not exist,
    * which is the same lie as a dashboard of another school's figures. It now
    * uses the same hook as the Semakan screen and the band on Minggu Ini, so the
    * three cannot disagree and the home does not fetch the queue twice. A

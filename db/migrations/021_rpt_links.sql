@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH ▸ MIGRATION 021 — teachers attach their RPT (Google Drive links)
+-- eRPH ▸ MIGRATION 021 - teachers attach their RPT (Google Drive links)
 -- ============================================================================
 -- Run AFTER 001a/001b/002/…/020. Safe to run more than once.
 --

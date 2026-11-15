@@ -1,8 +1,8 @@
 /**
  * The reviewer's side of a decision: sign, then decide.
  *
- * Kept out of the page so the order — envelope, then signature, then the one
- * request that carries both — lives in one place. Reversing it, or sending a
+ * Kept out of the page so the order - envelope, then signature, then the one
+ * request that carries both - lives in one place. Reversing it, or sending a
  * signature over a payload the server no longer has, is rejected upstream
  * (the server recomputes the hash from the stored document).
  */
@@ -18,13 +18,13 @@ export type { ReviewDecision };
  *
  * An approval is signed with a key this browser already holds, generated on
  * first use. A return is not signed: nothing was approved, so there is nothing
- * to attest to — and requiring a signature there would make the common case,
+ * to attest to - and requiring a signature there would make the common case,
  * "send this back, it needs work", slower for no assurance.
  */
 export async function decide(input: {
   userId: string;
   documentId: string;
-  /** `rph_document.version` — the server refuses a signature over another. */
+  /** `rph_document.version` - the server refuses a signature over another. */
   version: number;
   payload: unknown;
   decision: ReviewDecision;

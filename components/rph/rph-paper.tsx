@@ -11,15 +11,15 @@ import { currentSchool } from "@/lib/school";
 /**
  * The school's RPH, as it is actually submitted.
  *
- * Built against the template this school sends to its district — one table,
- * pale-green label cells, a fixed set of rows — rather than the generic KPM
+ * Built against the template this school sends to its district - one table,
+ * pale-green label cells, a fixed set of rows - rather than the generic KPM
  * form. The differences are the ones a teacher would notice immediately if
  * they were wrong: activities are a **list of names** (with indented
  * sub-items) rather than a timed table, **Kriteria Kejayaan** has its own row,
  * and there is no EMK, KBAT or Intervensi section because the printed form has
  * none.
  *
- * Rendered from the same JSON as the editor — one source of truth, so what a
+ * Rendered from the same JSON as the editor - one source of truth, so what a
  * teacher sees on screen is what prints and what the reviewer grades. This is
  * what has to survive inspection under Peraturan 8, Akta Pendidikan 1996.
  *
@@ -29,7 +29,7 @@ import { currentSchool } from "@/lib/school";
  * on the page.
  */
 
-/** Label cell — the pale green the school's form uses. Shared with the cover
+/** Label cell - the pale green the school's form uses. Shared with the cover
  *  sheet: if the district's green ever changes, it changes in one place. */
 export const LABEL_BG = "#d9ead3";
 export const RULE = "#a6a6a6";
@@ -66,18 +66,18 @@ export function Value({ children, span = 1 }: { children: React.ReactNode; span?
  * Empty cells print as a dash, the way the paper form does.
  *
  * Null-safe on purpose: a document read straight out of storage may predate
- * the field, and a printed page must never crash on missing data — it prints
+ * the field, and a printed page must never crash on missing data - it prints
  * the dash and gets on with it.
  */
-const or = (s: string | null | undefined) => (s?.trim() ? s.trim() : "—");
+const or = (s: string | null | undefined) => (s?.trim() ? s.trim() : "-");
 
 interface Props {
   payload: RphPayload;
-  /** CSS class for the sheet itself — not the school's class. */
+  /** CSS class for the sheet itself - not the school's class. */
   className?: string;
   /**
    * No default. A default here rendered "Nurul Aisyah binti Rahim" on every
-   * preview whose caller forgot to pass one — a real-looking name for a teacher
+   * preview whose caller forgot to pass one - a real-looking name for a teacher
    * who had nothing to do with the plan, on the document that gets printed and
    * filed. A blank cell is honest; a plausible stranger is not.
    */
@@ -117,10 +117,10 @@ export function RphPaper({
   signatureState = "none",
   compact = false,
 }: Props) {
-  // "2. Isnin" — the school's form numbers the day **Ahad = 1**, and derives
+  // "2. Isnin" - the school's form numbers the day **Ahad = 1**, and derives
   // it from the date rather than asking, so a plan cannot claim a Monday that
   // is a Tuesday.
-  const hari = planDate ? `${printedDayNumber(planDate)}. ${hariName(planDate)}` : "—";
+  const hari = planDate ? `${printedDayNumber(planDate)}. ${hariName(planDate)}` : "-";
 
   return (
     <article
@@ -192,12 +192,12 @@ export function RphPaper({
             <Label>Aktiviti PdPC</Label>
             <Value span={3}>
               {payload.aktiviti.length === 0 ? (
-                <span className="italic text-[#98a2b3]">— belum diisi —</span>
+                <span className="italic text-[#98a2b3]">- belum diisi -</span>
               ) : (
                 payload.aktiviti.map((a, i) => (
                   <span
                     /* biome-ignore lint/suspicious/noArrayIndexKey: append-only,
-                       never reordered, no per-item state — the rule guards against
+                       never reordered, no per-item state - the rule guards against
                        state following an item across a reorder, which cannot
                        happen on a static printed list. */
                     key={`${a.nama}-${i}`}

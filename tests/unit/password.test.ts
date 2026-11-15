@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { hashPassword, verifyAgainstDummy, verifyPassword } from "@/lib/server/auth/password";
 
 /**
- * Password storage (Supabase Auth removed — credentials live in `erph.user`).
+ * Password storage (Supabase Auth removed - credentials live in `erph.user`).
  *
  * The properties that matter for a credential scheme: verification is exact,
  * tampering is detected, parameters are read from the stored string so they can
@@ -22,7 +22,7 @@ describe("password hashing", () => {
     expect(await verifyPassword("", hash)).toBe(false);
   });
 
-  it("salts per-password — same input, different hashes", async () => {
+  it("salts per-password - same input, different hashes", async () => {
     const a = await hashPassword("sama");
     const b = await hashPassword("sama");
     expect(a).not.toBe(b);
@@ -54,7 +54,7 @@ describe("password hashing", () => {
     ];
     const weakened = `scrypt$1024$8$1$${salt}$${digest}`;
     // Weaker params produce a different digest for the same input, so this is
-    // expected to *fail* verification — proving we're not ignoring them.
+    // expected to *fail* verification - proving we're not ignoring them.
     expect(await verifyPassword("kunci", weakened)).toBe(false);
   });
 

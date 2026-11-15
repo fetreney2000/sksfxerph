@@ -1,5 +1,5 @@
 -- ============================================================================
--- eRPH · MIGRATION 001b — the schema delta (paste this whole file)
+-- eRPH · MIGRATION 001b - the schema delta (paste this whole file)
 -- ============================================================================
 -- Run AFTER 001a_alter_types.sql, which must be run one line at a time.
 --
@@ -46,7 +46,7 @@ end $$;
 
 alter table erph.user add column if not exists jawatan erph.jawatan;
 
--- How many RPH one teacher owes in a week — the denominator behind
+-- How many RPH one teacher owes in a week - the denominator behind
 -- "pematuhan sekolah", five for a school that runs Monday to Friday.
 alter table erph.school_setting
   add column if not exists rph_per_week smallint not null default 5;
@@ -57,7 +57,7 @@ alter table erph.school_setting add constraint school_setting_rph_per_week_check
 
 -- The classes a plan covers. Created here, ahead of the migration that
 -- backfills and renames onto it (020), because 007/016/017 re-emit
--- `erph.sync_rph` — whose body names this column — and a function body is
+-- `erph.sync_rph` - whose body names this column - and a function body is
 -- validated when the function is created, not when it runs.
 alter table erph.rph_document add column if not exists class_ids uuid[];
 
@@ -107,7 +107,7 @@ begin
   -- NULL-actor guard, matching sync_rph's.
   --
   -- This is load-bearing: `owner_id <> erph.actor()` evaluates to NULL when no
-  -- actor can be resolved, and PL/pgSQL treats NULL in IF as false — so the
+  -- actor can be resolved, and PL/pgSQL treats NULL in IF as false - so the
   -- "Tidak dibenarkan" branch would be skipped and ANY caller (including one with
   -- just the publishable key, for whom actor() is always null) could submit
   -- another teacher's plan. `IS DISTINCT FROM` never yields NULL.
@@ -131,7 +131,7 @@ begin
   -- /pentadbiran → Sesi & tarikh akhir ("Halang penghantaran sehingga
   -- kelengkapan 100%"). It used to be written by `admin_set_setting` and read
   -- by *nothing*: the gate below was hard-coded to 100%, so the switch in the
-  -- console did nothing at all — a setting that looked like a control and was
+  -- console did nothing at all - a setting that looked like a control and was
   -- not one.
   --
   -- `p_force` is the teacher's acknowledged escape hatch, not a bypass: it is
@@ -146,7 +146,7 @@ begin
 
   if v_pct < 100 and v_require and not p_force then
     return jsonb_build_object('ok', false, 'completeness', v_pct,
-      'error', 'RPH belum lengkap — lengkapkan setiap seksyen wajib');
+      'error', 'RPH belum lengkap - lengkapkan setiap seksyen wajib');
   end if;
 
   update erph.rph_document
@@ -180,14 +180,14 @@ begin
   -- Whole-school figures are a supervisor's question, not a teacher's.
   --
   -- The check was `is_member`, which made this the one thing a Guru Biasa
-  -- could still see the school through — the dashboard hid the card but the
+  -- could still see the school through - the dashboard hid the card but the
   -- route served it. Now it is the same rule as `/api/stats`: a teacher's
   -- dashboard is about their own week, and the school's compliance percentage
   -- beside it is an answer to a question they are not the one to answer.
   --
   -- The Administrator keeps it: they already answer for the school's figures
   -- on `/utama` through `admin_list_overview`, and `v_school_compliance` is
-  -- `security_invoker` — a check that ignored them would make a table they
+  -- `security_invoker` - a check that ignored them would make a table they
   -- already hold error rather than quietly show less.
   if not erph.is_staff(p_school)
      and not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
@@ -217,7 +217,7 @@ begin
     (select count(*)::int from d where grade = 1),
     (select count(*)::int from d where status = 'returned' or grade = 0),
     (select count(*)::int from d where status = 'draft'),
-    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 — a school
+    -- `least` ignores NULL arguments, so `least(100, NULL)` is 100 - a school
     -- with no active Guru Biasa would report full compliance instead of no
     -- figure at all. The zero denominator is therefore handled here and
     -- returns NULL: not scored, rather than scored zero or scored perfectly.
@@ -370,7 +370,7 @@ select docs.school_id, docs.session, docs.week_no,
 
 -- ── 7 · accounts ───────────────────────────────────────────────────────────
 -- The district/state roles are gone from the app. Postgres cannot drop an enum
--- value at all, so deleting the rows is what keeps the data honest — leaving
+-- value at all, so deleting the rows is what keeps the data honest - leaving
 -- them would mean two roles nothing references.
 -- If those accounts ever produced an export, delete its export_file rows first.
 delete from erph.school_member where user_id in
