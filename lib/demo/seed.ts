@@ -163,7 +163,10 @@ export async function seedLocalData(weekNo: number): Promise<void> {
     await db.classes.bulkPut(CLASSES);
 
     const docs: RphDocument[] = PLAN_SEED.map((seed, i) => {
-      const planDate = days[seed.dayIndex] ?? days[0]!;
+      // `schoolDays` always returns five dates; the second fallback is the
+      // backstop, never the path — and an empty week must not seed at all.
+      const planDate = days[seed.dayIndex] ?? days[0];
+      if (!planDate) throw new Error("seed week has no days");
       return {
         id: mintId(),
         schoolCode,

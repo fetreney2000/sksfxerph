@@ -27,7 +27,12 @@ function seededUsers(): {
   const row =
     /\('([a-z][\w.]+)',\s*'([^']+)',\s*'[^']*',\s*(?:'[^']*'|null),\s*'(\w+)',\s*(?:'(\w+)'|null),\s*(true|false)\)/g;
   for (const m of SQL.matchAll(row)) {
-    out.push({ username: m[1]!, hash: m[2]!, role: m[3]!, jawatan: m[4] ?? null });
+    out.push({
+      username: m[1] ?? "",
+      hash: m[2] ?? "",
+      role: m[3] ?? "",
+      jawatan: m[4] ?? null,
+    });
   }
   return out;
 }
@@ -36,7 +41,7 @@ function seededUsers(): {
 function documentedPasswords(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const m of SQL.matchAll(/--\s*username:\s*(\S+)\s+password:\s*(\S+)/g)) {
-    out[m[1]!] = m[2]!;
+    out[m[1] ?? ""] = m[2] ?? "";
   }
   return out;
 }
@@ -87,7 +92,7 @@ describe("seeded accounts", () => {
       const user = users.find((u) => u.username === username);
       expect(user, `no seeded row for ${username}`).toBeTruthy();
       expect(
-        await verifyPassword(password, user!.hash),
+        await verifyPassword(password, user?.hash ?? ""),
         `password for ${username} does not match its hash`,
       ).toBe(true);
     }
@@ -119,8 +124,8 @@ describe("seeded accounts", () => {
     const sys = users.find((u) => u.role === "system");
     expect(sys).toBeTruthy();
     // Malformed hash → verifyPassword fails closed for every input.
-    expect(await verifyPassword("anything", sys!.hash)).toBe(false);
-    expect(await verifyPassword("", sys!.hash)).toBe(false);
+    expect(await verifyPassword("anything", sys?.hash ?? "")).toBe(false);
+    expect(await verifyPassword("", sys?.hash ?? "")).toBe(false);
   });
 
   it("uses the same scrypt parameters as the runtime verifier", () => {

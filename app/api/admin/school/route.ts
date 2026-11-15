@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
 import type { adminDb } from "@/lib/server/db";
+import { toClientError } from "@/lib/server/http/errors";
 
 /**
  * GET / PATCH /api/admin/school — the school's own identity.
@@ -79,34 +80,6 @@ const textSchema = z.object({
   /** Explicit "keep the current crest" when no file was sent. */
   logo_url: z.string().max(600).nullable(),
 });
-
-/**
- * Postgres' and PostgREST's error text describes the schema — table names,
- * constraints, function signatures — and none of it means anything to a person
- * filling in a form. Every message `admin_set_school` raises *on purpose* is
- * Malay prose and matches none of these markers, so anything that does is a
- * database wearing a user-facing label: a real constraint failure, or a
- * deployment that has not run its migration yet ("could not find the function
- * … in the schema cache"), which the operator sees in full in the server log.
- */
-const INTERNAL_ERROR =
-  /\b(duplicate key|null value|violates|relation|constraint|column|syntax|permission denied|value too long|foreign key|does not exist|schema cache|could not find the function)\b/i;
-
-function formError(message: string): string {
-  // The one failure an administrator can actually fix from this page, and the
-  // state this deployment is in between shipping the code and running the
-  // migration. PostgREST would otherwise hand them "could not find the
-  // function erph.admin_set_school(p_jpn, p_kod_sekolah, …) in the schema
-  // cache" — a schema dump for a problem with a one-line remedy, which the
-  // server log still records in full.
-  if (/schema cache|could not find the function/i.test(message)) {
-    return "Simpan gagal: pangkalan data belum dikemas kini. Jalankan db/migrations/003_school_identity.sql terlebih dahulu.";
-  }
-  if (INTERNAL_ERROR.test(message)) {
-    return "Maklumat sekolah tidak sah. Sila semak semula.";
-  }
-  return message;
-}
 
 /**
  * Administrator + school, or the response to send back. The two arms must be
@@ -202,8 +175,22 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     p_logo_url: logoUrl,
   });
   if (error) {
-    console.error("[admin] set school failed:", error.message);
-    return NextResponse.json({ error: formError(error.message) }, { status: 422 });
+    // The state this deployment is in between shipping the code and running
+    // the migration. PostgREST would otherwise hand them "could not find the
+    // function erph.admin_set_school(…) in the schema cache" — a schema dump
+    // for a problem with a one-line remedy. Everything else goes through the
+    // central sanitizer: authored raises pass, infrastructure does not.
+    if (/schema cache|could not find the function/i.test(error.message)) {
+      console.error("[admin] set school failed:", error.message);
+      return NextResponse.json(
+        {
+          error:
+            "Simpan gagal: pangkalan data belum dikemas kini. Jalankan db/migrations/003_school_identity.sql terlebih dahulu.",
+        },
+        { status: 422 },
+      );
+    }
+    return toClientError("[admin] set school failed:", error);
   }
 
   const { data } = await gate.db.from("school").select(COLUMNS).eq("id", gate.schoolId);

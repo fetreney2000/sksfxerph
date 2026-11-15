@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { POST } from "@/app/api/export/route";
 import { emptyPayload } from "@/lib/schemas/rph";
-import { LOCAL_ACCOUNTS } from "@/lib/server/auth/local";
+import { LOCAL_ACCOUNTS, type LocalAccount } from "@/lib/server/auth/local";
 import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
 
 /**
@@ -21,7 +21,12 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
  */
 
 /** The Guru Biasa, so the name under test cannot be a hidden default. */
-const TEACHER = LOCAL_ACCOUNTS.find((a) => a.username === "guru.biasa")!;
+function demoTeacher(): LocalAccount {
+  const account = LOCAL_ACCOUNTS.find((a) => a.username === "guru.biasa");
+  if (!account) throw new Error("demo guru.biasa account is missing");
+  return account;
+}
+const TEACHER = demoTeacher();
 
 function post(body: unknown): NextRequest {
   return new NextRequest(

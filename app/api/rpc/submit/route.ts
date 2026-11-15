@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireDbUser } from "@/lib/server/auth/guard";
+import { isUuid, toClientError } from "@/lib/server/http/errors";
 
 /**
  * POST /api/rpc/submit — server-gated submission (`erph.submit_rph`).
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
   }
-  if (!body.documentId) {
+  if (!isUuid(body.documentId)) {
     return NextResponse.json({ error: "ID dokumen diperlukan" }, { status: 400 });
   }
 
@@ -32,8 +33,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    console.error("[submit] rpc failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[submit] rpc failed:", error);
   }
   return NextResponse.json(data);
 }

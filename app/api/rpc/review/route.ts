@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { reviewStageFor } from "@/lib/auth/permissions";
 import { requireReviewer } from "@/lib/server/auth/guard";
+import { toClientError } from "@/lib/server/http/errors";
 import { payloadHash, verifySignature } from "@/lib/signature";
 
 /**
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // plan — which the status check refuses before anything is inserted —
     // took the approval's own signature with it.
     if (inserted) await discardSignature(gate, body.documentId);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[review] rpc failed:", error);
   }
   return NextResponse.json(data);
 }

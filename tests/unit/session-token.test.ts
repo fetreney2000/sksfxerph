@@ -16,7 +16,7 @@ describe("session token", () => {
     const parsed = parseSession(mintSession(USER));
     expect(parsed).not.toBeNull();
     expect(parsed?.sub).toBe(USER);
-    expect(parsed!.exp - parsed!.iat).toBe(SESSION_TTL_SECONDS);
+    expect(parsed && parsed.exp - parsed.iat).toBe(SESSION_TTL_SECONDS);
   });
 
   it("is distinct per user", () => {
@@ -42,7 +42,8 @@ describe("session token", () => {
   it("rejects a tampered signature", () => {
     const cookie = mintSession(USER);
     const parts = cookie.split(".");
-    const flipped = parts[3]!.slice(0, -1) + (parts[3]!.endsWith("A") ? "B" : "A");
+    const flippedBase = parts[3] ?? "";
+    const flipped = flippedBase.slice(0, -1) + (flippedBase.endsWith("A") ? "B" : "A");
     expect(parseSession([parts[0], parts[1], parts[2], flipped].join("."))).toBeNull();
   });
 

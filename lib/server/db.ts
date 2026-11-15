@@ -31,14 +31,15 @@ export function adminDb(actorId?: string) {
     throw new Error("adminDb() called in local mode — no Supabase configured.");
   }
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) {
+  if (!url || !key) {
     throw new Error(
       "Set SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) for server-side access.",
     );
   }
 
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key, {
+  return createClient(url, key, {
     db: { schema: DB_SCHEMA },
     auth: {
       persistSession: false,

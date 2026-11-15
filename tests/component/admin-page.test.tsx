@@ -252,6 +252,19 @@ function clickTab(name: string) {
   fireEvent.click(tab);
 }
 
+/**
+ * Click the first of several same-named buttons.
+ *
+ * `getAllByRole(...)[0]` needs a guard under `noUncheckedIndexedAccess` — and
+ * a guard that reads as the test's intent ("there is at least one") beats a
+ * `!` that asserts it silently.
+ */
+function clickFirst(buttons: HTMLElement[]) {
+  expect(buttons.length).toBeGreaterThan(0);
+  const first = buttons[0];
+  if (first) fireEvent.click(first);
+}
+
 describe("pentadbiran", () => {
   it("shows one Papan Pemuka with a checklist that opens the matching tab", async () => {
     vi.stubGlobal("fetch", fakeFetch);
@@ -429,7 +442,7 @@ describe("pentadbiran", () => {
 
     // 1. The reset-password dialog still opens from a card's footer — this is
     //    the control that exists only on an account row.
-    fireEvent.click(screen.getAllByRole("button", { name: /Tetap semula kata laluan/ })[0]!);
+    clickFirst(screen.getAllByRole("button", { name: /Tetap semula kata laluan/ }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Batal" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -448,7 +461,7 @@ describe("pentadbiran", () => {
     // 3. Classes: the edit dialog opens…
     clickTab("Kelas");
     await waitFor(() => expect(screen.getByText("5 Amanah")).toBeTruthy());
-    fireEvent.click(screen.getAllByRole("button", { name: /Sunting/ })[0]!);
+    clickFirst(screen.getAllByRole("button", { name: /Sunting/ }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Batal" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -471,7 +484,7 @@ describe("pentadbiran", () => {
     // 1. An account: the name and email come prefilled from the row, and the
     //    corrected pair is what leaves the browser. Both at once, because a
     //    name without the address it corrects is half an edit.
-    fireEvent.click(screen.getAllByRole("button", { name: /Sunting/ })[0]!);
+    clickFirst(screen.getAllByRole("button", { name: /Sunting/ }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
     const name = screen.getByLabelText(/Nama penuh/) as HTMLInputElement;
     expect(name.value).toBe("Nurul Aisyah binti Rahim");
@@ -490,7 +503,7 @@ describe("pentadbiran", () => {
     //    against it points there — and the new name goes out.
     clickTab("Mata pelajaran");
     await waitFor(() => expect(screen.getByText("Bahasa Inggeris")).toBeTruthy());
-    fireEvent.click(screen.getAllByRole("button", { name: /Sunting/ })[0]!);
+    clickFirst(screen.getAllByRole("button", { name: /Sunting/ }));
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
 
     const subjectName = screen.getByLabelText(/Nama mata pelajaran/) as HTMLInputElement;

@@ -96,7 +96,18 @@ export async function resolveUser(
       console.error("[auth] failed to load session user:", error?.message ?? "not found");
       return null;
     }
-    return toUser(data as never, session);
+    // Shaped, not cast: the select above is the contract, and `as never`
+    // would let a renamed column through as `undefined` at runtime.
+    const row = data as unknown as {
+      id: string;
+      username: string;
+      full_name: string;
+      email: string | null;
+      role: MemberRole;
+      is_active: boolean;
+      password_changed_at: string;
+    };
+    return toUser(row, session);
   } catch (err) {
     console.error("[auth] session lookup failed:", err);
     return null;

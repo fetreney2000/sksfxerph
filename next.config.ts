@@ -44,7 +44,30 @@ const nextConfig: NextConfig = {
   },
 
   // Strict CSP + SW hardening (backend §10, PDPA).
+  //
+  // The signing keys live in localStorage (lib/signature/keys.ts) — readable
+  // by any script on this origin — so "which scripts may run here" is the
+  // boundary that matters, and it did not exist: the header block below set
+  // everything around CSP without CSP itself. `script-src` keeps
+  // `'unsafe-inline'` because the App Router inlines its flight data and there
+  // is no nonce plumbing; that still bars every *other* origin except the
+  // Google sign-in library, which only loads when the deployment configures it.
+  // Fonts are bundled by next/font (self), images are same-origin optimized,
+  // and the browser never calls Supabase directly — only the handlers do.
   async headers() {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://accounts.google.com",
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self'",
+      "img-src 'self' data: blob:",
+      "connect-src 'self' https://accounts.google.com",
+      "frame-src https://accounts.google.com",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; ");
     return [
       {
         source: "/sw.js",
@@ -56,6 +79,8 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
+          { key: "Content-Security-Policy", value: csp },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "DENY" },

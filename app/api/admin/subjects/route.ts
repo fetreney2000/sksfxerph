@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
 import type { adminDb } from "@/lib/server/db";
+import { toClientError } from "@/lib/server/http/errors";
 
 /**
  * GET / POST / PATCH /api/admin/subjects — the administrator's view of the
@@ -114,8 +115,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     p_curriculum: parsed.data.curriculum,
   });
   if (error) {
-    console.error("[admin] create subject failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[admin] create subject failed:", error);
   }
   return NextResponse.json({ ok: true });
 }
@@ -153,8 +153,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       p_curriculum: body.curriculum,
     });
     if (error) {
-      console.error("[admin] edit subject failed:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 422 });
+      return toClientError("[admin] edit subject failed:", error);
     }
     return NextResponse.json({ ok: true });
   }
@@ -168,8 +167,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     p_active: body.isActive,
   });
   if (error) {
-    console.error("[admin] set subject failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[admin] set subject failed:", error);
   }
   return NextResponse.json({ ok: true });
 }

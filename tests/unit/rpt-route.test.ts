@@ -262,7 +262,9 @@ describe("GET /api/rpt", () => {
   });
 
   it("does not list another teacher's links", async () => {
-    state.rows[0]!.owner_id = OTHER_TEACHER_ID;
+    const only = state.rows[0];
+    expect(only).toBeDefined();
+    if (only) only.owner_id = OTHER_TEACHER_ID;
 
     const res = await GET(authed("GET", "/api/rpt"));
 
@@ -293,7 +295,7 @@ describe("POST /api/rpt", () => {
 
     expect(res.status).toBe(200);
     expect(state.rows).toHaveLength(1);
-    expect(state.rows[0]!.url).toBe("https://drive.google.com/file/d/updated");
+    expect(state.rows[0]?.url).toBe("https://drive.google.com/file/d/updated");
   });
 
   it("refuses a non-Drive URL", async () => {
@@ -378,7 +380,7 @@ describe("GET /api/pantau/teachers — RPT decoration", () => {
       items: { userId: string; rptLinks: { title: string; url: string }[] }[];
     };
     expect(body.items).toHaveLength(1);
-    expect(body.items[0]!.rptLinks).toEqual([
+    expect(body.items[0]?.rptLinks).toEqual([
       { title: "RPT Matematik Tahun 5", url: "https://drive.google.com/file/d/abc" },
     ]);
   });
@@ -404,10 +406,11 @@ describe("GET /api/pantau/teachers — RPT decoration", () => {
     expect(res.status).toBe(200);
     const inCalls = state.calls.filter((c) => c.table === "rpt_link" && c.method === "in");
     expect(inCalls).toHaveLength(1);
-    expect(inCalls[0]!.args).toEqual(["owner_id", [TEACHER_ID]]);
+    expect(inCalls[0]?.args).toEqual(["owner_id", [TEACHER_ID]]);
     const body = (await res.json()) as {
       items: { rptLinks: { title: string }[] }[];
     };
-    expect(body.items[0]!.rptLinks.map((l) => l.title)).toEqual(["RPT Matematik Tahun 5"]);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.rptLinks.map((l) => l.title)).toEqual(["RPT Matematik Tahun 5"]);
   });
 });

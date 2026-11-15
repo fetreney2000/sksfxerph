@@ -3,6 +3,7 @@ import { z } from "zod";
 import { SESSION } from "@/lib/config";
 import { requireAdministrator, requireDbUser, schoolIdFor } from "@/lib/server/auth/guard";
 import type { adminDb } from "@/lib/server/db";
+import { toClientError } from "@/lib/server/http/errors";
 
 /**
  * GET / POST / PATCH /api/classes — the school's classes for one session.
@@ -117,8 +118,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     p_active: true,
   });
   if (error) {
-    console.error("[classes] create failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[classes] create failed:", error);
   }
   return NextResponse.json({ ok: true, id: data });
 }
@@ -150,8 +150,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     p_active: parsed.data.isActive,
   });
   if (error) {
-    console.error("[classes] update failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[classes] update failed:", error);
   }
   return NextResponse.json({ ok: true });
 }

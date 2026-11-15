@@ -100,10 +100,26 @@ const safeName = (value: string, fallback: string): string => {
 
 async function supabaseAdmin() {
   const { createClient } = await import("@supabase/supabase-js");
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false }, db: { schema: DB_SCHEMA } },
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // No `!`: `supabaseConfigured` only proves the URL and anon key exist. A
+  // deployment with no server key must get a 503 it can act on, not a
+  // TypeError thrown from inside an import. Callers check
+  // `hasServerKey()` first; this throw is the backstop, never the path.
+  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error("Supabase server credentials are not configured.");
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false },
+    db: { schema: DB_SCHEMA },
+  });
+}
+
+/** The server key `supabaseAdmin()` needs — absent in local mode and in a deployment that set the URL but no secret. */
+function hasServerKey(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
   );
 }
 
@@ -222,6 +238,12 @@ export async function POST(request: NextRequest) {
   // the document this copy came from would falsify the audit trail, so the id
   // has to belong to the person asking.
   if (supabaseConfigured && parsed.data.document_id && "user" in gate) {
+    if (!hasServerKey()) {
+      return NextResponse.json(
+        { error: "Eksport arkib tidak tersedia — kunci pelayan tiada." },
+        { status: 503 },
+      );
+    }
     const admin = await supabaseAdmin();
     const { data: owned, error } = await admin
       .from("rph_document")
@@ -453,35 +475,39 @@ export async function POST(request: NextRequest) {
   // in the school's private bucket, so `bucket` and `path` name something
   // that exists.
   if (supabaseConfigured && "user" in gate) {
-    try {
-      const admin = await supabaseAdmin();
-      const path = `${parsed.data.document_id ?? "adhoc"}/${filename}`;
-      const { error: upErr } = await admin.storage
-        .from(EXPORT_BUCKET)
-        .upload(path, new Uint8Array(buffer), {
-          contentType:
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          upsert: true,
+    if (!hasServerKey()) {
+      console.error("[export] upload skipped: server key missing.");
+    } else {
+      try {
+        const admin = await supabaseAdmin();
+        const path = `${parsed.data.document_id ?? "adhoc"}/${filename}`;
+        const { error: upErr } = await admin.storage
+          .from(EXPORT_BUCKET)
+          .upload(path, new Uint8Array(buffer), {
+            contentType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            upsert: true,
+          });
+        if (upErr) {
+          // The download below still works — the copy is streamed to the caller
+          // either way — so a storage failure must not fail the export. It is
+          // logged, because the row that follows will name a path with nothing
+          // at it, and that gap should be visible.
+          console.error("[export] could not store the copy:", upErr.message);
+        }
+        const { error } = await admin.from("export_file").insert({
+          document_id: parsed.data.document_id ?? null,
+          school_id: school.id || null,
+          created_by: gate.user.id,
+          bucket: EXPORT_BUCKET,
+          path,
+          format: "docx",
+          bytes: buffer.byteLength,
         });
-      if (upErr) {
-        // The download below still works — the copy is streamed to the caller
-        // either way — so a storage failure must not fail the export. It is
-        // logged, because the row that follows will name a path with nothing
-        // at it, and that gap should be visible.
-        console.error("[export] could not store the copy:", upErr.message);
+        if (error) console.error("[export] audit write failed:", error.message);
+      } catch (err) {
+        console.error("[export] audit write failed:", err);
       }
-      const { error } = await admin.from("export_file").insert({
-        document_id: parsed.data.document_id ?? null,
-        school_id: school.id || null,
-        created_by: gate.user.id,
-        bucket: EXPORT_BUCKET,
-        path,
-        format: "docx",
-        bytes: buffer.byteLength,
-      });
-      if (error) console.error("[export] audit write failed:", error.message);
-    } catch (err) {
-      console.error("[export] audit write failed:", err);
     }
   }
 

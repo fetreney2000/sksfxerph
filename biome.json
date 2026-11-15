@@ -27,12 +27,12 @@
         "noConstAssign": "error"
       },
       "suspicious": {
-        "noExplicitAny": "warn",
+        "noExplicitAny": "error",
         "noConsole": { "level": "warn", "options": { "allow": ["error"] } },
         "noArrayIndexKey": "warn"
       },
       "style": {
-        "noNonNullAssertion": "off",
+        "noNonNullAssertion": "error",
         "useImportType": "error"
       }
     }

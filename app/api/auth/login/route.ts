@@ -77,6 +77,21 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  // Length caps before scrypt ever runs: an over-long input is never a real
+  // credential (emails top out at 320 chars, stored passwords are far shorter
+  // than 1024), so it is answered as bad credentials rather than hashed. An
+  // unbounded password would let a caller make every attempt pay KDF time on
+  // megabytes of input.
+  if (identifier.length > 320 || password.length > 1024) {
+    return NextResponse.json(
+      {
+        error: EMAIL_RE.test(identifier)
+          ? "Emel atau kata laluan salah."
+          : "Nama pengguna atau kata laluan salah.",
+      },
+      { status: 401 },
+    );
+  }
   // One field, two doors: an address matches `email`, anything else matches
   // `username`. The body key stays `username` — it is the identifier the
   // client typed, and renaming it would buy nothing.

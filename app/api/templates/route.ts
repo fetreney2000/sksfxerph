@@ -5,6 +5,7 @@ import { SESSION, supabaseConfigured } from "@/lib/config";
 import { emptyPayload, type RphPayload, rphPayloadSchema } from "@/lib/schemas/rph";
 import { requireDbUser, requireUser, schoolIdFor } from "@/lib/server/auth/guard";
 import { adminDb } from "@/lib/server/db";
+import { toClientError } from "@/lib/server/http/errors";
 import type { Curriculum } from "@/lib/types";
 
 /**
@@ -174,8 +175,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .single();
 
   if (error) {
-    console.error("[templates] create failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[templates] create failed:", error);
   }
   return NextResponse.json({ ok: true, id: (data as { id: string }).id });
 }
@@ -211,8 +211,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   });
 
   if (error) {
-    console.error("[templates] update failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[templates] update failed:", error);
   }
   return NextResponse.json({ ok: true });
 }
@@ -228,8 +227,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
   const { error } = await check.db.from("rph_template").delete().eq("id", id);
   if (error) {
-    console.error("[templates] delete failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[templates] delete failed:", error);
   }
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
 import { hashPassword } from "@/lib/server/auth/password";
+import { toClientError } from "@/lib/server/http/errors";
 import { JAWATAN, MEMBER_ROLES } from "@/lib/types";
 
 /**
@@ -135,14 +136,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // 23505 is the unique index doing its job when two admins race on a name —
   // surfaced as text rather than a Postgres code, because nobody reading the
-  // UI knows what 23505 means.
+  // UI knows what 23505 means. Anything else goes through the central
+  // sanitizer: authored raises pass, infrastructure does not.
   if (error) {
-    const message =
-      error.code === "23505" || /telah digunakan/i.test(error.message)
-        ? "Nama pengguna ini telah digunakan."
-        : error.message;
-    console.error("[admin] create member failed:", error.message);
-    return NextResponse.json({ error: message }, { status: 422 });
+    if (error.code === "23505" || /telah digunakan/i.test(error.message)) {
+      console.error("[admin] create member failed:", error.message);
+      return NextResponse.json(
+        { error: "Nama pengguna ini telah digunakan." },
+        { status: 422 },
+      );
+    }
+    return toClientError("[admin] create member failed:", error);
   }
 
   return NextResponse.json({ ok: true, userId: data });
@@ -234,8 +238,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   const { error } = await gate.db.rpc(rpc, args);
   if (error) {
-    console.error(`[admin] ${rpc} failed:`, error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError(`[admin] ${rpc} failed:`, error);
   }
   return NextResponse.json({ ok: true });
 }

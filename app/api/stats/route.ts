@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { currentWeek } from "@/lib/config";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
 import { loadCalendarAnchors } from "@/lib/server/calendar";
+import { toClientError } from "@/lib/server/http/errors";
 import { parseRange } from "@/lib/server/range";
 import { resolveSession } from "@/lib/server/session";
 
@@ -46,8 +47,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   });
 
   if (error) {
-    console.error("[stats] rpc failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[stats] rpc failed:", error);
   }
 
   // The trend, over the requested range. Same permission shape as the single

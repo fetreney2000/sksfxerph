@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { toClientError } from "@/lib/server/http/errors";
 
 /**
  * DELETE /api/rph/[id] — take a plan out of the archive.
@@ -63,8 +64,7 @@ export async function DELETE(
     .eq("owner_id", gate.user.id);
 
   if (error) {
-    console.error("[rph] delete failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[rph] delete failed:", error);
   }
 
   return NextResponse.json({ ok: true });

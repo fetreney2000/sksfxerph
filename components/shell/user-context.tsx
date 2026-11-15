@@ -57,6 +57,11 @@ export function givenName(fullName: string): string {
 export function initialsOf(fullName: string): string {
   const parts = fullName.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "U";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
+  const first = parts[0] ?? "";
+  const second = parts[1] ?? "";
+  // No `!`: an index one past the end is `undefined`, and the single-name
+  // branch above already returned — but the type does not know that, and a
+  // crash in an avatar is not how to learn the string was short.
+  if (!second) return first.slice(0, 2).toUpperCase();
+  return `${first[0] ?? ""}${second[0] ?? ""}`.toUpperCase();
 }

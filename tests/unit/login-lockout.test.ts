@@ -200,6 +200,21 @@ describe("the login lockout", () => {
     });
   });
 
+  it("rejects an over-long identifier or password before scrypt ever runs", async () => {
+    // An over-long input is never a real credential — 320 chars tops an email,
+    // stored passwords are far shorter than 1024 — so it is answered as bad
+    // credentials rather than hashed. Without the cap a caller could make
+    // every attempt pay KDF time on megabytes of input.
+    const longId = await POST(post(`${"a".repeat(320)}@sk.local`, "salah"));
+    expect(longId.status).toBe(401);
+
+    const longPw = await POST(post("tidak.ada", "x".repeat(2000)));
+    expect(longPw.status).toBe(401);
+    expect(await longPw.json()).toEqual({
+      error: "Nama pengguna atau kata laluan salah.",
+    });
+  });
+
   it("signs in by email, case-insensitively", async () => {
     seed({ email: "suhaila@sktamanharmoni.local" });
     const res = await POST(post("Suhaila@SKTamanHarmoni.local", "biasa123"));

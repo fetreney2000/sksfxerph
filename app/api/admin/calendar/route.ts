@@ -3,6 +3,7 @@ import { z } from "zod";
 import { weekOfIso } from "@/lib/config";
 import { requireAdministrator, schoolIdFor } from "@/lib/server/auth/guard";
 import { invalidateCalendarCache } from "@/lib/server/calendar";
+import { toClientError } from "@/lib/server/http/errors";
 
 /**
  * GET / PATCH / DELETE /api/admin/calendar — which week a date range is.
@@ -145,10 +146,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     p_from_week_no: parsed.data.fromWeekNo ?? null,
   });
   if (error) {
-    // The SQL messages are written for the person at the form, so they travel
-    // through untouched into the toast — same as the rest of the admin routes.
-    console.error("[admin] set calendar week failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[admin] set calendar week failed:", error);
   }
   // Dropped rather than waited out: the administrator is looking at their own
   // dashboard now, and the server must not keep counting the old week behind it.
@@ -186,8 +184,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     p_week_no: weekNoParam,
   });
   if (error) {
-    console.error("[admin] clear calendar week failed:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 422 });
+    return toClientError("[admin] clear calendar week failed:", error);
   }
   invalidateCalendarCache(schoolId);
   return NextResponse.json({ ok: true });

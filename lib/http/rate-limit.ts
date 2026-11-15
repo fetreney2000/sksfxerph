@@ -25,9 +25,15 @@ export function rateLimit(key: string): NextResponse | null {
 
   if (!entry || entry.resetAt <= now) {
     hits.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    // Opportunistic prune so a long-lived process doesn't accumulate keys.
+    // Opportunistic prune so a long-lived process doesn't accumulate keys —
+    // without a cap an attacker cycling IPs grows this map without bound, and
+    // a full scan on every request would turn the limiter itself into the DoS.
     if (hits.size > 5_000) {
       for (const [k, v] of hits) if (v.resetAt <= now) hits.delete(k);
+      // Still over budget (a flood of distinct keys inside one window): drop
+      // the whole table rather than scanning it on every request. Failing open
+      // is safe here — the per-account bucket and the lockout still hold.
+      if (hits.size > 20_000) hits.clear();
     }
     return null;
   }
@@ -77,12 +83,17 @@ export function clientKey(request: Request, fallback: string): string {
  * derived from the request body, so forging headers does not help.
  */
 export function clientIp(request: Request, fallback: string): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  const real = request.headers.get("x-real-ip")?.trim();
-  if (real) return real;
-  return fallback;
+  // Bounded and charset-checked: the header is attacker-controlled and becomes
+  // a map key, so a megabyte of garbage must not become a megabyte of memory —
+  // and anything that is not an address-like token tells us nothing anyway.
+  const clean = (value: string | null): string | null => {
+    const token = value?.split(",")[0]?.trim() ?? "";
+    if (!token || token.length > 64 || !/^[A-Za-z0-9.:_-]+$/.test(token)) return null;
+    return token;
+  };
+  return (
+    clean(request.headers.get("x-forwarded-for")) ??
+    clean(request.headers.get("x-real-ip")) ??
+    fallback
+  );
 }

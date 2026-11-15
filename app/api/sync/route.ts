@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { supabaseConfigured } from "@/lib/config";
 import { rateLimit } from "@/lib/http/rate-limit";
 import { requirePermission } from "@/lib/server/auth/guard";
+import { isUuid, toClientError } from "@/lib/server/http/errors";
 import type { SyncResult } from "@/lib/types";
 
 /**
@@ -59,15 +60,33 @@ export async function POST(request: NextRequest) {
       { status: 413 },
     );
   }
+  // Structural gate before anything reaches SQL: every op names its own row by
+  // UUID under the one entity this endpoint carries. Anything deeper — week
+  // numbers, dates, class membership — stays SQL's job, and its refusals come
+  // back per-op in `results` rather than as a batch rejection. Without this, a
+  // malformed op_id died inside `(v_op->>'op_id')::uuid` and the 22P02 text
+  // went straight to the client.
+  const malformed = ops.some(
+    (op) =>
+      typeof op !== "object" ||
+      op === null ||
+      !isUuid((op as Record<string, unknown>).op_id) ||
+      !isUuid((op as Record<string, unknown>).id) ||
+      (op as Record<string, unknown>).entity !== "rph",
+  );
+  if (malformed) {
+    return NextResponse.json({ error: "Operasi tidak sah" }, { status: 400 });
+  }
 
   try {
     const { data, error } = await gate.db.rpc("sync_rph", { p_ops: ops });
 
     if (error) {
-      console.error("[sync] rpc failed:", error.message);
+      // The 401 test reads the raw text server-side; the client only ever sees
+      // what `toClientError` passes — an authored raise, or nothing at all.
       const status =
         error.code === "PGRST301" || /belum log masuk/i.test(error.message) ? 401 : 422;
-      return NextResponse.json({ error: error.message }, { status });
+      return toClientError("[sync] rpc failed:", error, status);
     }
 
     return NextResponse.json({ results: (data as SyncResult[] | null) ?? [] });
