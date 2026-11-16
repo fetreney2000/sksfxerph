@@ -154,7 +154,7 @@ const patchSchema = z
   .object({
     classIds: z.array(z.string().uuid()).min(1).max(30).optional(),
     subjectCode: z.string().min(1).max(12).optional(),
-    weekNo: z.number().int().min(1).max(53).optional(),
+    weekNo: z.number().int().min(1).max(52).optional(),
     planDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Tarikh tidak sah")
@@ -270,6 +270,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
     }
     const schoolClasses = new Set((classes ?? []).map((c: { id: string }) => c.id));
+    // Canonical form, as on create: the unique index compares arrays
+    // order-sensitively, so the stored order must not depend on tick order.
+    d.classIds = [...new Set(d.classIds)].sort();
     if (!d.classIds.every((id) => schoolClasses.has(id))) {
       return NextResponse.json(
         { error: "Kelas ini bukan milik sekolah atau sesi anda" },
@@ -333,6 +336,31 @@ export async function PATCH(
 
   const { error } = await gate.db.from("rph_document").update(patch).eq("id", id);
   if (error) {
+    // Same race as on create: two saves moving two rows onto the same slot.
+    // The overlap probe above would have caught a visible one, so re-probe
+    // and report the holder instead of a bare server error.
+    if ((error as { code?: string })?.code === "23505") {
+      const probe = await gate.db
+        .from("rph_document")
+        .select("id, class_ids")
+        .eq("school_id", schoolId)
+        .eq("owner_id", gate.user.id)
+        .eq("session", session)
+        .eq("week_no", effWeek)
+        .eq("plan_date", effDate)
+        .eq("subject_code", effSubject)
+        .is("deleted_at", null)
+        .neq("id", id);
+      const hit = ((probe.data ?? []) as { id: string; class_ids: string[] | null }[]).find(
+        (r) => (r.class_ids ?? []).some((c) => effClassIds.includes(c)),
+      );
+      if (!probe.error && hit) {
+        return NextResponse.json(
+          { error: "Slot ini sudah diisi oleh RPH lain.", clashId: hit.id },
+          { status: 409 },
+        );
+      }
+    }
     return toClientError("[rph] update failed:", error);
   }
   return NextResponse.json({ ok: true, version: current.version + 1 });

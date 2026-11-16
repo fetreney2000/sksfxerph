@@ -131,7 +131,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 const createSchema = z.object({
   classIds: z.array(z.string().uuid()).min(1).max(30),
   subjectCode: z.string().min(1).max(12),
-  weekNo: z.number().int().min(1).max(53),
+  weekNo: z.number().int().min(1).max(52),
   planDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Tarikh tidak sah")
@@ -172,6 +172,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const d = parsed.data;
 
+  // Canonical form: sorted and de-duplicated. The schema's unique index
+  // compares `class_ids` as arrays (order-sensitive), and the old sync path
+  // sorted before writing - an unsorted insert would slip past the index and
+  // file the same slot twice under two orders.
+  const classIds = [...new Set(d.classIds)].sort();
+
   // The classes must be the school's own, for this session, and active: a
   // plan filed under another school's class would be invisible everywhere
   // and ungradeable anywhere. Same rule the old sync path enforced.
@@ -186,7 +192,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
   }
   const schoolClasses = new Set((classes ?? []).map((c: { id: string }) => c.id));
-  if (!d.classIds.every((id) => schoolClasses.has(id))) {
+  if (!classIds.every((id) => schoolClasses.has(id))) {
     return NextResponse.json(
       { error: "Kelas ini bukan milik sekolah atau sesi anda" },
       { status: 422 },
@@ -225,7 +231,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return toClientError("[rph] clash lookup failed:", clashErr);
   }
   const hit = ((clash ?? []) as { id: string; class_ids: string[] }[]).find((row) =>
-    (row.class_ids ?? []).some((c) => d.classIds.includes(c)),
+    (row.class_ids ?? []).some((c) => classIds.includes(c)),
   );
   if (hit) {
     return NextResponse.json(
@@ -239,7 +245,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .insert({
       school_id: schoolId,
       owner_id: gate.user.id,
-      class_ids: d.classIds,
+      class_ids: classIds,
       subject_code: d.subjectCode,
       session,
       week_no: d.weekNo,
@@ -255,6 +261,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .single();
 
   if (error) {
+    // Exact-duplicate race: two presses in flight can both pass the clash
+    // check above, and the unique index catches the second. That is not a
+    // failure - the plan exists, so hand it back the way the 409 path does
+    // and the editor opens it instead of showing an error.
+    if ((error as { code?: string })?.code === "23505") {
+      const retry = await gate.db
+        .from("rph_document")
+        .select("id, class_ids")
+        .eq("school_id", schoolId)
+        .eq("owner_id", gate.user.id)
+        .eq("session", session)
+        .eq("week_no", d.weekNo)
+        .eq("plan_date", d.planDate)
+        .eq("subject_code", d.subjectCode)
+        .is("deleted_at", null);
+      const retryHit = ((retry.data ?? []) as { id: string; class_ids: string[] }[]).find(
+        (row) => (row.class_ids ?? []).some((c) => classIds.includes(c)),
+      );
+      if (!retry.error && retryHit) {
+        return NextResponse.json(
+          { error: "Anda sudah mempunyai RPH untuk slot ini.", clashId: retryHit.id },
+          { status: 409 },
+        );
+      }
+    }
     return toClientError("[rph] create failed:", error);
   }
   return NextResponse.json({ ok: true, id: (data as { id: string }).id, version: 1 });
