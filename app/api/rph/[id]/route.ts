@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import type { DocumentRow } from "@/app/api/rph/route";
+import { can } from "@/lib/auth/permissions";
 import { rphPayloadSchema } from "@/lib/schemas/rph";
-import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { requireDbUser, requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
 import { dbFailureMessage, toClientError } from "@/lib/server/http/errors";
 import { resolveSession } from "@/lib/server/session";
 
@@ -31,14 +32,20 @@ const COLUMNS =
   "slot_time_end, status, payload, version, content_hash, created_at, " +
   "updated_at, submitted_at, deleted_at, grade, reviewed_at, " +
   "subject:subject_code(nama), " +
+  // The reader is not always the writer: a reviewer opening "Buka penuh"
+  // needs the name on the paper, and the queue already proves this embed.
+  "owner:owner_id(full_name), " +
   "rph_review(reviewer:reviewer_id(full_name), comment, created_at)";
 
 /**
- * GET /api/rph/[id] - one of the caller's own plans.
+ * GET /api/rph/[id] - one plan, read by its owner or its reviewer.
  *
- * What the editor opens: a single row, owner-scoped like the list, so a
+ * Owners read their own rows (the `rph` permission), exactly as before - a
  * hand-typed id for a colleague's plan answers 404 rather than leaking its
- * existence. Class names are resolved the same way as the list.
+ * existence. Reviewers (`semak`) read the rows they may decide: the whole
+ * school for a Guru Besar, the assigned teachers for a GPK - the same scope
+ * `/api/queue` applies. This is what "Buka penuh" on Semakan opens: the
+ * editor stays owner-only, so review reads needed their own door.
  */
 export async function GET(
   request: NextRequest,
@@ -49,8 +56,13 @@ export async function GET(
     return NextResponse.json({ error: "ID tidak sah" }, { status: 400 });
   }
 
-  const gate = await requirePermission(request, "rph");
+  const gate = await requireDbUser(request);
   if ("error" in gate) return gate.error;
+  const teacher = can(gate.user.role, "rph");
+  const reviewer = can(gate.user.role, "semak");
+  if (!teacher && !reviewer) {
+    return NextResponse.json({ error: "Peranan anda tidak mencukupi" }, { status: 403 });
+  }
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) {
@@ -62,17 +74,50 @@ export async function GET(
     .select(COLUMNS)
     .eq("id", id)
     .eq("school_id", schoolId)
-    .eq("owner_id", gate.user.id)
     .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {
     console.error("[rph] read failed:", error.message);
+    const known = dbFailureMessage(error);
+    if (known) return NextResponse.json({ error: known }, { status: 422 });
     return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
   }
-  if (!data) return NextResponse.json({ error: "RPH tidak dijumpai" }, { status: 404 });
+  const row = data as unknown as
+    | (DocumentRow & { owner?: { full_name: string } | null })
+    | null;
+  if (!row) return NextResponse.json({ error: "RPH tidak dijumpai" }, { status: 404 });
 
-  const row = data as unknown as DocumentRow;
+  // Their own row needs the teaching permission; anyone else's needs the
+  // reviewing one *and* the scope - same rule as the queue, so a GPK cannot
+  // open a plan assigned to nobody by guessing its id.
+  const ownOk = row.owner_id === gate.user.id && teacher;
+  let scopeOk = false;
+  if (!ownOk && reviewer) {
+    if (gate.user.role === "guru_besar") {
+      scopeOk = true;
+    } else {
+      const { data: supervised, error: scopeErr } = await gate.db
+        .from("school_member")
+        .select("user_id")
+        .eq("school_id", schoolId)
+        .eq("supervisor_id", gate.user.id)
+        .eq("is_active", true);
+      if (scopeErr) {
+        console.error("[rph] scope lookup failed:", scopeErr.message);
+        const known = dbFailureMessage(scopeErr);
+        if (known) return NextResponse.json({ error: known }, { status: 422 });
+        return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+      }
+      scopeOk = ((supervised ?? []) as { user_id: string }[]).some(
+        (m) => m.user_id === row.owner_id,
+      );
+    }
+  }
+  if (!ownOk && !scopeOk) {
+    return NextResponse.json({ error: "RPH tidak dijumpai" }, { status: 404 });
+  }
+
   const { data: classes } = await gate.db
     .from("class")
     .select("id, nama")
@@ -86,6 +131,7 @@ export async function GET(
       ...row,
       class_names: (row.class_ids ?? []).map((cid) => names.get(cid) ?? ""),
     },
+    teacherName: row.owner?.full_name ?? "Guru",
   });
 }
 
@@ -152,7 +198,11 @@ export async function DELETE(
  */
 const patchSchema = z
   .object({
-    classIds: z.array(z.string().uuid()).min(1).max(30).optional(),
+    classIds: z
+      .array(z.string().uuid())
+      .min(1, "Pilih sekurang-kurangnya satu kelas")
+      .max(30)
+      .optional(),
     subjectCode: z.string().min(1).max(12).optional(),
     weekNo: z.number().int().min(1).max(52).optional(),
     planDate: z

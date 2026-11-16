@@ -133,7 +133,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * the editor can offer it instead of silently becoming someone else's row.
  */
 const createSchema = z.object({
-  classIds: z.array(z.string().uuid()).min(1).max(30),
+  classIds: z.array(z.string().uuid()).min(1, "Pilih sekurang-kurangnya satu kelas").max(30),
   subjectCode: z.string().min(1).max(12),
   weekNo: z.number().int().min(1).max(52),
   planDate: z

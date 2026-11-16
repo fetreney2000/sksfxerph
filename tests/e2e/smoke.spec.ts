@@ -52,7 +52,7 @@ function collectErrors(page: Page): string[] {
 
 async function login(page: Page, identifier = DEMO_EMAIL, password = DEMO_PASS): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel(/Emel atau nama pengguna/).fill(identifier);
+  await page.getByLabel(/^Emel$/).fill(identifier);
   await page.getByLabel(/Kata laluan/).fill(password);
   await page.getByRole("button", { name: "Log masuk" }).click();
   // Either home, per `homeFor`: every teaching role lands on /minggu, the
@@ -73,7 +73,7 @@ test.describe("authentication", () => {
   test("rejects a wrong password without revealing which field was wrong", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/login");
-    await page.getByLabel(/Emel atau nama pengguna/).fill(DEMO_EMAIL);
+    await page.getByLabel(/^Emel$/).fill(DEMO_EMAIL);
     await page.getByLabel(/Kata laluan/).fill("salah-sangat");
     await page.getByRole("button", { name: "Log masuk" }).click();
 

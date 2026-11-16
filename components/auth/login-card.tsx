@@ -85,7 +85,7 @@ export function LoginCard() {
         <form onSubmit={signIn} noValidate>
           <div className="mb-3.5">
             <Label htmlFor="f-login-username" required>
-              Emel atau nama pengguna
+              Emel
             </Label>
             <Input
               id="f-login-username"

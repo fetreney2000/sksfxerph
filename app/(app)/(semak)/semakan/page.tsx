@@ -456,7 +456,7 @@ export default function SemakanPage() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => router.push(`/editor/${item.id}`)}
+                  onClick={() => router.push(`/semakan/${item.id}`)}
                 >
                   Buka penuh
                 </Button>
@@ -494,7 +494,7 @@ export default function SemakanPage() {
                   {item.teacherName} · {item.className}
                 </DialogTitle>
                 <Button asChild size="sm" variant="ghost" className="shrink-0">
-                  <Link href={`/editor/${item.id}`}>Buka penuh</Link>
+                  <Link href={`/semakan/${item.id}`}>Buka penuh</Link>
                 </Button>
               </div>
               <DialogDescription className="mt-0.5">

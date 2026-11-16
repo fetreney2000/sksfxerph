@@ -41,6 +41,7 @@ const state = vi.hoisted(() => ({
   role: "guru_biasa" as string,
   calls: [] as { table: string; method: string; args: unknown[] }[],
   rows: [] as Row[],
+  supervised: [] as string[],
 }));
 
 vi.mock("@/lib/config", async (importOriginal) => {
@@ -164,6 +165,18 @@ vi.mock("@/lib/server/db", () => ({
             onErr as (e: unknown) => unknown,
           );
         }
+        if (table === "school_member") {
+          // The reviewer's scope read asks for user ids supervised by the
+          // caller; anything else on this table is unfiltered noise the route
+          // never awaits. schoolIdFor reads through maybeSingle, not here.
+          const wantsUsers = ops.some((o) => o.method === "select" && o.args[0] === "user_id");
+          if (wantsUsers) {
+            return Promise.resolve({
+              data: state.supervised.map((user_id) => ({ user_id })),
+              error: null,
+            }).then(onOk as (v: unknown) => unknown, onErr as (e: unknown) => unknown);
+          }
+        }
         return Promise.resolve({ data: filtered(), error: null }).then(
           onOk as (v: unknown) => unknown,
           onErr as (e: unknown) => unknown,
@@ -244,6 +257,7 @@ beforeEach(() => {
   state.role = "guru_biasa";
   state.calls.length = 0;
   state.rows = [];
+  state.supervised = [];
 });
 
 describe("POST /api/rph", () => {
@@ -327,6 +341,47 @@ describe("GET /api/rph/[id]", () => {
     const res = await call(GET_ONE, "GET", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
 
     expect(res.status).toBe(404);
+  });
+
+  it("lets a GPK read an assigned teacher's plan, with the teacher's name", async () => {
+    state.role = "gpk";
+    state.supervised = [OTHER_ID];
+    state.rows = [draft({ owner_id: OTHER_ID })];
+
+    const res = await call(GET_ONE, "GET", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { item: { id: string }; teacherName: string };
+    expect(body.item.id).toBe(VALID_ID);
+    expect(typeof body.teacherName).toBe("string");
+  });
+
+  it("lets a Guru Besar read any plan in the school", async () => {
+    state.role = "guru_besar";
+    state.rows = [draft({ owner_id: OTHER_ID })];
+
+    const res = await call(GET_ONE, "GET", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(200);
+  });
+
+  it("answers 404 for a GPK outside their assignment", async () => {
+    state.role = "gpk";
+    state.supervised = [];
+    state.rows = [draft({ owner_id: OTHER_ID })];
+
+    const res = await call(GET_ONE, "GET", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("refuses a role with neither the teaching nor the reviewing permission", async () => {
+    state.role = "pentadbir";
+    state.rows = [draft({ owner_id: OTHER_ID })];
+
+    const res = await call(GET_ONE, "GET", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(403);
   });
 
   it("refuses a malformed id before the database", async () => {

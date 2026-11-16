@@ -565,13 +565,11 @@ export function RphEditor({
       // A copied plan brings its own classes; they are kept only while every
       // one still belongs to this school's list - a class deleted since the
       // source was written would leave the plan stamped with an id the server
-      // refuses on every flush. Anything that survives the filter, or nothing
-      // at all, falls back to the first class, the same default a blank plan
-      // gets.
-      const copiedClasses = (loaded?.classIds ?? []).filter((cid) =>
+      // refuses on every flush. A blank plan starts with none ticked: the
+      // teacher chooses in step 1, and a save with none is refused.
+      const classIds = (loaded?.classIds ?? []).filter((cid) =>
         classes.some((c) => c.id === cid),
       );
-      const classIds = copiedClasses.length > 0 ? copiedClasses : cls ? [cls.id] : [];
       const classNames = classIds.map((cid) => classes.find((c) => c.id === cid)?.nama ?? "");
       setPending({
         id:
@@ -580,9 +578,9 @@ export function RphEditor({
             : `local-${now}`,
         schoolCode,
         ownerId: ownerId(),
-        // Step 1 ticks classes; the first one is the default and the teacher
-        // widens it from there. One plan, one review, one sheet - however many
-        // classes it covers.
+        // Step 1 ticks classes - none is the default, and the teacher ticks
+        // what this plan covers. One plan, one review, one sheet - however
+        // many classes it covers.
         classIds,
         classNames,
         subjectCode: editing?.subjectCode ?? loaded?.subjectCode ?? subject.code,
