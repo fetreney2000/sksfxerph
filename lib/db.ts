@@ -2,11 +2,13 @@ import Dexie, { type EntityTable } from "dexie";
 import type { RphDocument, SchoolClass, SyncOperation, TeacherNotification } from "@/lib/types";
 
 /**
- * The offline source of truth.
+ * The offline dev harness's store - NOT production storage.
  *
- * Every read in the editor goes through Dexie, never straight to Supabase -
- * that is what makes the app usable in a school with patchy connectivity and
- * what keeps it working during the 7-day Supabase free-tier pause.
+ * Production reads and writes go straight to the API, never here - that
+ * is what makes the app work with no offline layer to maintain. This
+ * file exists so local development and the e2e suite (which run with no
+ * backend) still have a database to read and write: the demo seed and
+ * the local accounts' plans. Do not add production reads or writes here.
  *
  * Indexes mirror the SQL natural key so client-side duplicate detection
  * matches `rph_document_uniq` in db/schema.sql.
@@ -59,33 +61,14 @@ db.version(2)
 
 export { db };
 
-/* ── Small helpers the UI leans on ─────────────────────────────────────────── */
-
-/** Total queued mutations - drives the sync chip's "n belum diselesaikan" label. */
-export async function queueDepth(): Promise<number> {
-  return db.syncQueue.count();
-}
-
-/** Documents needing action for a given week, newest plan date first. */
-export async function documentsForWeek(
-  ownerId: string,
-  session: string,
-  weekNo: number,
-): Promise<RphDocument[]> {
-  const rows = await db.documents
-    .where("[ownerId+session]")
-    .equals([ownerId, session])
-    .filter((d) => d.weekNo === weekNo)
-    .toArray();
-  return rows.sort((a, b) => (a.planDate < b.planDate ? -1 : a.planDate > b.planDate ? 1 : 0));
-}
+/* ── Small helpers the harness leans on ──────────────────────────────────── */
 
 /**
- * The overlap lookup used before creating a new plan: a duplicate is another
- * live plan with the same subject on the same day that claims *any* of the
- * classes this draft covers - mirroring the `class_ids && v_class_ids`
- * resolution `sync_rph` applies server-side. Disjoint class sets are two
- * different lessons and may coexist.
+ * The overlap lookup used before creating a new plan in the dev harness: a
+ * duplicate is another live plan with the same subject on the same day that
+ * claims *any* of the classes this draft covers - mirroring the overlap check
+ * POST /api/rph applies server-side. Disjoint class sets are two different
+ * lessons and may coexist.
  */
 export async function findByNaturalKey(
   ownerId: string,

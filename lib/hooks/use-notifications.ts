@@ -19,21 +19,15 @@ export interface FeedNotification {
 }
 
 /**
- * One notification feed from two sources.
+ * One notification feed.
  *
- *  · Dexie - events generated *on this device* (e.g. an offline plan merged
- *    into a server plan), available offline.
- *  · `/api/notifications` - rows written by `sahkan_rph()` and `hantar_balik()`
- *    when a GPK decides on a plan, which the device has never seen.
+ * Synced mode reads the server only: `/api/notifications` rows written by
+ * `sahkan_rph()` and `hantar_balik()` when a reviewer decides. The old Dexie
+ * mirror existed for offline-generated events (merges, rejected syncs) - with
+ * no offline queue there is nothing to mirror.
  *
- * In local mode the API isn't called at all (no database), so the Dexie list
- * stands alone. Merged by id and sorted newest-first.
- *
- * Marking read goes to *both*. The Dexie write is what the offline list
- * reflects; the PATCH is what the school's rows need, because `read_at` on
- * `erph.notification` is not reachable from the client - and without it the
- * bell counted every review decision as unread for ever, with a button
- * beside it that could not clear them.
+ * Local mode (the development harness) has no server, so the Dexie list
+ * stands alone there. Merged by id and sorted newest first.
  */
 export function useNotifications(): {
   items: FeedNotification[];
@@ -43,13 +37,19 @@ export function useNotifications(): {
   const queryClient = useQueryClient();
 
   const local = useLiveQuery(
-    async () =>
-      (await db.notifications
+    async () => {
+      // Harness only: production never writes here, so there is nothing to
+      // read back there either. Skipping the IndexedDB read entirely keeps
+      // the production path free of the local store.
+      if (supabaseConfigured) return [] as FeedNotification[];
+      return (await db.notifications
         .orderBy("createdAt")
         .reverse()
         .limit(50)
-        .toArray()) as FeedNotification[],
-    [],
+        .toArray()) as FeedNotification[];
+    },
+    // Re-run when the deployment flips modes mid-session (dev harness).
+    [supabaseConfigured],
     [] as FeedNotification[],
   );
 
@@ -80,16 +80,24 @@ export function useNotifications(): {
   }, [local, remote.data]);
 
   const markRead = (id: string) => {
-    void db.notifications.update(id, { readAt: Date.now() }).catch(() => undefined);
+    // The harness list is the only list there; the server is the only list
+    // everywhere else.
+    if (!supabaseConfigured) {
+      void db.notifications.update(id, { readAt: Date.now() }).catch(() => undefined);
+      return;
+    }
     sendRead({ ids: [id] });
   };
 
   const markAllRead = () => {
-    const now = Date.now();
-    void db.notifications
-      .toCollection()
-      .modify({ readAt: now })
-      .catch(() => undefined);
+    if (!supabaseConfigured) {
+      const now = Date.now();
+      void db.notifications
+        .toCollection()
+        .modify({ readAt: now })
+        .catch(() => undefined);
+      return;
+    }
     sendRead({ all: true });
   };
 

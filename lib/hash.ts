@@ -1,9 +1,8 @@
 /**
  * Stable content hash for no-op detection.
  *
- * Not cryptographic - the server only compares it to decide whether a sync op
- * actually changed anything. FNV-1a so it needs no dependency and computes
- * identically on server and client.
+ * Not a cryptographic hash - it only tells change apart, so FNV-1a needs no
+ * dependency and computes identically wherever it runs.
  *
  * Keys are sorted recursively first: `JSON.stringify` with a replacer array
  * would apply that array at every nesting level and silently drop nested

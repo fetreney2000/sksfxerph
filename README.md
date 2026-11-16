@@ -2,7 +2,7 @@
 
 A working implementation of the electronic Daily Lesson Plan (Rancangan Pengajaran Harian) system for Malaysian teachers, built to the research in this repository and KPM's **Surat Siaran Bilangan 2 Tahun 2025**.
 
-**Stack:** Next.js 16.3 (App Router) · React 19 · Tailwind v4 · Supabase (Postgres/RLS) · Dexie (IndexedDB) · Vercel
+**Stack:** Next.js 16.3 (App Router) · React 19 · Tailwind v4 · Supabase (Postgres/RLS) · Vercel
 
 ---
 
@@ -49,8 +49,9 @@ Sign in with the local-mode demo account — **`cikgu` / `cikgu123`**.
 
 With no Supabase env vars the app runs in **local mode**: everything persists to
 IndexedDB, sessions still go through the real cookie/scrypt path (just against
-a bundled demo account), and the whole product works offline. See
-`.env.example` to enable syncing.
+a bundled demo account). The dev harness and e2e suite run against that
+local IndexedDB; production reads and writes go straight to the API and
+never touch the browser store. See `.env.example` to connect a database.
 
 **Authentication is deliberately not Supabase Auth.** Accounts are rows in
 `erph.user` (username + scrypt hash), verified by `/api/auth/login`, and the
@@ -156,36 +157,29 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 | Paparan Sekolah | `/sekolah` | School compliance, per-panel progress, teacher table |
 | Laporan & Eksport | `/laporan` | PDF/CSV/DOCX export with audit trail |
 
-Plus: `⌘K` command palette, dark mode, PWA install, service worker, offline sync queue.
+Plus: dark mode, PWA install.
 
 ---
 
 ## Architecture
 
 ```
-Browser (Client Components, offline-first)
- ├─ Dexie / IndexedDB ─── local source of truth
- ├─ syncQueue ─────────── idempotent mutations (op_id)
- └─ Service worker ────── app-shell precache, never caches /api/*
-        │  httpOnly session cookie (same-origin fetch — no token in JS)
-        ▼
-Vercel (Node route handlers) ── the ONLY thing that talks to the database
- ├─ /api/auth/*     → scrypt verify + sign session cookie
- ├─ /api/sync       → Supabase RPC `sync_rph`
- ├─ /api/rpc/*      → submit_rph / review_rph
- ├─ /api/queue      → submitted plans for the caller's school
- ├─ /api/stats      → school_week_stats RPC
- ├─ /api/export     → DOCX via `docx` (pure JS, no headless Chrome)
- └─ /api/heartbeat  → keeps the free-tier project from auto-pausing
-        │  secret key + header  X-Erph-User: <user uuid>
-        ▼
-Supabase (PostgreSQL · schema `erph`)
- └─ db/schema.sql · RLS on every table · SECURITY DEFINER RPCs
-    erph.actor()  ← resolves identity; honours the header ONLY for service_role
-    submit_rph() / review_rph() / sync_rph() / school_week_stats()
+Browser (Client Components, always online)
+ - React Query: server state; explicit POST/PATCH/DELETE per save
+        |  httpOnly session cookie (same-origin fetch, no token in JS)
+        v
+Vercel (Node route handlers) -- the ONLY thing that talks to the database
+ - /api/auth/*     -> scrypt verify + sign session cookie
+ - /api/rph        -> the caller's own plans (GET list, POST create)
+ - /api/rph/[id]   -> single plan (GET), save edits (PATCH), soft delete
+ - /api/rpc/*      -> submit_rph / review_rph
+ - /api/queue      -> submitted plans for the caller's school
+ - /api/stats      -> school_week_stats RPC
+ - /api/export     -> DOCX via `docx` (pure JS, no headless Chrome)
+ - /api/heartbeat  -> keeps the free-tier project from auto-pausing
 ```
 
-**The rule that holds it together:** the client never touches the database. It writes to Dexie, then flushes a batch to a route handler that has already authenticated the cookie — and that handler passes the user id down, where `erph.actor()` and the RPCs re-check it. The client cannot skip a rule because there is no path from the browser to PostgREST.
+**The rule that holds it together:** the client never touches the database. It calls a route handler that has already authenticated the cookie — and that handler passes the user id down, where `erph.actor()` and the RPCs re-check it. The client cannot skip a rule because there is no path from the browser to PostgREST.
 
 ### Key files
 
@@ -196,8 +190,8 @@ lib/server/auth/token.ts    signed session cookie (pure, unit-tested)
 lib/server/auth/session.ts  cookie → user, incl. revocation checks
 lib/server/auth/guard.ts    requireUser / requireReviewer / schoolIdFor
 lib/rpc.ts                  fetch wrappers for the RPC-backed routes
+lib/rph-doc.ts              server row to plan shape (one mapping for every reader)
 lib/schemas/rph.ts          Zod payload + completeness rules (mirrors SQL exactly)
-lib/sync/queue.ts           offline queue: batch, backoff, reconcile
 lib/config.ts               calendar-day tokens (one definition, test-enforced)
 components/rph/editor.tsx   the 4-step wizard
 ```

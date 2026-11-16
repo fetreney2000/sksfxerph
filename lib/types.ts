@@ -122,7 +122,9 @@ export interface RphDocument {
   createdAt: number;
 }
 
-/** One queued mutation waiting for the network. See lib/sync/queue.ts. */
+/** One queued mutation in the offline dev harness's outbox. Production sync
+ * is gone: writes go straight to the API, so nothing ever enqueues here
+ * outside local mode. */
 export interface SyncOperation {
   opId: string;
   entity: "rph";
@@ -185,30 +187,6 @@ export interface UserProfile {
   role: MemberRole;
   title?: string;
   schoolCode: string;
-}
-
-/* ── API contracts ─────────────────────────────────────────────────────────── */
-
-export type SyncResultKind = "applied" | "duplicate" | "rejected";
-
-export interface SyncResult {
-  opId: string;
-  result: SyncResultKind;
-  id?: string;
-  version?: number;
-  status?: RphStatus;
-  completeness?: number;
-  error?: string;
-  /**
-   * Set on a `rejected` result: may this op succeed if it is tried again?
-   *
-   * The distinction is the difference between a teacher's edit being kept and
-   * being lost. A rejection the server decided on - a class that is not in
-   * this school - will be rejected forever, so the op is dropped and the
-   * teacher is told. A failure the server did not expect might well succeed
-   * next time, so the op stays in the queue and is retried.
-   */
-  retryable?: boolean;
 }
 
 export interface ReviewDecision {

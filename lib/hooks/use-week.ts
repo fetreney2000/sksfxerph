@@ -1,12 +1,16 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
-import { schoolCode, weekDeadline } from "@/lib/config";
+import type { DocumentRow } from "@/app/api/rph/route";
+import { handleExpiredSession } from "@/lib/client/auth-session";
+import { schoolCode, supabaseConfigured, weekDeadline } from "@/lib/config";
 import { schoolDays } from "@/lib/date";
-import { db, documentsForWeek } from "@/lib/db";
+import { db } from "@/lib/db";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSession } from "@/lib/hooks/use-session";
 import { ownerId } from "@/lib/owner";
+import { toLocalPlan } from "@/lib/rph-doc";
 import { normalisePayload } from "@/lib/schemas/rph";
 import type { RphDocument } from "@/lib/types";
 import { summariseWeek, type WeekCounts } from "@/lib/week-summary";
@@ -32,66 +36,89 @@ const EMPTY_WEEK_COUNTS: WeekCounts = {
 };
 
 /**
- * Everything the dashboard and archive need from IndexedDB, in one live query.
- * `useLiveQuery` re-renders on any matching write - this is how the editor's
- * save shows up in the dashboard without any global store.
+ * The teacher's own plans, newest first.
+ *
+ * Synced mode reads the server directly - there is no local mirror to keep in
+ * step, so what the dashboard, the archive and the editor open is always what
+ * the server has. Local mode (the development harness) reads IndexedDB, where
+ * the demo seed lives.
+ */
+export function useOwnPlans(): { items: RphDocument[]; loading: boolean } {
+  const session = useSession();
+  const remote = useQuery<{ items: DocumentRow[] }>({
+    queryKey: ["own-plans", schoolCode, session],
+    queryFn: async () => {
+      const res = await fetch("/api/rph", { credentials: "same-origin" });
+      if (handleExpiredSession(res.status)) return { items: [] };
+      if (!res.ok) return { items: [] };
+      return (await res.json()) as { items: DocumentRow[] };
+    },
+    enabled: supabaseConfigured,
+    retry: 1,
+    staleTime: 30_000,
+  });
+
+  const local = useLiveQuery(async () => {
+    if (supabaseConfigured) return [] as RphDocument[];
+    const owner = ownerId();
+    return db.documents.where("[ownerId+session]").equals([owner, session]).toArray();
+  }, [session]);
+
+  if (!supabaseConfigured) {
+    // Normalised on the way out: Dexie holds whatever was written, including
+    // plans saved before the template reshape - and a reader that assumed the
+    // current shape would crash on the first field that did.
+    return {
+      items: (local ?? []).map((d) => ({ ...d, payload: normalisePayload(d.payload) })),
+      loading: local === undefined,
+    };
+  }
+  if (remote.isLoading) return { items: [], loading: true };
+  return { items: (remote.data?.items ?? []).map(toLocalPlan), loading: false };
+}
+
+/**
+ * Everything the dashboard and archive need - derived from the teacher's own
+ * plans, so the week view, the archive and the editor all read the same rows.
  */
 export function useWeek(): WeekSummary {
-  // The session is a dependency, not a constant read inside the callback: Dexie
-  // caches the result of the last run, so a school that rolls its year over
-  // would otherwise keep showing last year's plans until something else
-  // invalidated the query.
+  // The session is a dependency, not a constant read inside the callback: a
+  // request scoped on a stale session would keep showing last year's plans.
   const session = useSession();
-  // Whose plans, too. IndexedDB is shared by every account on this browser,
-  // so asking for "the" plans would be asking for the last one who signed in.
-  const owner = ownerId();
-  // Inside the hook rather than the module constant `WEEK` used to be: that was
-  // evaluated when the bundle loaded, before the school's calendar had been
-  // fetched, so it could only ever hold the term-start grid's answer - and a
-  // Dexie query keyed on an unchanging value could not re-run once it had.
+  // Inside the hook rather than a module constant: the school's declared
+  // weeks arrive after the bundle loads, and a module constant could never
+  // re-render once they did.
   const weekNo = useCurrentWeek();
+  const { items, loading } = useOwnPlans();
+  // IndexedDB is shared by every account on this browser, so the harness
+  // path must ask for the signed-in account's plans - never "the" plans.
+  // (The server already scopes to the caller; filtering here too keeps one
+  // rule for both paths.)
+  const owner = ownerId();
 
-  const summary = useLiveQuery(async () => {
-    const documents = await documentsForWeek(owner, session, weekNo);
-    return {
-      documents,
-      ...summariseWeek(documents, weekDeadline(weekNo).getTime()),
-    };
-  }, [owner, session, weekNo]);
+  const documents = items.filter(
+    (d) => d.ownerId === owner && d.session === session && d.weekNo === weekNo,
+  );
+  const summary = summariseWeek(documents, weekDeadline(weekNo).getTime());
 
   // `summariseWeek` owns the definitions - approved, waiting, action and the
   // punctuality denominator all come from the same pass over the same rows.
-  const counts = summary ?? EMPTY_WEEK_COUNTS;
+  const counts = loading ? EMPTY_WEEK_COUNTS : summary;
 
   return {
     weekNo,
     days: schoolDays(weekNo),
-    documents: summary?.documents ?? [],
+    documents: loading ? [] : documents,
     ...counts,
-    loading: summary === undefined,
+    loading,
   };
 }
 
 /** All documents this teacher has ever written, newest first. */
-export function useArchive() {
-  const session = useSession();
-  const owner = ownerId();
-  return useLiveQuery(
-    async () => {
-      const all = await db.documents
-        .where("[ownerId+session]")
-        .equals([owner, session])
-        .toArray();
-      // Normalised on the way out, not on the way in: Dexie holds whatever
-      // was written, including plans saved before the template reshape, and
-      // a reader that assumes the current shape crashes on them. One place
-      // to normalise beats every screen remembering to.
-      return all
-        .map((d) => ({ ...d, payload: normalisePayload(d.payload) }))
-        .sort((a, b) => (a.planDate < b.planDate ? 1 : a.planDate > b.planDate ? -1 : 0));
-    },
-    [owner, session],
-    [] as RphDocument[],
+export function useArchive(): RphDocument[] {
+  const { items } = useOwnPlans();
+  return [...items].sort((a, b) =>
+    a.planDate < b.planDate ? 1 : a.planDate > b.planDate ? -1 : 0,
   );
 }
 

@@ -94,11 +94,7 @@ export const ms = {
     scheduled: "Dijadualkan",
     complete: "Lengkap",
     incomplete: "Tidak lengkap",
-    offline: "Luar talian",
-    queued: (n: number) => `${n} belum diselesaikan`,
-    synced: "Disegerakkan",
     saving: "Disimpan",
-    online: "Dalam talian",
   },
 
   editor: {

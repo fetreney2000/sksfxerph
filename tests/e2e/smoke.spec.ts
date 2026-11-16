@@ -3,9 +3,10 @@ import { expect, type Page, test } from "@playwright/test";
 /**
  * E2E smoke tests - the critical paths unit tests can't reach.
  *
- * IndexedDB seeding, hydration, the offline queue, client routing and now the
- * session gate only exist in a real browser, so this is what proves the app
- * actually works rather than merely compiles.
+ * IndexedDB seeding and hydration, client routing and now the session gate
+ * only exist in a real browser, so this is what proves the app actually works
+ * rather than merely compiles. The suite runs against the offline dev harness
+ * (no backend): synced mode is covered by the route-level unit tests.
  *
  * Local mode credentials are the documented demo pair (see
  * lib/server/auth/local.ts); the login route takes the same scrypt path as a
@@ -417,9 +418,8 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("offline edit survives a reload (Dexie, not component state)", async ({
+  test("an explicit save survives a reload (harness IndexedDB, not component state)", async ({
     page,
-    context,
   }) => {
     const errors = collectErrors(page);
 
@@ -437,18 +437,20 @@ test.describe("eRPH smoke", () => {
     const box = page.getByLabel(/Refleksi/);
     await expect(box).toBeVisible();
 
-    // 2. Cut the network - the whole point of the local-first design. The UI
-    //    no longer says so anywhere; what proves it is that the next steps
-    //    work with the network down.
-    await context.setOffline(true);
-
-    // 3. Edit while offline. This must not throw, warn, or lose the keystrokes.
-    const marker = `Refleksi luar talian ${Date.now()}`;
+    // 2. Edit, then save explicitly - keystrokes alone hold nothing now that
+    //    autosave is gone, so the save is what the reload must recover.
+    const marker = `Refleksi tersimpan ${Date.now()}`;
     await box.fill(marker);
     await expect(box).toHaveValue(marker);
+    await page.getByRole("button", { name: /Simpan perubahan/ }).click();
+    // The save button is gone once the overlay clears - that is the write
+    // landing, not a toast that could come from anywhere.
+    await expect(page.getByRole("button", { name: /Simpan perubahan/ })).toHaveCount(0, {
+      timeout: 15_000,
+    });
 
-    // 4. Reload (network restored) - the value must come back from IndexedDB.
-    await context.setOffline(false);
+    // 3. Reload - the value must come back from the local store, with no
+    //    server involved.
     await page.reload();
     await page
       .getByRole("button", { name: /Refleksi/ })
@@ -635,6 +637,12 @@ test.describe("eRPH smoke", () => {
 
     const marker = `SK salin ${Date.now()}`;
     await skInput.fill(marker);
+    // Typing alone writes nothing now (explicit save replaced autosave), so
+    // file the marker before leaving for the archive.
+    await page.getByRole("button", { name: /Simpan perubahan/ }).click();
+    await expect(page.getByRole("button", { name: /Simpan perubahan/ })).toHaveCount(0, {
+      timeout: 15_000,
+    });
 
     // 3. Copy it from the archive. Nothing is written yet - the copy opens as
     //    an unsaved draft the teacher can discard.
@@ -676,25 +684,6 @@ test.describe("eRPH smoke", () => {
     await expect(page.getByRole("row").filter({ hasText: marker })).toHaveCount(2, {
       timeout: 15_000,
     });
-
-    expect(errors, errors.join("\n")).toEqual([]);
-  });
-
-  test("service worker registers in production build", async ({ page }) => {
-    const errors = collectErrors(page);
-    await page.goto("/minggu");
-
-    await expect
-      .poll(
-        () =>
-          page.evaluate(async () => {
-            if (!("serviceWorker" in navigator)) return "unsupported";
-            const reg = await navigator.serviceWorker.getRegistration();
-            return reg ? "registered" : "pending";
-          }),
-        { timeout: 15_000 },
-      )
-      .toBe("registered");
 
     expect(errors, errors.join("\n")).toEqual([]);
   });

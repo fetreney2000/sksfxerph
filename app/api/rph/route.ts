@@ -1,10 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { rphPayloadSchema } from "@/lib/schemas/rph";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { toClientError } from "@/lib/server/http/errors";
+import { resolveSession } from "@/lib/server/session";
 
 /**
- * GET /api/rph - the caller's own plans, as the server has them.
+ * GET /api/rph - the caller's own plans.
  *
- * Documents have always synced *up* and nothing has ever pulled them *down*,
+ * Documents have always gone *up* and nothing has ever been pulled *down*,
  * so a plan only existed in the browser that created it: the same teacher on a
  * second device saw an empty archive, and the seal - which is rendered from
  * the local document - could not appear at all. This is the other half.
@@ -54,10 +58,6 @@ export interface DocumentRow {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // The caller's *own* plans: only a role that writes plans may pull them. A
-  // Guru Besar teaches no class, so there is nothing of theirs to return -
-  // reviewers read plans through `/api/queue` and teachers through
-  // `pantau_teachers`, both scoped differently.
   const gate = await requirePermission(request, "rph");
   if ("error" in gate) return gate.error;
 
@@ -79,6 +79,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
     .eq("school_id", schoolId)
     .eq("owner_id", gate.user.id)
+    // Soft-deleted rows stay in the database as statutory records, but the
+    // archive must not list what the teacher removed: there is no local
+    // mirror left to delete them from, so the exclusion lives here.
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false })
     .limit(200);
 
@@ -106,4 +110,152 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }));
 
   return NextResponse.json({ items: rows });
+}
+
+/**
+ * POST /api/rph - file a new plan.
+ *
+ * Online-only writes: the editor keeps unsaved work in React state and only
+ * calls here when the teacher presses Simpan, so every row in the database is
+ * a plan somebody chose to write - no blank drafts, no sync queue, no merge
+ * step. The server owns identity, session and version: the school comes from
+ * the caller's membership and the session from `school_setting`, never from
+ * the request body, because a teacher must not be able to file their plan
+ * under another school or year.
+ *
+ * The natural key is checked before the insert, the same overlap rule the old
+ * sync path enforced: a second plan for the same slot coexists only where
+ * both claim a shared class. A clash is a 409 naming the existing plan, so
+ * the editor can offer it instead of silently becoming someone else's row.
+ */
+const createSchema = z.object({
+  classIds: z.array(z.string().uuid()).min(1).max(30),
+  subjectCode: z.string().min(1).max(12),
+  weekNo: z.number().int().min(1).max(53),
+  planDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Tarikh tidak sah")
+    .refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)), {
+      message: "Tarikh tidak sah",
+    }),
+  slotTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Masa tidak sah"),
+  slotTimeEnd: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Masa tidak sah")
+    .optional(),
+  payload: rphPayloadSchema,
+  contentHash: z.string().max(128).optional(),
+});
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const gate = await requirePermission(request, "rph");
+  if ("error" in gate) return gate.error;
+
+  const schoolId = await schoolIdFor(gate.db, gate.user.id);
+  if (!schoolId) {
+    return NextResponse.json({ error: "Akaun ini tiada sekolah" }, { status: 400 });
+  }
+  const session = await resolveSession(gate.user.id);
+
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ error: "JSON tidak sah" }, { status: 400 });
+  }
+  const parsed = createSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Data tidak sah" },
+      { status: 422 },
+    );
+  }
+  const d = parsed.data;
+
+  // The classes must be the school's own, for this session, and active: a
+  // plan filed under another school's class would be invisible everywhere
+  // and ungradeable anywhere. Same rule the old sync path enforced.
+  const { data: classes, error: classErr } = await gate.db
+    .from("class")
+    .select("id")
+    .eq("school_id", schoolId)
+    .eq("session", session)
+    .eq("is_active", true);
+  if (classErr) {
+    console.error("[rph] class lookup failed:", classErr.message);
+    return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+  }
+  const schoolClasses = new Set((classes ?? []).map((c: { id: string }) => c.id));
+  if (!d.classIds.every((id) => schoolClasses.has(id))) {
+    return NextResponse.json(
+      { error: "Kelas ini bukan milik sekolah atau sesi anda" },
+      { status: 422 },
+    );
+  }
+
+  // The subject must exist: the cover sheet and the DSKP lookups join on its
+  // code, and a typo would file a plan nobody's report can name.
+  const { data: subject, error: subjectErr } = await gate.db
+    .from("subject")
+    .select("code")
+    .eq("code", d.subjectCode)
+    .maybeSingle();
+  if (subjectErr) {
+    console.error("[rph] subject lookup failed:", subjectErr.message);
+    return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+  }
+  if (!subject) {
+    return NextResponse.json({ error: "Subjek tidak sah." }, { status: 422 });
+  }
+
+  // The natural-key clash check, before the insert rather than after it: a
+  // second plan for the same teacher, subject, week and day that shares a
+  // class is the same slot taught twice, and the first filing wins.
+  const { data: clash, error: clashErr } = await gate.db
+    .from("rph_document")
+    .select("id, class_ids")
+    .eq("school_id", schoolId)
+    .eq("owner_id", gate.user.id)
+    .eq("session", session)
+    .eq("week_no", d.weekNo)
+    .eq("plan_date", d.planDate)
+    .eq("subject_code", d.subjectCode)
+    .is("deleted_at", null);
+  if (clashErr) {
+    return toClientError("[rph] clash lookup failed:", clashErr);
+  }
+  const hit = ((clash ?? []) as { id: string; class_ids: string[] }[]).find((row) =>
+    (row.class_ids ?? []).some((c) => d.classIds.includes(c)),
+  );
+  if (hit) {
+    return NextResponse.json(
+      { error: "Anda sudah mempunyai RPH untuk slot ini.", clashId: hit.id },
+      { status: 409 },
+    );
+  }
+
+  const { data, error } = await gate.db
+    .from("rph_document")
+    .insert({
+      school_id: schoolId,
+      owner_id: gate.user.id,
+      class_ids: d.classIds,
+      subject_code: d.subjectCode,
+      session,
+      week_no: d.weekNo,
+      plan_date: d.planDate,
+      slot_time: d.slotTime,
+      slot_time_end: d.slotTimeEnd ?? d.slotTime,
+      payload: d.payload,
+      content_hash: d.contentHash ?? null,
+      status: "draft",
+      version: 1,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    return toClientError("[rph] create failed:", error);
+  }
+  return NextResponse.json({ ok: true, id: (data as { id: string }).id, version: 1 });
 }

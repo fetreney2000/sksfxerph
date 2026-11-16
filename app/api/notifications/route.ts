@@ -17,10 +17,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * GET /api/notifications - the server half of the notification feed.
  *
  * `sahkan_rph()` and `hantar_balik()` insert rows for the plan's owner
- * (approved / returned). The Dexie mirror only ever holds events that happen
- * *on this device* (sync merges), so without this route a synced-mode teacher
- * would never see "RPH perlu dibaiki" in the bell - the table would have a
- * writer and no reader.
+ * (approved / returned). This route is the feed's only reader: the bell
+ * would otherwise have a table with writers and nothing behind it.
  *
  * Scoped to the caller by `user_id`; other people's notifications are not
  * visible even though the handler holds the secret key.

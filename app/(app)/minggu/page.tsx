@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Bolt,
@@ -56,6 +57,7 @@ import type { RphDocument } from "@/lib/types";
 
 export default function MingguPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const me = useUser();
   // Inside the component and subscribed to the calendar: a module constant is
   // fixed when the bundle loads, which is before the school's declared week has
@@ -93,12 +95,13 @@ export default function MingguPage() {
   };
 
   const onReuse = async () => {
-    const n = await reuseLastWeek(WEEK - 1, WEEK, classes);
+    const { created, skipped } = await reuseLastWeek(WEEK - 1, WEEK, classes);
     toast.success(
-      n > 0
-        ? `${n} RPH minggu lepas disalin ke Minggu ${WEEK}`
+      created > 0
+        ? `${created} RPH minggu lepas disalin ke Minggu ${WEEK}${skipped > 0 ? ` (${skipped} slot sudah diisi)` : ""}`
         : "Tiada slot kosong - semua RPH minggu ini sudah wujud",
     );
+    await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
   };
 
   /**

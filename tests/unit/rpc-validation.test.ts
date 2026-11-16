@@ -5,11 +5,10 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
 /**
  * Input shape gates on the write paths.
  *
- * SQL used to be the first thing to see these identifiers: a malformed
+ * SQL used to be the first thing to see this identifier: a malformed
  * `documentId` died inside a `::uuid` cast and the 22P02 text went straight to
- * the client, and a malformed sync op did the same inside `sync_rph`. The
- * routes now refuse both with a 400 before any query runs - proved here by
- * asserting the RPC is never reached.
+ * the client. The route now refuses it with a 400 before any query runs -
+ * proved here by asserting the RPC is never reached.
  */
 
 vi.hoisted(() => {
@@ -69,12 +68,6 @@ vi.mock("@/lib/server/db", () => ({
     },
     rpc: (name: string) => {
       state.rpcCalls.push(name);
-      if (name === "sync_rph") {
-        return Promise.resolve({
-          data: [{ op_id: "op-1", result: "applied" }],
-          error: null,
-        });
-      }
       if (name === "submit_rph") {
         return Promise.resolve({
           data: { ok: true, status: "submitted", completeness: 100, version: 2 },
@@ -87,7 +80,6 @@ vi.mock("@/lib/server/db", () => ({
 }));
 
 const { POST: SUBMIT } = await import("@/app/api/rpc/submit/route");
-const { POST: SYNC } = await import("@/app/api/sync/route");
 
 function post(path: string, body: unknown): NextRequest {
   return new NextRequest(
@@ -101,12 +93,6 @@ function post(path: string, body: unknown): NextRequest {
     }),
   );
 }
-
-const OP = {
-  op_id: "11111111-1111-4111-8111-111111111111",
-  id: "22222222-2222-4222-8222-222222222222",
-  entity: "rph",
-};
 
 beforeEach(() => {
   state.role = "guru_biasa";
@@ -135,36 +121,5 @@ describe("POST /api/rpc/submit - identifier shape", () => {
 
     expect(res.status).toBe(200);
     expect(state.rpcCalls).toEqual(["submit_rph"]);
-  });
-});
-
-describe("POST /api/sync - op shape", () => {
-  it("refuses a batch with a malformed op id, unknown entity, or non-object", async () => {
-    for (const bad of [
-      { ...OP, op_id: "nope" },
-      { ...OP, id: "123" },
-      { ...OP, entity: "rph_document" },
-      { ...OP, entity: "" },
-      "just-a-string",
-      null,
-    ]) {
-      const res = await SYNC(post("/api/sync", { ops: [bad] }));
-      expect(res.status).toBe(400);
-    }
-    expect(state.rpcCalls).toEqual([]);
-  });
-
-  it("still accepts an empty batch without calling the RPC", async () => {
-    const res = await SYNC(post("/api/sync", { ops: [] }));
-
-    expect(res.status).toBe(200);
-    expect(state.rpcCalls).toEqual([]);
-  });
-
-  it("forwards a well-formed batch to the RPC", async () => {
-    const res = await SYNC(post("/api/sync", { ops: [OP] }));
-
-    expect(res.status).toBe(200);
-    expect(state.rpcCalls).toEqual(["sync_rph"]);
   });
 });

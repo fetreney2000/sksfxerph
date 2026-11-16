@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashPayload } from "@/lib/sync/hash";
+import { hashPayload } from "@/lib/hash";
 
 /**
  * The hash decides whether a sync op actually changed anything, so it must be

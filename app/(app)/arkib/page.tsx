@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Copy, Search, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -27,6 +28,7 @@ import type { RphDocument } from "@/lib/types";
 
 export default function ArkibPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const archive = useArchive() ?? [];
   const [confirming, setConfirming] = React.useState<RphDocument | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -408,6 +410,7 @@ export default function ArkibPage() {
                   .then(() => {
                     toast.success("Rancangan dikeluarkan daripada arkib");
                     setConfirming(null);
+                    return queryClient.invalidateQueries({ queryKey: ["own-plans"] });
                   })
                   .catch((err: unknown) =>
                     toast.error(err instanceof Error ? err.message : "Gagal memadam"),

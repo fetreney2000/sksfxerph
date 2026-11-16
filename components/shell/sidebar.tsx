@@ -1,6 +1,5 @@
 "use client";
 
-import { useLiveQuery } from "dexie-react-hooks";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,11 +7,11 @@ import { navFor } from "@/components/shell/nav";
 import { homeFor, reviewStageFor } from "@/lib/auth/permissions";
 import { signOut } from "@/lib/client/sign-out";
 import { cn } from "@/lib/cn";
-import { db } from "@/lib/db";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useReviewQueueData } from "@/lib/hooks/use-remote";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
+import { useOwnPlans } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
 import { ownerId } from "@/lib/owner";
 import type { MemberRole } from "@/lib/types";
@@ -36,21 +35,22 @@ export function Sidebar({
   const roleLabel = ms.roles[user.role];
 
   const session = useSession();
-  // Whose drafts this badge counts: IndexedDB is shared by every account that
-  // signs into this browser.
+  // Whose drafts this badge counts: the harness browser is shared by every
+  // account that signs into it.
   const owner = ownerId();
   const school = useSchool();
-  const counts = useLiveQuery(
-    async () => ({
-      drafts: await db.documents
-        .where("[ownerId+session]")
-        .equals([owner, session])
-        .filter((d) => d.weekNo === WEEK && d.status === "draft")
-        .count(),
-    }),
-    [owner, session, WEEK],
-    { drafts: 0 },
-  );
+  // The same rows the dashboard reads, so the badge and the week cannot
+  // disagree - and one request serves both, since the query key matches.
+  const { items: ownPlans, loading: plansLoading } = useOwnPlans();
+  const drafts = plansLoading
+    ? 0
+    : ownPlans.filter(
+        (d) =>
+          d.ownerId === owner &&
+          d.session === session &&
+          d.weekNo === WEEK &&
+          d.status === "draft",
+      ).length;
 
   /**
    * How many plans are waiting to be reviewed.
@@ -101,7 +101,7 @@ export function Sidebar({
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               const n =
                 item.badge === "drafts"
-                  ? counts?.drafts
+                  ? drafts
                   : item.badge === "pending"
                     ? pending
                     : undefined;

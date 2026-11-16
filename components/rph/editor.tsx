@@ -1,6 +1,6 @@
 "use client";
 
-import { useLiveQuery } from "dexie-react-hooks";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,6 +16,7 @@ import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
+import type { DocumentRow } from "@/app/api/rph/route";
 import { RphPaper } from "@/components/rph/rph-paper";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
@@ -39,6 +40,7 @@ import {
 import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/field";
 import { HelpHint } from "@/components/ui/help-hint";
 import { Progress } from "@/components/ui/progress";
+import { handleExpiredSession } from "@/lib/client/auth-session";
 import { cn } from "@/lib/cn";
 import {
   currentWeek,
@@ -51,6 +53,7 @@ import {
 } from "@/lib/config";
 import { longDate, schoolDays, weekOptions } from "@/lib/date";
 import { db } from "@/lib/db";
+import { hashPayload } from "@/lib/hash";
 import { useCalendarReady } from "@/lib/hooks/use-calendar";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
@@ -60,6 +63,7 @@ import { ms } from "@/lib/i18n/ms";
 import { takeImport } from "@/lib/import/pending";
 import { ownerId } from "@/lib/owner";
 import { RpcError, submitRph } from "@/lib/rpc";
+import { toLocalPlan } from "@/lib/rph-doc";
 import {
   aktivitiFromText,
   aktivitiToText,
@@ -71,7 +75,6 @@ import {
 } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import { payloadHash, verifySignature } from "@/lib/signature";
-import { commit } from "@/lib/sync/queue";
 import type { Curriculum, RphDocument } from "@/lib/types";
 
 /**
@@ -275,8 +278,7 @@ async function loadTemplateForEdit(id: string): Promise<TemplateRow | null> {
  *
  * Every failure path returns `null` rather than throwing: a template someone
  * else has since deleted, or a week with nothing in it, should open an empty
- * editor - not an error page for a convenience feature. Offline, Dexie still
- * answers for `reuse` and `copy`, so the command works with no network at all.
+ * editor - not an error page for a convenience feature.
  */
 async function loadSeed(
   copyId?: string,
@@ -288,12 +290,14 @@ async function loadSeed(
   // template or last week's best plan if a hand-typed URL ever carries both.
   if (copyId) {
     try {
-      const doc = await db.documents.get(copyId);
-      // Only the teacher's own plans are theirs to copy. The archive lists
-      // nothing else, so this only matters for a hand-edited URL - but a
-      // classmate's plan arriving in this teacher's editor would be a leak,
-      // however small.
-      if (!doc || doc.ownerId !== ownerId()) return null;
+      // The server only ever returns the caller's own rows, so a hand-edited
+      // URL naming a colleague's plan 404s rather than leaking it.
+      const doc = supabaseConfigured
+        ? await fetchOwnPlan(copyId)
+        : await db.documents.get(copyId);
+      // The harness still checks ownership client-side: its store is shared
+      // by every account on the browser, unlike the server's scoped read.
+      if (!doc || (!supabaseConfigured && doc.ownerId !== ownerId())) return null;
       return {
         payload: normalisePayload(doc.payload),
         subjectCode: doc.subjectCode,
@@ -322,10 +326,12 @@ async function loadSeed(
 
   if (reuse) {
     try {
-      const docs = await db.documents
-        .where("[ownerId+session]")
-        .equals([ownerId(), currentSession()])
-        .toArray();
+      const docs = supabaseConfigured
+        ? (await fetchOwnPlans()).filter((d) => d.session === currentSession())
+        : await db.documents
+            .where("[ownerId+session]")
+            .equals([ownerId(), currentSession()])
+            .toArray();
       // The newest *written* plan from last week - an untouched blank from a
       // previous "RPH baharu" would seed this one with nothing at all.
       const source = docs
@@ -343,6 +349,22 @@ async function loadSeed(
   }
 
   return null;
+}
+
+/** One own plan by id, or `null` when it is not ours to copy. */
+async function fetchOwnPlan(id: string): Promise<RphDocument | null> {
+  const res = await fetch(`/api/rph/${encodeURIComponent(id)}`, { credentials: "same-origin" });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { item?: DocumentRow };
+  return body.item ? toLocalPlan(body.item) : null;
+}
+
+/** All of the caller's own plans, newest first. */
+async function fetchOwnPlans(): Promise<RphDocument[]> {
+  const res = await fetch("/api/rph", { credentials: "same-origin" });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { items?: DocumentRow[] };
+  return (body.items ?? []).map(toLocalPlan);
 }
 
 /**
@@ -373,42 +395,83 @@ export function RphEditor({
   const id = docId ?? (typeof params.id === "string" ? params.id : undefined);
 
   /**
-   * `useLiveQuery` is what makes the dashboard update the instant the editor
-   * saves - both screens subscribe to the same Dexie row, no global store.
+   * The stored plan, if this URL names one.
+   *
+   * The server is the only copy: in a synced deployment the row comes from
+   * `/api/rph/[id]`; in the offline dev harness it comes from IndexedDB, where
+   * the demo seed lives. Either way nothing is written until the teacher
+   * presses Simpan - opening the penyunting must never leave a document
+   * behind that nobody chose to write.
    *
    * The discriminated return matters: `undefined` alone can't tell "still
    * loading" apart from "document doesn't exist", and showing a teacher a
-   * bogus "not found" while IndexedDB is warming up is a real bug.
+   * bogus "not found" while the store is warming up is a real bug.
    */
-  const found = useLiveQuery(async () => {
-    // No id is "not saved yet", not "nothing here". The editor opens blank and
-    // the teacher's first explicit save is what creates the row - opening the
-    // penyunting must never leave a document behind that nobody chose to write.
-    if (!id) return { state: "unsaved" as const };
-    const doc = await db.documents.get(id);
-    // Normalised on read. Dexie holds whatever was saved, and a plan written
-    // before the template reshape carries no `kriteria_kejayaan` - which is
-    // how opening an existing RPH from the archive crashed the editor on the
-    // first field that assumed it existed.
-    return doc
-      ? { state: "ok" as const, doc: { ...doc, payload: normalisePayload(doc.payload) } }
-      : { state: "missing" as const };
-  }, [id]);
+  const queryClient = useQueryClient();
+  const stored = useQuery({
+    // The session is not part of this key: the row carries its own session
+    // and the server scopes to the caller, so a year rollover cannot serve
+    // last year's plan for this id - ids are unique.
+    queryKey: ["rph-plan", id ?? "new"],
+    queryFn: async (): Promise<{ state: "ok"; doc: RphDocument } | { state: "missing" }> => {
+      // The id is always set here (`enabled` below); this is the type
+      // checker's way of knowing it, not a runtime branch.
+      const docId = id as string;
+      if (!supabaseConfigured) {
+        // Development harness only: the demo seed lives in IndexedDB and
+        // there is no server to ask.
+        const doc = await db.documents.get(docId);
+        // Normalised on read. Dexie holds whatever was saved, and a plan
+        // written before the template reshape carries no `kriteria_kejayaan`
+        // - which is how opening an existing RPH from the archive crashed the
+        // editor on the first field that assumed it existed.
+        return doc
+          ? { state: "ok" as const, doc: { ...doc, payload: normalisePayload(doc.payload) } }
+          : { state: "missing" as const };
+      }
+      const res = await fetch(`/api/rph/${encodeURIComponent(docId)}`, {
+        credentials: "same-origin",
+      });
+      if (handleExpiredSession(res.status)) {
+        window.location.assign("/login");
+        return { state: "missing" as const };
+      }
+      if (res.status === 404) return { state: "missing" as const };
+      if (!res.ok) throw new Error(`Gagal membuka RPH (${res.status})`);
+      const body = (await res.json()) as { item: DocumentRow };
+      return { state: "ok" as const, doc: toLocalPlan(body.item) };
+    },
+    enabled: !asTemplate && !!id,
+    retry: 1,
+    staleTime: 30_000,
+  });
 
-  const persisted = found?.state === "ok" ? found.doc : undefined;
+  /** No id is "not saved yet", not "nothing here" - and needs no request. */
+  const found:
+    | { state: "unsaved" }
+    | { state: "ok"; doc: RphDocument }
+    | { state: "missing" }
+    | undefined =
+    !id || asTemplate
+      ? ({ state: "unsaved" } as const)
+      : stored.isLoading
+        ? undefined
+        : (stored.data ?? { state: "missing" as const });
+
+  const persisted = found !== undefined && found.state === "ok" ? found.doc : undefined;
 
   const { items: classes } = useSchoolClasses();
   const { items: subjects } = useSchoolSubjects();
 
   /**
    * A document that exists only in React state - no id in the URL, no row in
-   * Dexie, nothing for the sync queue to send.
+   * the database. Nothing is written until the teacher presses Simpan.
    *
    * It becomes real when the teacher presses Simpan, and not before. Seeded
    * once the class list has arrived, because every class in `class_ids` must be
    * one the server checks against the caller's school and session: inventing a
-   * placeholder would produce a plan that looks saved and is rejected on every
-   * flush.
+   * placeholder would produce a plan that looks saved and is rejected on
+   * submit.
    */
   const [pending, setPending] = React.useState<RphDocument | null>(null);
   const [seeded, setSeeded] = React.useState(false);
@@ -549,8 +612,11 @@ export function RphEditor({
     };
   }, [id, seeded, classes, subjects, asTemplate, router, calendarReady]);
 
-  /** What is on screen: a stored plan, or one that has not been saved yet. */
-  const live = persisted ?? pending;
+  /** What is on screen: unsaved edits, a stored plan, or a blank slate. */
+  const [overlay, setOverlay] = React.useState<RphDocument | null>(null);
+  const live = overlay ?? persisted ?? pending;
+  /** Unsaved changes to a stored plan exist - Simpan writes them, Hantar waits for them. */
+  const dirty = overlay !== null;
 
   // The school year the preview prints - server-resolved, so the paper shows
   // the same year the plan will be filed under.
@@ -559,8 +625,6 @@ export function RphEditor({
 
   const [submitOpen, setSubmitOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  /** Writes in flight - the indicator only speaks up if one is genuinely slow. */
-  const inFlight = React.useRef(0);
 
   // ── Tier B: the gated wizard became four collapsible sections ────────────
   /** Which tab owns the narrow layout; ignored at `xl` where both columns dock. */
@@ -583,12 +647,12 @@ export function RphEditor({
   /**
    * What the teacher has typed, held *synchronously*.
    *
-   * `live` only changes once Dexie confirms a write, so a render landing
-   * between two fast keystrokes restores the older stored value - and React
-   * resets a controlled input to its prop, which discards the characters
+   * `live` only changes when React state does, so a render landing between
+   * two fast keystrokes would otherwise restore the older stored value - and
+   * React resets a controlled input to its prop, which discards the characters
    * typed since. Tracing this showed `SLOW typing: ok / FAST typing: lost`.
-   * The draft makes the keystroke the source of truth; the store is where it
-   * lands.
+   * The draft makes the keystroke the source of truth; the store is what it
+   * lands in only once Simpan is pressed.
    */
   const [draft, setDraft] = React.useState<RphPayload | null>(null);
   const payload = draft ?? live?.payload ?? emptyPayload();
@@ -621,11 +685,14 @@ export function RphEditor({
   // A different document is a different draft. The effect only re-runs when
   // the id changes, so this can never clobber something being typed.
   React.useEffect(() => {
-    if (liveId) setDraft(null);
+    if (liveId) {
+      setDraft(null);
+      setOverlay(null);
+    }
   }, [liveId]);
 
   const update = React.useCallback(
-    async (patch: Partial<RphDocument>) => {
+    (patch: Partial<RphDocument>) => {
       if (!live) return;
 
       const next: RphDocument = {
@@ -635,35 +702,22 @@ export function RphEditor({
         clientUpdatedAt: Date.now(),
       };
 
-      // An unsaved plan is edited in memory only. `commit()` would put a row in
-      // Dexie *and* enqueue a network sync - exactly the write the teacher has
-      // not asked for yet, and the reason opening the penyunting used to leave
-      // a document behind.
+      // An unsaved plan is edited in memory only: nothing is written anywhere
+      // until the teacher presses Simpan - opening the penyunting must never
+      // leave a document behind that nobody chose to write.
       if (!persisted) {
         setPending(next);
         return;
       }
 
-      inFlight.current += 1;
-      // A Dexie put lands in about a millisecond - well inside a frame.
-      // Toggling the indicator for those would strobe it on every keystroke,
-      // so it only turns amber if a write is still pending after 200ms:
-      // routine success stays quiet, slowness becomes conspicuous.
-      const showIfSlow = window.setTimeout(() => {
-        if (inFlight.current > 0) setSaving(true);
-      }, 200);
-      try {
-        // commit() writes to Dexie first (optimistic, instant for the UI) and
-        // queues the network sync in the background. `payload` comes from the
-        // ref, never from `patch` - a doc-level patch carrying an older payload
-        // would revert whatever was typed after it was built.
-        await commit(next);
-      } finally {
-        inFlight.current -= 1;
-        window.clearTimeout(showIfSlow);
-        if (inFlight.current === 0) setSaving(false);
-      }
+      // A stored plan is edited in memory too, until Simpan perubahan is
+      // pressed. Writing through on every keystroke would turn typing into
+      // network requests; the overlay keeps keystrokes instant and the save
+      // a single explicit write.
+      setOverlay(next);
     },
+    // `persisted` (not `live`) decides the branch: an overlay must not send
+    // the next keystroke down the unsaved path.
     [live, persisted],
   );
 
@@ -673,8 +727,7 @@ export function RphEditor({
    * Everything above deliberately does not do this - which is the whole point
    * of the change. A teacher who opens the penyunting, changes their mind and
    * navigates away must leave nothing behind: no empty draft in the dashboard,
-   * no orphan row for a reviewer, no queued sync. Pressing Simpan is what says
-   * "this is a plan".
+   * no orphan row for a reviewer. Pressing Simpan is what says "this is a plan".
    */
   const [creating, setCreating] = React.useState(false);
   const savePlan = React.useCallback(async () => {
@@ -683,51 +736,173 @@ export function RphEditor({
     try {
       const draft = { ...pending, payload: payloadRef.current };
 
-      // `rph_document` is keyed on teacher×class-set×subject×session×week×date
-      // - and the class half is an *overlap*: a second plan for the same slot
-      // does not coexist only where both claim a shared class. The server
-      // resolves it onto the first and the teacher's work silently becomes
-      // someone else's row, with no warning anywhere.
-      //
-      // Dexie holds the server's plans too now (`lib/sync/pull`), so this
-      // catches a plan written on another device as well as this one. Offering
-      // the existing plan is better than refusing outright: the common case is
-      // a teacher who forgot they already started it.
-      const clash = await db.documents
-        .where("[ownerId+session+weekNo+planDate]")
-        .equals([draft.ownerId, draft.session, draft.weekNo, draft.planDate])
-        .filter(
-          (d) =>
-            d.id !== draft.id &&
-            d.subjectCode === draft.subjectCode &&
-            Array.isArray(d.classIds) &&
-            d.classIds.some((c) => draft.classIds.includes(c)),
-        )
-        .first();
-
-      if (clash) {
-        // Name the shared class, not the whole label - that is the one the two
-        // plans are fighting over.
-        const shared =
-          clash.classNames[clash.classIds.findIndex((c) => draft.classIds.includes(c))] ?? "";
-        toast.error(
-          `Anda sudah mempunyai RPH untuk ${shared} · ${draft.subjectName} pada ` +
-            `${draft.planDate}. Buka yang sedia ada, atau tukar kelas, subjek atau tarikh.`,
-        );
-        router.push(`/editor/${clash.id}`);
+      if (!supabaseConfigured) {
+        // Development harness: Dexie *is* the database. Same overlap rule as
+        // the server enforces below, so the demo behaves like the deployment.
+        const clash = await db.documents
+          .where("[ownerId+session+weekNo+planDate]")
+          .equals([draft.ownerId, draft.session, draft.weekNo, draft.planDate])
+          .filter(
+            (d) =>
+              d.id !== draft.id &&
+              d.subjectCode === draft.subjectCode &&
+              Array.isArray(d.classIds) &&
+              d.classIds.some((c) => draft.classIds.includes(c)),
+          )
+          .first();
+        if (clash) {
+          toast.error(
+            `Anda sudah mempunyai RPH untuk ${clash.classNames[clash.classIds.findIndex((c) => draft.classIds.includes(c))] ?? ""} · ${draft.subjectName} pada ` +
+              `${draft.planDate}. Buka yang sedia ada, atau tukar kelas, subjek atau tarikh.`,
+          );
+          router.push(`/editor/${clash.id}`);
+          return;
+        }
+        await db.documents.put(draft);
+        router.replace(`/editor/${draft.id}`);
         return;
       }
 
-      // Carry the id into the URL so a refresh, a bookmark or a share lands on
-      // the row that now exists rather than back on the blank editor.
-      await commit(draft);
-      router.replace(`/editor/${draft.id}`);
+      const res = await fetch("/api/rph", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          classIds: draft.classIds,
+          subjectCode: draft.subjectCode,
+          weekNo: draft.weekNo,
+          planDate: draft.planDate,
+          slotTime: draft.slotTime,
+          slotTimeEnd: draft.slotTimeEnd,
+          payload: draft.payload,
+          contentHash: hashPayload(draft.payload),
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        clashId?: string;
+        id?: string;
+        version?: number;
+      } | null;
+      if (res.status === 409 && body?.clashId) {
+        // The slot is already filed - possibly by this same press, retried
+        // after a dropped response. Either way the plan exists, so open it
+        // instead of filing a second row the reviewer would have to guess
+        // between.
+        toast.error(
+          body.error ?? "Anda sudah mempunyai RPH untuk slot ini. Buka yang sedia ada.",
+        );
+        router.push(`/editor/${body.clashId}`);
+        return;
+      }
+      if (!res.ok || !body?.id) {
+        throw new Error(body?.error ?? "Gagal menyimpan rancangan");
+      }
+      const created: RphDocument = {
+        ...draft,
+        id: body.id,
+        version: body.version ?? 1,
+      };
+      // Seed the cache before navigating, so the plan opens instantly on the
+      // row that now exists rather than flashing the loader - a refresh, a
+      // bookmark or a share lands on the same row.
+      queryClient.setQueryData(["rph-plan", body.id], {
+        state: "ok" as const,
+        doc: created,
+      });
+      setPending(null);
+      setOverlay(null);
+      await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
+      router.replace(`/editor/${body.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan rancangan");
     } finally {
       setCreating(false);
     }
-  }, [pending, persisted, creating, router]);
+  }, [pending, persisted, creating, router, queryClient]);
+
+  /**
+   * Write unsaved edits on a stored plan.
+   *
+   * Typing only ever touches React state; this is the single write. The row
+   * carries its new version back, and the cache is updated in place so the
+   * screen never flashes the old row it just replaced.
+   */
+  const saveChanges = React.useCallback(
+    async (opts?: { silent?: boolean }): Promise<boolean> => {
+      if (!overlay || !persisted || saving) return false;
+      setSaving(true);
+      try {
+        const next: RphDocument = {
+          ...overlay,
+          payload: payloadRef.current,
+          clientUpdatedAt: Date.now(),
+        };
+
+        if (!supabaseConfigured) {
+          // Development harness: Dexie *is* the database.
+          await db.documents.put(next);
+          setOverlay(null);
+          queryClient.invalidateQueries({ queryKey: ["rph-plan", persisted.id] });
+          if (!opts?.silent) toast.success("Disimpan");
+          return true;
+        }
+
+        const res = await fetch(`/api/rph/${encodeURIComponent(persisted.id)}`, {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            classIds: next.classIds,
+            subjectCode: next.subjectCode,
+            weekNo: next.weekNo,
+            planDate: next.planDate,
+            slotTime: next.slotTime,
+            slotTimeEnd: next.slotTimeEnd,
+            payload: next.payload,
+            contentHash: hashPayload(next.payload),
+          }),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+          clashId?: string;
+          version?: number;
+        } | null;
+        if (res.status === 409 && body?.clashId) {
+          toast.error(body.error ?? "Slot ini sudah diisi oleh RPH lain. Buka yang sedia ada.");
+          router.push(`/editor/${body.clashId}`);
+          return false;
+        }
+        if (!res.ok) {
+          // A sealed plan changed under the teacher's hands elsewhere: the
+          // server wins, the local edits cannot land, and saying so plainly
+          // beats a spinner that never resolves.
+          if (res.status === 409) {
+            toast.error(body?.error ?? "RPH ini telah disahkan dan tidak boleh diubah.");
+            setOverlay(null);
+            await queryClient.invalidateQueries({ queryKey: ["rph-plan", persisted.id] });
+            return false;
+          }
+          throw new Error(body?.error ?? "Gagal menyimpan perubahan");
+        }
+        const saved: RphDocument = { ...next, version: body?.version ?? next.version + 1 };
+        queryClient.setQueryData(["rph-plan", persisted.id], {
+          state: "ok" as const,
+          doc: saved,
+        });
+        setOverlay(null);
+        await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
+        if (!opts?.silent) toast.success("Disimpan");
+        return true;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Gagal menyimpan perubahan");
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [overlay, persisted, saving, router, queryClient],
+  );
 
   /** Which of the school's curricula the chosen subject belongs to. */
   const curriculum = React.useMemo<Curriculum>(() => {
@@ -833,9 +1008,8 @@ export function RphEditor({
    *
    * The keystroke everyone expects in a document editor, and the only one
    * here whose meaning differs by state. An unsaved plan has to be *created*,
-   * which is what `savePlan` does; a saved one is already written on every
-   * keystroke, so the honest response is to say so rather than to stage an
-   * action that changes nothing.
+   * which is what `savePlan` does; unsaved edits on a stored plan are what
+   * `saveChanges` writes, and a clean plan needs nothing.
    *
    * Shift is left alone so Ctrl+Shift+S still reaches the browser's own
    * Save-Page-As - swallowing a keystroke a user may legitimately want is
@@ -853,6 +1027,10 @@ export function RphEditor({
         setSaveOpen(true);
         return;
       }
+      if (dirty && persisted) {
+        void saveChanges();
+        return;
+      }
       if (persisted) {
         toast.success("Sudah disimpan");
         return;
@@ -861,7 +1039,7 @@ export function RphEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [persisted, savePlan, asTemplate]);
+  }, [persisted, dirty, savePlan, saveChanges, asTemplate]);
 
   const updatePayload = React.useCallback(
     (patch: Partial<RphPayload>) => {
@@ -1067,7 +1245,7 @@ export function RphEditor({
 
   // An unsaved plan cannot be built until the class list has arrived: the
   // document carries real ids in `class_ids`, and a placeholder would produce
-  // something that looks saved and is rejected on every sync.
+  // something that looks saved and is rejected on submit.
   if (!live) {
     return (
       <Card>
@@ -1088,35 +1266,66 @@ export function RphEditor({
   const ready = blocking.length === 0;
 
   const onSubmit = async (force: boolean) => {
-    // Offline-first: never block a teacher on a network hiccup. When we ARE
-    // online and configured, the server is authoritative - `submit_rph` owns
-    // the completeness rule (backend §3.3 decision 4) and may disagree with
-    // our local meter. If it refuses, show the gate instead of submitting.
-    if (supabaseConfigured && navigator.onLine) {
-      try {
-        const verdict = await submitRph(live.id, force);
-        if (verdict && !verdict.ok) {
-          setSubmitOpen(true);
-          return;
-        }
-      } catch (err) {
-        // An expired session is NOT a network hiccup: claiming "Dihantar"
-        // while the server never saw it would be a lie. Send them to re-auth.
-        if (err instanceof RpcError && err.isAuthFailure) {
-          toast.error("Sesi anda telah tamat. Sila log masuk semula.");
-          window.setTimeout(() => window.location.assign("/login"), 1200);
-          return;
-        }
-        // Genuine network/DB hiccup: fall through and submit locally.
-        // sync_rph applies the same 100% gate server-side, so this cannot
-        // become a bypass - it just queues the submission for when we reconnect.
+    if (!live) return;
+    // Hantar always files what is on screen: unsaved edits are flushed first
+    // rather than submitting the version before them.
+    if (dirty) {
+      const saved = await saveChanges({ silent: true });
+      if (!saved) return;
+    }
+
+    if (!supabaseConfigured) {
+      // Development harness: no server, so the local completeness meter is
+      // the gate and the status flips in IndexedDB.
+      if (score < 100 && !force) {
+        setSubmitOpen(true);
+        return;
       }
-    } else if (score < 100 && !force) {
-      setSubmitOpen(true);
+      await db.documents.put({
+        ...live,
+        payload: payloadRef.current,
+        status: "submitted",
+        submittedAt: Date.now(),
+        grade: undefined,
+        clientUpdatedAt: Date.now(),
+      });
+      setOverlay(null);
+      await queryClient.invalidateQueries({ queryKey: ["rph-plan", live.id] });
+      setSubmitOpen(false);
+      toast.success(`Dihantar untuk semakan · status: ${ms.status.submitted}`);
+      router.push("/minggu");
       return;
     }
 
-    await update({ status: "submitted", submittedAt: Date.now(), grade: undefined });
+    // The server is authoritative - `submit_rph` owns the completeness rule
+    // and may disagree with our local meter. If it refuses, show the gate
+    // instead of submitting.
+    setSaving(true);
+    try {
+      const verdict = await submitRph(live.id, force);
+      if (verdict && !verdict.ok) {
+        setSubmitOpen(true);
+        return;
+      }
+    } catch (err) {
+      // An expired session is NOT a hiccup: claiming "Dihantar" while the
+      // server never saw it would be a lie. Send them to re-auth.
+      if (err instanceof RpcError && err.isAuthFailure) {
+        toast.error("Sesi anda telah tamat. Sila log masuk semula.");
+        window.setTimeout(() => window.location.assign("/login"), 1200);
+        return;
+      }
+      toast.error(err instanceof Error ? err.message : "Gagal menghantar");
+      return;
+    } finally {
+      setSaving(false);
+    }
+
+    // Re-read the row the RPC just decided on: status, version and timestamps
+    // all moved server-side, and the screen should show what was filed.
+    await queryClient.invalidateQueries({ queryKey: ["rph-plan", live.id] });
+    await queryClient.refetchQueries({ queryKey: ["rph-plan", live.id] });
+    await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
     setSubmitOpen(false);
     toast.success(`Dihantar untuk semakan · status: ${ms.status.submitted}`);
     router.push("/minggu");
@@ -1476,14 +1685,18 @@ export function RphEditor({
           <span
             className={cn(
               "h-1.75 w-1.75 rounded-full",
-              creating || saving ? "bg-warning" : persisted ? "bg-success" : "bg-ink-4",
+              creating || saving
+                ? "bg-warning"
+                : persisted && !dirty
+                  ? "bg-success"
+                  : "bg-ink-4",
             )}
             aria-hidden
           />
           {creating || saving
             ? "Menyimpan…"
-            : persisted
-              ? `${ms.status.saving} · ${ms.status.online}`
+            : persisted && !dirty
+              ? ms.status.saving
               : "Belum disimpan"}
         </span>
 
@@ -1495,9 +1708,16 @@ export function RphEditor({
             {editingTemplate ? "Simpan perubahan templat" : "Simpan sebagai templat"}
           </Button>
         ) : persisted ? (
-          <Button className="ml-auto" onClick={() => void onSubmit(false)}>
-            <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
-          </Button>
+          dirty ? (
+            <Button className="ml-auto" disabled={saving} onClick={() => void saveChanges()}>
+              <Save className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              {saving ? "Menyimpan…" : "Simpan perubahan"}
+            </Button>
+          ) : (
+            <Button className="ml-auto" onClick={() => void onSubmit(false)}>
+              <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
+            </Button>
+          )
         ) : (
           <Button className="ml-auto" disabled={creating} onClick={() => void savePlan()}>
             <Save className="h-4 w-4" strokeWidth={1.9} aria-hidden />

@@ -43,7 +43,7 @@ const nextConfig: NextConfig = {
       : [],
   },
 
-  // Strict CSP + SW hardening (backend §10, PDPA).
+  // Strict CSP + hardening (backend §10, PDPA).
   //
   // The signing keys live in localStorage (lib/signature/keys.ts) — readable
   // by any script on this origin — so "which scripts may run here" is the
@@ -69,13 +69,6 @@ const nextConfig: NextConfig = {
       "form-action 'self'",
     ].join("; ");
     return [
-      {
-        source: "/sw.js",
-        headers: [
-          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
-          { key: "Service-Worker-Allowed", value: "/" },
-        ],
-      },
       {
         source: "/(.*)",
         headers: [
