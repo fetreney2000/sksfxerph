@@ -87,7 +87,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .limit(200);
 
   if (error) {
+    // Reads fail the same way writes do when the database and the app
+    // disagree - name the cause instead of a bare 500.
     console.error("[rph] pull failed:", error.message);
+    const known = dbFailureMessage(error);
+    if (known) return NextResponse.json({ error: known }, { status: 422 });
     return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
   }
 
