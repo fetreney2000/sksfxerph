@@ -87,7 +87,7 @@ export default function SemakanPage() {
   // declarations arrive is what keeps the picker from staying empty forever.
   // biome-ignore lint/correctness/useExhaustiveDependencies: subscribe-then-read - the dependency fires the recompute the store's update needs.
   const weekOpts = React.useMemo(() => weekOptions(), [currentWeekNo]);
-  const { items: weekPlans, refetch: refetchWeek } = useWeekPlans(weekFilter);
+  const { items: weekPlans, refetch: refetchWeek, assigned } = useWeekPlans(weekFilter);
   /** The list on screen: the queue, or the browsed week. */
   const list = weekFilter === null ? QUEUE : weekPlans;
 
@@ -377,7 +377,9 @@ export default function SemakanPage() {
                 </div>
               </>
             ) : (
-              <p className="mt-2 text-[11.5px] text-ink-4">{ms.review.browseHint}</p>
+              <p className="mt-2 text-[11.5px] text-ink-4">
+                {assigned ? ms.review.browseHint : ms.review.noSupervised}
+              </p>
             )}
           </div>
 

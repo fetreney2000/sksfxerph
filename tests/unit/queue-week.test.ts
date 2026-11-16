@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { weekMondayIso } from "@/lib/config";
 import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
+import { invalidateCalendarCache } from "@/lib/server/calendar";
 
 /**
  * GET /api/queue - the week mode (`?week=N`) behind the reviewer's backdated
@@ -13,6 +15,12 @@ import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
  * and the same soft-delete exclusion. What must never change silently is the
  * default mode: the ordinary queue keeps its `status` filter, its ordering and
  * its 50-row cap.
+ *
+ * Week mode matches by WHEN TAUGHT (the week's Monday..Sunday under the
+ * school's current declarations), never by the stamped `week_no`: a plan filed
+ * under grid numbering goes stale the moment the administrator declares those
+ * dates another number, and the picker - which labels every week by its dates
+ * - would offer a week whose plans it then could not find.
  */
 
 // The session cookie cannot be minted without the secret once Supabase counts
@@ -33,6 +41,15 @@ const state = vi.hoisted(() => ({
   calls: [] as { table: string; method: string; args: unknown[] }[],
   /** Rows the awaited `rph_document` read answers with. */
   rows: [] as Record<string, unknown>[],
+  /** Declared calendar weeks the route's date arithmetic reads through. */
+  anchors: [] as {
+    week_no: number;
+    start_date: string;
+    label: string | null;
+    session: string;
+  }[],
+  /** Teachers supervised by the signing-in GPK. Empty means unassigned. */
+  supervised: ["00000000-0000-4000-8000-000000000002"] as string[],
 }));
 
 vi.mock("@/lib/config", async (importOriginal) => {
@@ -55,7 +72,17 @@ vi.mock("@/lib/server/db", () => ({
           state.calls.push({ table, method, args });
           return chain;
         };
-      for (const method of ["select", "eq", "neq", "in", "is", "order", "limit"]) {
+      for (const method of [
+        "select",
+        "eq",
+        "neq",
+        "in",
+        "is",
+        "order",
+        "limit",
+        "gte",
+        "lte",
+      ]) {
         chain[method] = record(method);
       }
       chain.maybeSingle = async () => {
@@ -94,8 +121,10 @@ vi.mock("@/lib/server/db", () => ({
                   ],
                   error: null,
                 }
-              : // The GPK scope lookup selects `user_id` from school_member.
-                { data: [{ user_id: TEACHER_ID }], error: null };
+              : table === "academic_calendar"
+                ? { data: state.anchors, error: null }
+                : // The GPK scope lookup selects `user_id` from school_member.
+                  { data: state.supervised.map((user_id) => ({ user_id })), error: null };
         return Promise.resolve(answer).then(
           onOk as (v: unknown) => unknown,
           onErr as (e: unknown) => unknown,
@@ -130,6 +159,11 @@ const docCalls = () =>
 beforeEach(() => {
   state.role = "gpk";
   state.calls.length = 0;
+  state.anchors = [];
+  state.supervised = [TEACHER_ID];
+  // `loadCalendarAnchors` caches per school: without this, one test's
+  // declarations leak into the next test's date arithmetic.
+  invalidateCalendarCache();
   state.rows = [
     {
       id: "doc-draft",
@@ -180,12 +214,25 @@ describe("GET /api/queue - default mode", () => {
 });
 
 describe("GET /api/queue - week mode", () => {
+  /** Monday..Sunday the route should ask for, computed the way the route does. */
+  const weekRange = (week: number, anchors: { weekNo: number; startDate: string }[] = []) => {
+    const monday = weekMondayIso(week, anchors);
+    const sunday = new Date(Date.parse(`${monday}T00:00:00Z`) + 6 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    return { monday, sunday };
+  };
+
   it("browses the whole week: every status, by plan date, with a higher cap", async () => {
     const res = await GET(get("?week=2"));
 
     expect(res.status).toBe(200);
     const filters = docCalls().filter((c) => !c.startsWith("select("));
-    expect(filters).toContain('eq(["week_no",2])');
+    const { monday, sunday } = weekRange(2);
+    expect(filters).toContain(`gte(["plan_date","${monday}"])`);
+    expect(filters).toContain(`lte(["plan_date","${sunday}"])`);
+    // The stamped number is never consulted: after a declaration it is stale.
+    expect(filters.some((c) => c.includes("week_no"))).toBe(false);
     // No status filter - a draft and an approved plan both belong to the week.
     expect(filters.some((c) => c.startsWith('eq(["status"'))).toBe(false);
     expect(filters).toContain('order(["plan_date",{"ascending":true}])');
@@ -193,6 +240,40 @@ describe("GET /api/queue - week mode", () => {
 
     const body = (await res.json()) as { items: { id: string }[] };
     expect(body.items.map((i) => i.id)).toEqual(["doc-draft", "doc-approved"]);
+  });
+
+  it("finds a plan stamped under grid numbering after a declaration renumbers it", async () => {
+    // The plan was filed when the grid called 19 Oct week 32; the school has
+    // since declared those dates week 34. The stale stamp stays on the row -
+    // the browse must not ask for it.
+    state.anchors = [
+      { week_no: 34, start_date: "2026-10-19", label: null, session: "2026/2027" },
+    ];
+    state.rows = [
+      {
+        id: "doc-stale",
+        version: 1,
+        status: "submitted",
+        week_no: 32,
+        plan_date: "2026-10-20",
+        slot_time: "07:30",
+        payload: {},
+        submitted_at: "2026-10-21T01:00:00.000Z",
+        owner: { full_name: "Aminah Binti Abu" },
+        class_ids: ["class-1"],
+        subject: { nama: "Bahasa Melayu" },
+      },
+    ];
+
+    const res = await GET(get("?week=34"));
+
+    expect(res.status).toBe(200);
+    const filters = docCalls().filter((c) => !c.startsWith("select("));
+    expect(filters).toContain('gte(["plan_date","2026-10-19"])');
+    expect(filters).toContain('lte(["plan_date","2026-10-25"])');
+    expect(filters.some((c) => c.includes("week_no"))).toBe(false);
+    const body = (await res.json()) as { items: { id: string }[] };
+    expect(body.items.map((i) => i.id)).toEqual(["doc-stale"]);
   });
 
   it("still excludes soft-deleted plans from a browsed week", async () => {
@@ -240,6 +321,27 @@ describe("GET /api/queue - who may ask, and for whom", () => {
     await GET(get("?week=2"));
 
     expect(docCalls().some((c) => c.startsWith("in("))).toBe(false);
+  });
+
+  it("says when a GPK has no supervised teachers, instead of an empty week", async () => {
+    state.supervised = [];
+
+    const res = await GET(get("?week=2"));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: unknown[]; assigned: boolean };
+    expect(body.items).toEqual([]);
+    expect(body.assigned).toBe(false);
+    // The query was built but never run: a builder records its chain on the
+    // way down, so the proof it never executed is the missing terminal read.
+    expect(callsOn("rph_document", "then")).toEqual([]);
+    expect(callsOn("rph_document", "order")).toEqual([]);
+  });
+
+  it("marks the week assigned when teachers are supervised", async () => {
+    const res = await GET(get("?week=2"));
+
+    expect(((await res.json()) as { assigned: boolean }).assigned).toBe(true);
   });
 });
 

@@ -138,9 +138,15 @@ export function useWeekPlans(week: number | null): {
   items: QueueItem[];
   loading: boolean;
   refetch: () => Promise<unknown>;
+  /**
+   * False when a GPK has no supervised teachers at all: the week is not empty,
+   * there is simply nobody to review. Told apart from an empty week so the
+   * page can say which it is.
+   */
+  assigned: boolean;
 } {
   const session = useSession();
-  const remote = useQuery<{ items: QueueItem[] }>({
+  const remote = useQuery<{ items: QueueItem[]; assigned?: boolean }>({
     queryKey: ["review-week", schoolCode, session, week],
     queryFn: async () => {
       const res = await fetch(`/api/queue?week=${week}`, { credentials: "same-origin" });
@@ -148,11 +154,11 @@ export function useWeekPlans(week: number | null): {
       // failure is an empty week, never the demo data.
       if (handleExpiredSession(res.status)) return { items: [] };
       if (!res.ok) return { items: [] };
-      return (await res.json()) as { items: QueueItem[] };
+      return (await res.json()) as { items: QueueItem[]; assigned?: boolean };
     },
     // Only a real week in synced mode asks the server. In local mode there is
     // no backend, so the bundled dataset is filtered by the week each plan
-    // was written for - the same substitution every demo hook makes.
+    // was written for — the same substitution every demo hook makes.
     enabled: supabaseConfigured && week !== null,
     retry: false,
     staleTime: 30_000,
@@ -163,13 +169,16 @@ export function useWeekPlans(week: number | null): {
       items: week === null ? [] : QUEUE.filter((q) => weekOfIso(q.planDate) === week),
       loading: false,
       refetch: async () => undefined,
+      assigned: true,
     };
   }
-  if (remote.isLoading) return { items: [], loading: true, refetch: remote.refetch };
+  if (remote.isLoading)
+    return { items: [], loading: true, refetch: remote.refetch, assigned: true };
   return {
     items: remote.data?.items ?? [],
     loading: false,
     refetch: () => remote.refetch(),
+    assigned: remote.data?.assigned ?? true,
   };
 }
 

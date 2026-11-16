@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { reviewStageFor } from "@/lib/auth/permissions";
+import { weekMondayIso } from "@/lib/config";
 import { mytFields } from "@/lib/date";
 import type { QueueItem } from "@/lib/demo/review";
 import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
+import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { resolveSession } from "@/lib/server/session";
 
 /**
@@ -61,11 +63,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // ── Week mode (`?week=N`) ────────────────────────────────────────────────
   // Without it the queue is the pending submissions, as it always was. With
-  // it, the call browses *every* plan of that school week, any status - which
+  // it, the call browses *every* plan of that school week, any status — which
   // is how a reviewer reaches a backdated RPH: one the teacher wrote for a
   // past week and never submitted (a draft the reviewer may submit on their
   // behalf), or one already decided, which is listed so the week can be read
   // as a whole but cannot be decided again here.
+  //
+  // Matched by WHEN TAUGHT, not by the stamped number. `week_no` is written
+  // once by the teacher's browser under whatever numbering the calendar had
+  // that day; a later declaration cascades the numbers forward (a grid week
+  // 32 becomes a declared week 34) and the stamp goes stale. The picker labels
+  // each week by its dates, and dates never go stale — so the filter reads
+  // the same range the label names.
   const weekParam = request.nextUrl.searchParams.get("week");
   let week: number | null = null;
   if (weekParam !== null) {
@@ -83,6 +92,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const session = await resolveSession(gate.user.id);
 
+  // The week's days under the school's *current* declarations — the same
+  // arithmetic the picker labels are built from. One object so the filter
+  // below narrows it whole: a half-computed range must never reach the query.
+  let range: { monday: string; sunday: string } | null = null;
+  if (week !== null) {
+    const anchors = await loadCalendarAnchors(schoolId);
+    const monday = weekMondayIso(week, anchors);
+    // Sunday closes the week: a school week runs Monday to Sunday, so every
+    // calendar day belongs to exactly one browsable range. Pure calendar
+    // arithmetic on a UTC-midnight date token — no timezone involved.
+    const sundayMs = Date.parse(`${monday}T00:00:00Z`) + 6 * 86_400_000;
+    range = { monday, sunday: new Date(sundayMs).toISOString().slice(0, 10) };
+  }
+
   let query = gate.db
     .from("rph_document")
     .select(
@@ -98,8 +121,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .is("deleted_at", null);
   if (week === null) {
     query = query.eq("status", stage.status);
-  } else {
-    query = query.eq("week_no", week);
+  } else if (range !== null) {
+    query = query.gte("plan_date", range.monday).lte("plan_date", range.sunday);
   }
 
   // Scope. RLS on rph_document enforces this too, but this handler holds the
@@ -124,7 +147,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
     const ids = (supervised ?? []).map((row) => (row as { user_id: string }).user_id);
     // Not an error: a GPK with no teachers assigned yet simply has no queue.
-    if (ids.length === 0) return NextResponse.json({ items: [] as QueueItem[] });
+    // Said out loud (`assigned: false`) rather than as an empty list, or the
+    // reviewer reads "no plans this week" when the truth is "no teachers to
+    // review" - a supervision assignment the pentadbir has not made yet.
+    if (ids.length === 0)
+      return NextResponse.json({ items: [] as QueueItem[], assigned: false });
     query = query.in("owner_id", ids);
   }
 
@@ -204,5 +231,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     };
   });
 
-  return NextResponse.json({ items });
+  return NextResponse.json({ items, assigned: true });
 }

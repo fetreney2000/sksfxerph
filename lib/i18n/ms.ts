@@ -195,6 +195,8 @@ export const ms = {
     weekCurrent: "Minggu semasa",
     weekSuffix: "Minggu",
     browseHint: "Memaparkan semua RPH minggu ini - draf, dihantar dan yang sudah diputuskan.",
+    noSupervised:
+      "Tiada guru di bawah penyeliaan anda - pentadbir perlu menetapkan penyeliaan di /pentadbiran.",
     draftNote:
       "Draf belum dihantar guru. Sahkan di sini untuk menghantarnya bagi pihak guru terlebih dahulu, kemudian buat keputusan.",
     decidedNote: "RPH ini sudah diputuskan - paparan sahaja.",
