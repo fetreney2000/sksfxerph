@@ -12,7 +12,7 @@
 --   python scripts/gen-migration.py
 --
 -- ▸ 1 ▸ the table and its indexes ────────────────────────────────────────────
-create table erph.rpt_link (
+create table if not exists erph.rpt_link (
   id         uuid primary key default gen_random_uuid(),
   school_id  uuid not null references erph.school(id) on delete cascade,
   owner_id   uuid not null references erph.user(id) on delete cascade,
@@ -24,7 +24,7 @@ create table erph.rpt_link (
 );
 create unique index if not exists rpt_link_owner_title_uniq
   on erph.rpt_link (school_id, owner_id, session, lower(title));
-create index rpt_link_school_idx on erph.rpt_link (school_id, session);
+create index if not exists rpt_link_school_idx on erph.rpt_link (school_id, session);
 
 alter table erph.rpt_link enable row level security;
 
