@@ -33,5 +33,20 @@ alter table erph.rph_document alter column class_ids set not null;
 alter table erph.rph_document add constraint rph_document_class_ids_check
   check (cardinality(class_ids) between 1 and 30);
 
--- ▸ 3 ▸ drop the legacy column nothing writes any more ────────────────────────
-alter table erph.rph_document drop column if exists class_id;
+-- ▸ 3 ▸ defuse the legacy column ─────────────────────────────────────────────
+-- It cannot simply be dropped: the pre-020 RLS policies
+-- (`rph_owner_insert`, `rph_owner_update`) still name `class_id`, so
+-- DROP COLUMN aborts with 2BP01 unless the policies are rebuilt first - and
+-- rebuilding needs functions this database may also predate. That rebuild is
+-- out of scope here: the server holds the secret key and bypasses RLS, so the
+-- stale policies gate nothing in the app's path. Making the column nullable
+-- is enough - nothing writes it any more, and no insert can trip on it.
+do $$ begin
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'erph' and table_name = 'rph_document'
+       and column_name = 'class_id' and is_nullable = 'NO'
+  ) then
+    alter table erph.rph_document alter column class_id drop not null;
+  end if;
+end $$;
