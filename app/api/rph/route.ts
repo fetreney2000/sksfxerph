@@ -264,6 +264,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       content_hash: d.contentHash ?? null,
       status: "draft",
       version: 1,
+      // Sent explicitly, not left to the column default: the old sync RPC
+      // always wrote its own timestamp here, so a database that created this
+      // column NOT NULL without a default never noticed - the direct insert
+      // would die with 23502 on the first save.
+      client_updated_at: new Date().toISOString(),
     })
     .select("id")
     .single();
