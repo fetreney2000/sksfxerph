@@ -54,14 +54,16 @@ export function isUuid(value: unknown): value is string {
  * secrets but useless for triage: "Ralat pelayan." cannot tell a stale
  * database from a bad reference. Error *codes* carry no schema - no table,
  * column or constraint names - so they are safe to show, and each one points
- * at a different fix. Returns null for anything unrecognised, and the caller
- * falls back to the generic line.
+ * at a different fix. Known codes get a sentence; any other code is appended
+ * verbatim so the next report identifies itself. Null only when there is no
+ * code at all, and the caller falls back to the generic line.
  */
 export function dbFailureMessage(error: unknown): string | null {
   const code =
     typeof error === "object" && error !== null && "code" in error
-      ? String((error as { code: unknown }).code)
-      : null;
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  if (!code) return null;
   switch (code) {
     case "PGRST202":
     case "PGRST204":
@@ -75,6 +77,8 @@ export function dbFailureMessage(error: unknown): string | null {
     case "23502":
       return "Maklumat tidak lengkap (kod 23502).";
     default:
-      return null;
+      return code.startsWith("PGRST")
+        ? `Pangkalan data menolak permintaan (kod ${code}).`
+        : `Ralat pelayan. (kod: ${code})`;
   }
 }

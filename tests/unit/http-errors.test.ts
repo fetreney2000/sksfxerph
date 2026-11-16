@@ -67,10 +67,14 @@ describe("dbFailureMessage", () => {
     expect(dbFailureMessage({ code: "23502" })).toContain("23502");
   });
 
-  it("stays silent on anything unrecognised", () => {
-    expect(dbFailureMessage({ message: "weird", code: "XX999" })).toBeNull();
+  it("stays silent only when there is no code at all", () => {
     expect(dbFailureMessage(new Error("fetch failed"))).toBeNull();
     expect(dbFailureMessage(null)).toBeNull();
+  });
+
+  it("appends any other code verbatim - codes carry no schema", () => {
+    expect(dbFailureMessage({ code: "PGRST200" })).toContain("PGRST200");
+    expect(dbFailureMessage({ code: "57014" })).toContain("57014");
   });
 });
 
