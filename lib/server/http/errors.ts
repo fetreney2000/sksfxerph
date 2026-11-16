@@ -46,3 +46,35 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
 }
+
+/**
+ * Name the infrastructure failure without describing it.
+ *
+ * `toClientError` hides everything behind one line, which is correct for
+ * secrets but useless for triage: "Ralat pelayan." cannot tell a stale
+ * database from a bad reference. Error *codes* carry no schema - no table,
+ * column or constraint names - so they are safe to show, and each one points
+ * at a different fix. Returns null for anything unrecognised, and the caller
+ * falls back to the generic line.
+ */
+export function dbFailureMessage(error: unknown): string | null {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code: unknown }).code)
+      : null;
+  switch (code) {
+    case "PGRST202":
+    case "PGRST204":
+      return "Aplikasi dan pangkalan data tidak sepadan (kod PGRST). Hubungi pentadbir untuk selaraskan migrasi.";
+    case "42501":
+      return "Akaun ini tiada kebenaran menulis (kod 42501).";
+    case "23503":
+      return "Rujukan kelas atau subjek tidak sah (kod 23503).";
+    case "23514":
+      return "Nilai di luar julat yang dibenarkan (kod 23514).";
+    case "23502":
+      return "Maklumat tidak lengkap (kod 23502).";
+    default:
+      return null;
+  }
+}

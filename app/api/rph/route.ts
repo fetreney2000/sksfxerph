@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rphPayloadSchema } from "@/lib/schemas/rph";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
-import { toClientError } from "@/lib/server/http/errors";
+import { dbFailureMessage, toClientError } from "@/lib/server/http/errors";
 import { resolveSession } from "@/lib/server/session";
 
 /**
@@ -228,6 +228,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .eq("subject_code", d.subjectCode)
     .is("deleted_at", null);
   if (clashErr) {
+    // A failed read before any write: name the infrastructure cause when it
+    // is a known one, so a stale database does not masquerade as a bug.
+    const known = dbFailureMessage(clashErr);
+    if (known) return NextResponse.json({ error: known }, { status: 422 });
     return toClientError("[rph] clash lookup failed:", clashErr);
   }
   const hit = ((clash ?? []) as { id: string; class_ids: string[] }[]).find((row) =>
@@ -286,6 +290,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         );
       }
     }
+    const known = dbFailureMessage(error);
+    if (known) return NextResponse.json({ error: known }, { status: 422 });
     return toClientError("[rph] create failed:", error);
   }
   return NextResponse.json({ ok: true, id: (data as { id: string }).id, version: 1 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isUuid, toClientError } from "@/lib/server/http/errors";
+import { dbFailureMessage, isUuid, toClientError } from "@/lib/server/http/errors";
 
 /**
  * The central error sanitizer.
@@ -46,6 +46,31 @@ describe("toClientError", () => {
   it("keeps the caller's status", async () => {
     const res = toClientError("[test]", { message: "x", code: "42501" }, 401);
     expect(res.status).toBe(401);
+  });
+});
+
+describe("dbFailureMessage", () => {
+  it("names a schema mismatch without leaking internals", () => {
+    const msg = dbFailureMessage({
+      message: "Could not find the 'content_hash' column of 'rph_document' in the schema cache",
+      code: "PGRST204",
+    });
+    expect(msg).toContain("tidak sepadan");
+    expect(msg).toContain("PGRST");
+    expect(msg).not.toContain("content_hash");
+  });
+
+  it("names permission, reference and range failures by code", () => {
+    expect(dbFailureMessage({ code: "42501" })).toContain("42501");
+    expect(dbFailureMessage({ code: "23503" })).toContain("23503");
+    expect(dbFailureMessage({ code: "23514" })).toContain("23514");
+    expect(dbFailureMessage({ code: "23502" })).toContain("23502");
+  });
+
+  it("stays silent on anything unrecognised", () => {
+    expect(dbFailureMessage({ message: "weird", code: "XX999" })).toBeNull();
+    expect(dbFailureMessage(new Error("fetch failed"))).toBeNull();
+    expect(dbFailureMessage(null)).toBeNull();
   });
 });
 

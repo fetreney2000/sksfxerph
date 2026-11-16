@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { DocumentRow } from "@/app/api/rph/route";
 import { rphPayloadSchema } from "@/lib/schemas/rph";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
-import { toClientError } from "@/lib/server/http/errors";
+import { dbFailureMessage, toClientError } from "@/lib/server/http/errors";
 import { resolveSession } from "@/lib/server/session";
 
 /**
@@ -307,6 +307,8 @@ export async function PATCH(
       .is("deleted_at", null)
       .neq("id", id);
     if (probe.error) {
+      const known = dbFailureMessage(probe.error);
+      if (known) return NextResponse.json({ error: known }, { status: 422 });
       return toClientError("[rph] clash lookup failed:", probe.error);
     }
     const hit = ((probe.data ?? []) as { id: string; class_ids: string[] | null }[]).find((r) =>
@@ -361,6 +363,8 @@ export async function PATCH(
         );
       }
     }
+    const known = dbFailureMessage(error);
+    if (known) return NextResponse.json({ error: known }, { status: 422 });
     return toClientError("[rph] update failed:", error);
   }
   return NextResponse.json({ ok: true, version: current.version + 1 });
