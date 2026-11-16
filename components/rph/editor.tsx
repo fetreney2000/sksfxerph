@@ -2060,13 +2060,13 @@ function StepProfil({
                 <legend className="px-0 text-[12.5px] font-semibold text-ink-2">
                   {ms.editor.class}
                 </legend>
-                <div className="flex max-h-36 flex-wrap content-start gap-x-4 gap-y-1.5 overflow-y-auto">
+                <div className="grid max-h-36 grid-cols-2 content-start gap-x-3 gap-y-1.5 overflow-y-auto">
                   {classOptions.map((c) => {
                     const checked = doc.classIds.includes(c.id);
                     return (
                       <label
                         key={c.id}
-                        className="inline-flex items-center gap-2 text-[13px] text-ink-2"
+                        className="flex min-w-0 items-center gap-2 text-[13px] text-ink-2"
                       >
                         <input
                           type="checkbox"
