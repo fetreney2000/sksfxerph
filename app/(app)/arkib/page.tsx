@@ -16,7 +16,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogBody,
@@ -461,15 +461,6 @@ export default function ArkibPage() {
           );
         })}
       </div>
-
-      <Card className="mt-3">
-        <CardFooter>
-          <span className="text-[12.5px] text-ink-3">
-            Rekod disimpan mengikut Peraturan 8, Akta Pendidikan 1996 - memadam menyembunyikan
-            rancangan daripada aplikasi, tetapi rekod kekal dalam pangkalan data.
-          </span>
-        </CardFooter>
-      </Card>
 
       <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
         <DialogContent>
