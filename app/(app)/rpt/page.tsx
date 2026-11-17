@@ -225,10 +225,13 @@ export default function RptPage() {
         <div className="grid items-start gap-4 lg:grid-cols-[360px_1fr]">
           <Card>
             <CardHeader>
-              <CardTitle>Tambah pautan</CardTitle>
-              <CardDescription>
-                Satu tajuk satu pautan. Menambah tajuk yang sama akan menggantikan pautan lama.
-              </CardDescription>
+              <div className="min-w-0">
+                <CardTitle>Tambah pautan</CardTitle>
+                <CardDescription className="mt-0.5">
+                  Satu tajuk satu pautan. Menambah tajuk yang sama akan menggantikan pautan
+                  lama.
+                </CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={save} noValidate className="grid gap-3">
@@ -268,12 +271,14 @@ export default function RptPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Pautan saya</CardTitle>
-              <CardDescription>
-                {items.length === 0
-                  ? "Belum ada pautan untuk sesi ini."
-                  : `${items.length} pautan untuk sesi ini.`}
-              </CardDescription>
+              <div className="min-w-0">
+                <CardTitle>Pautan saya</CardTitle>
+                <CardDescription className="mt-0.5">
+                  {items.length === 0
+                    ? "Belum ada pautan untuk sesi ini."
+                    : `${items.length} pautan untuk sesi ini.`}
+                </CardDescription>
+              </div>
             </CardHeader>
             <CardContent className="grid gap-2">
               {items.length === 0 && (
