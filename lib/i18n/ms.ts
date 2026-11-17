@@ -36,7 +36,6 @@ export const ms = {
   nav: {
     minggu: "Minggu Ini",
     editor: "Penyunting RPH",
-    templat: "Perpustakaan Templat",
     arkib: "Senarai RPH",
     rpt: "RPT Tahunan",
     semakan: "Semakan RPH",
@@ -44,7 +43,6 @@ export const ms = {
     guru: "Guru",
     penyeliaan: "Penyeliaan",
     pentadbiran: "Pentadbiran",
-    sumber: "Sumber",
     urus: "Urus eRPH",
     utama: "Papan Pemuka",
   },
@@ -100,8 +98,6 @@ export const ms = {
   editor: {
     step1: "Profil",
     step1sub: "Kelas · tarikh · masa · tema",
-    /** A template has no class, date or lesson time, so neither does this line. */
-    step1subTemplate: "Subjek · tema · bidang · tajuk",
     step2: "DSKP",
     step2sub: "Standard, objektif dan kriteria",
     step3: "PdPc",

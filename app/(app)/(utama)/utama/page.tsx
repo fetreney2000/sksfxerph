@@ -13,7 +13,6 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
-import Link from "next/link";
 import { type ReactNode, useState } from "react";
 import type { Overview } from "@/app/api/admin/overview/route";
 import { AdminConsole, type AdminTab } from "@/components/admin/admin-console";
@@ -54,19 +53,10 @@ const PERMISSION_LABEL: Record<Permission, string> = {
   pantau: "Pantauan sekolah",
   laporan: "Laporan dan eksport",
   audit: "Log audit",
-  templat: "Perpustakaan templat",
   pentadbir: "Tetapan aplikasi",
 };
 
-const ORDER: Permission[] = [
-  "rph",
-  "semak",
-  "pantau",
-  "laporan",
-  "audit",
-  "templat",
-  "pentadbir",
-];
+const ORDER: Permission[] = ["rph", "semak", "pantau", "laporan", "audit", "pentadbir"];
 
 interface Stat {
   label: string;
@@ -148,12 +138,6 @@ export default function UtamaPage() {
       value: o?.subjects ?? "-",
       hint: "ditawarkan",
       icon: <BookOpen className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
-    },
-    {
-      label: "Templat",
-      value: o?.templates ?? "-",
-      hint: "dalam perpustakaan",
-      icon: <Users className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
   ];
 
@@ -249,14 +233,6 @@ export default function UtamaPage() {
           <p className="mt-0.5 text-[12.5px] text-ink-3">
             Ringkasan sekolah, persediaan, dan tetapan - semuanya di satu tempat.
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/templat"
-            className="rounded-[9px] border border-border-strong bg-surface px-3 py-2 text-[12.5px] font-semibold text-ink-2 shadow-xs transition-colors hover:bg-surface-3"
-          >
-            Perpustakaan templat
-          </Link>
         </div>
       </div>
 

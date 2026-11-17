@@ -8,10 +8,9 @@ import { resolveSession } from "@/lib/server/session";
  *
  * The file bytes never touch this database: an RPT lives in the teacher's own
  * Google Drive and only the link is stored here, titled per subject, so a GPK
- * or Guru Besar can open and check it. Server-only like `/api/templates` -
- * there is no Dexie store and no sync op, because a link to Drive is only
- * usable online anyway, and in local mode there are no reviewers to show it
- * to.
+ * or Guru Besar can open and check it. Server-only: there is no Dexie
+ * store and no sync op, because a link to Drive is only usable online
+ * anyway, and in local mode there are no reviewers to show it to.
  *
  * Writes are gated on `rph`: a Guru Besar teaches no class and holds no plans,
  * so they have nothing to attach - reviewers read through

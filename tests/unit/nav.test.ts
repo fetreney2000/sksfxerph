@@ -55,7 +55,7 @@ describe("navigation - the home matches the role", () => {
   it("gives the Guru Besar the supervision screens but no week or archive", () => {
     // A Guru Besar teaches no class: /minggu and /arkib are `rph` screens and
     // must not appear, while the review queue is their landing page.
-    expect(hrefsFor("guru_besar")).toEqual(["/semakan", "/sekolah", "/laporan", "/templat"]);
+    expect(hrefsFor("guru_besar")).toEqual(["/semakan", "/sekolah", "/laporan"]);
   });
 });
 
@@ -72,33 +72,27 @@ describe("mobile navigation - four tabs, then Lagi", () => {
     expect(secondary.flatMap((group) => group.items.map((item) => item.href))).toEqual([
       "/arkib",
       "/rpt",
-      "/templat",
     ]);
   });
 
   it("shows a Guru Biasa every destination they have, with no empty Lagi tab", () => {
     const { primary, secondary } = mobileNavFor("guru_biasa");
 
-    expect(primary.map((item) => item.href)).toEqual(["/minggu", "/arkib", "/rpt", "/templat"]);
+    expect(primary.map((item) => item.href)).toEqual(["/minggu", "/arkib", "/rpt"]);
     expect(secondary).toEqual([]);
   });
 
-  it("gives the Guru Besar their four supervision screens directly", () => {
+  it("gives the Guru Besar their three supervision screens directly", () => {
     const { primary, secondary } = mobileNavFor("guru_besar");
 
-    expect(primary.map((item) => item.href)).toEqual([
-      "/semakan",
-      "/sekolah",
-      "/laporan",
-      "/templat",
-    ]);
+    expect(primary.map((item) => item.href)).toEqual(["/semakan", "/sekolah", "/laporan"]);
     expect(secondary).toEqual([]);
   });
 
-  it("gives the Administrator the console and the template library", () => {
+  it("gives the Administrator the console and nothing else", () => {
     const { primary, secondary } = mobileNavFor("pentadbir");
 
-    expect(primary.map((item) => item.href)).toEqual(["/utama", "/templat"]);
+    expect(primary.map((item) => item.href)).toEqual(["/utama"]);
     expect(secondary).toEqual([]);
   });
 });
@@ -116,14 +110,6 @@ describe("routeMetaFor - nested editor routes keep their name", () => {
   it("uses a page-specific crumb rather than only school/session/week", () => {
     expect(routeMetaFor("/semakan").crumb).toBe("Giliran semakan");
     expect(routeMetaFor("/minggu").crumb).toBe("Ruang kerja");
-  });
-
-  it("tells the template authoring screen apart from the library it lives under", () => {
-    // The penyunting is not a library screen, so it does not inherit the
-    // library's crumb - a teacher should be able to tell which of the two
-    // they are on from the title bar.
-    expect(routeMetaFor("/templat/baru").crumb).toBe("Templat baharu");
-    expect(routeMetaFor("/templat").crumb).toBe("Templat tersedia");
   });
 
   it("falls back for an unknown route", () => {

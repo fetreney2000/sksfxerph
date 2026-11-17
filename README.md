@@ -151,8 +151,7 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 |---|---|---|
 | Minggu Ini | `/minggu` | Deadline countdown, weekly PdP table, stats, activity feed |
 | Editor RPH | `/editor/[id]` | 4-step wizard, DSKP picker, live A4 preview, completeness meter |
-| Perpustakaan Templat | `/templat` | Reusable plans by level/subject. **Cipta** and **Sunting** both write the plan in the editor and save it as a template |
-| Sejarah & Arkib | `/arkib` | Weekly archive, statutory record note |
+| Senarai RPH | `/arkib` | Tree archive by session and week, statutory record note |
 | Semakan RPH | `/semakan` | Review queue, keyboard grading (`J/K`, `1`, `0`) |
 | Paparan Sekolah | `/sekolah` | School compliance, per-panel progress, teacher table |
 | Laporan & Eksport | `/laporan` | PDF/CSV/DOCX export with audit trail |

@@ -463,83 +463,11 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("creating a template opens the penyunting, not a dialog", async ({ page }) => {
+  test("the penyunting files a real plan", async ({ page }) => {
     const errors = collectErrors(page);
-
-    // The tile that used to sit here claimed "Cipta templat" and opened a
-    // dialog that collected a title and three dropdowns - an empty template,
-    // with nothing in it to start from.
-    await page.goto("/templat");
-    // Local mode has no database to write a template to, so the button says
-    // so instead of letting someone write a whole plan before the 503.
-    await expect(page.getByRole("button", { name: "Cipta templat" })).toBeDisabled();
-
-    await page.goto("/templat/baru");
-    await expect(page).toHaveURL(/\/templat\/baru/, { timeout: 15_000 });
-    // The profil section's own subtitle - it says what a template keeps, and
-    // the plan penyunting's says "Kelas · tarikh · masa · tema".
-    await expect(page.getByText("Subjek · tema · bidang · tajuk")).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // A template stores no class, no week, no date and no lesson time, so the
-    // penyunting does not offer them - a field whose answer goes nowhere.
-    // Kelas is a tick group, not a labelled select, so it is looked up by role.
-    await expect(page.getByRole("group", { name: "Kelas" })).toHaveCount(0);
-    await expect(page.getByLabel("Tarikh")).toHaveCount(0);
-    await expect(page.locator('input[type="date"]')).toHaveCount(0);
-
-    // …and what it offers instead of "Simpan rancangan".
-    await expect(page.getByRole("button", { name: /Simpan sebagai templat/ })).toBeVisible();
-
-    expect(errors, errors.join("\n")).toEqual([]);
-  });
-
-  test("the penyunting asks for a template's name before it writes anything", async ({
-    page,
-  }) => {
-    const errors = collectErrors(page);
-    await page.goto("/templat/baru");
-    await expect(page.getByRole("button", { name: /Simpan sebagai templat/ })).toBeVisible({
-      timeout: 15_000,
-    });
-
-    await page.getByRole("button", { name: /Simpan sebagai templat/ }).click();
-    await expect(page.getByRole("heading", { name: "Simpan sebagai templat" })).toBeVisible();
-
-    // A name is required, and it is refused before anything is sent.
-    // Scoped to the dialog: the profil section has its own "Tajuk" field.
-    const dialog = page.getByRole("dialog");
-    await page.getByRole("button", { name: "Cipta templat", exact: true }).click();
-    await expect(dialog.getByText("Tajuk templat diperlukan.")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Simpan sebagai templat" })).toBeVisible();
-
-    // Cancelling loses nothing else either: the plan is still on the screen,
-    // still unsaved, exactly as it was before the dialog opened.
-    await dialog.getByLabel(/^Tajuk/).fill("Matematik Tahun 5 · SK 3.1");
-    await dialog.getByRole("button", { name: "Batal" }).click();
-    await expect(page.getByRole("heading", { name: "Simpan sebagai templat" })).toHaveCount(0);
-    await expect(page.getByText("Subjek · tema · bidang · tajuk")).toBeVisible();
-    await expect(page.getByText("Belum disimpan")).toBeVisible();
-
-    expect(errors, errors.join("\n")).toEqual([]);
-  });
-
-  test("the penyunting still files a real plan", async ({ page }) => {
-    const errors = collectErrors(page);
-    await page.goto("/templat/baru");
-    await expect(page.getByText("Subjek · tema · bidang · tajuk")).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Back out the same way the screen offers. Scoped to <main>: the sidebar
-    // and the mobile bar carry the same destination.
-    await page.getByRole("main").getByRole("link", { name: "Perpustakaan Templat" }).click();
-    await expect(page).toHaveURL(/\/templat/);
-
     await page.goto("/editor");
-    // The plan penyunting is unchanged by sharing a component with the
-    // template route: the fields a template drops are still here.
+    // The plan penyunting keeps every field: class tick group, week, date,
+    // lesson time.
     await expect(page.getByRole("button", { name: /Simpan rancangan/ })).toBeVisible({
       timeout: 15_000,
     });
@@ -714,7 +642,6 @@ test.describe("mobile layout", () => {
     await nav.getByRole("button", { name: "Lagi" }).click();
     const sheet = page.getByRole("dialog", { name: "Lagi" });
     await expect(sheet.getByRole("link", { name: /Senarai RPH/ })).toBeVisible();
-    await expect(sheet.getByRole("link", { name: /Perpustakaan Templat/ })).toBeVisible();
 
     await sheet.getByRole("link", { name: /Senarai RPH/ }).click();
     await expect(page).toHaveURL(/\/arkib/, { timeout: 15_000 });

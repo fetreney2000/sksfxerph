@@ -22,7 +22,6 @@ export interface Overview {
   members: { total: number; teachers: number; byRole: Record<string, number> };
   classes: number;
   subjects: number;
-  templates: number;
   week: {
     expected: number;
     submitted: number;
@@ -46,7 +45,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // dashboard it is a summary of.
   const anchors = await loadCalendarAnchors(schoolId);
 
-  const [members, classes, subjects, templates, stats] = await Promise.all([
+  const [members, classes, subjects, stats] = await Promise.all([
     gate.db.rpc("admin_list_members", { p_school: schoolId }),
     gate.db
       .from("class")
@@ -57,10 +56,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .from("subject")
       .select("code", { count: "exact", head: true })
       .eq("is_active", true),
-    gate.db
-      .from("rph_template")
-      .select("id", { count: "exact", head: true })
-      .eq("school_id", schoolId),
     gate.db.rpc("school_week_stats", {
       p_school: schoolId,
       p_session: session,
@@ -93,7 +88,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     members: { total: rows.length, teachers, byRole },
     classes: classes.count ?? 0,
     subjects: subjects.count ?? 0,
-    templates: templates.count ?? 0,
     week: week
       ? {
           expected: week.expected ?? 0,

@@ -35,38 +35,26 @@ export type Permission =
   | "laporan"
   /** Read the audit log. */
   | "audit"
-  /**
-   * The template library - reading, and for the school's own templates,
-   * writing them.
-   *
-   * Split from `rph` because the Administrator needs it without needing `rph`.
-   * An administrator does not teach, so they should not be given a permission
-   * named "write and submit one's own plans" just to reach a screen they *do*
-   * administer; folding the two together would have been the smaller diff and
-   * the worse model.
-   */
-  | "templat"
   /** App set-up: accounts, classes, subjects, session, deadlines. */
   | "pentadbir";
 
 const MATRIX: Record<MemberRole, readonly Permission[]> = {
   // Guru Mata Pelajaran (KPM HR12–HR21): their own RPH and nothing else.
-  guru_biasa: ["rph", "templat"],
+  guru_biasa: ["rph"],
   // GPK Pentadbiran (KPM HR02) - "menyelia dan menilai pengajaran" - so it
   // supervises: grade, monitor, report, and see who reviewed what. A GPK still
   // teaches, so they keep `rph` for their own classes.
-  gpk: ["rph", "semak", "pantau", "laporan", "audit", "templat"],
+  gpk: ["rph", "semak", "pantau", "laporan", "audit"],
   // PGB (KPM HR01) supervises the whole school but teaches no class: no `rph`,
   // so no /minggu, /arkib or /editor - only the supervision screens above.
   // They stay a reviewer (`semak`) with school-wide scope, which is what
   // `erph.may_supervise` checks independently of this table.
-  guru_besar: ["semak", "pantau", "laporan", "audit", "templat"],
+  guru_besar: ["semak", "pantau", "laporan", "audit"],
   // Administrator sets the app up. Deliberately outside `is_staff` in SQL, so
   // it can never grade a plan, read whole-school compliance or open the log -
   // and deliberately *without* `rph`: they do not teach, so they have no plans
-  // of their own to write, submit or be graded on. `templat` is what they do
-  // administer.
-  pentadbir: ["pentadbir", "templat"],
+  // of their own to write, submit or be graded on.
+  pentadbir: ["pentadbir"],
   // District/state officers were removed: this app is internal to one school.
   system: [],
 };

@@ -547,15 +547,6 @@ export default function MingguPage() {
                 label="Masukkan RPH sedia ada"
                 onClick={() => fileRef.current?.click()}
               />
-              {/* No count shown. The number would have to come from a query
-                  this page does not make, and a badge that reads "8" because
-                  someone typed 8 is worse than no badge - the teacher opens
-                  /templat expecting eight and finds however many there are. */}
-              <Shortcut
-                icon={<Layers className="h-4 w-4" />}
-                label="Templat sekolah"
-                onClick={() => router.push("/templat")}
-              />
               {/* Gated with `can`, the same predicate the sidebar filters on.
                   A shortcut to a page a teacher cannot open is a button that
                   fails, and the sidebar hiding it while this offered it would

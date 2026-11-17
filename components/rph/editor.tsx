@@ -20,11 +20,6 @@ import type { DocumentRow } from "@/app/api/rph/route";
 import { RphPaper } from "@/components/rph/rph-paper";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
-import {
-  EMPTY_TEMPLATE_META,
-  type TemplateMeta,
-  TemplateMetaFields,
-} from "@/components/template/fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -75,7 +70,7 @@ import {
 } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import { payloadHash, verifySignature } from "@/lib/signature";
-import type { Curriculum, RphDocument } from "@/lib/types";
+import type { RphDocument } from "@/lib/types";
 
 /**
  * Download the plan as a KPM-formatted DOCX from /api/export.
@@ -208,7 +203,7 @@ function notes(payload: RphPayload): Note[] {
   return out;
 }
 
-/** What `?copy=`, `?template=` and `?reuse=` preload into the plan that does not exist yet. */
+/** What `?copy=` and `?reuse=` preload into the plan that does not exist yet. */
 interface SeedSource {
   payload: RphPayload;
   subjectCode?: string;
@@ -220,74 +215,17 @@ interface SeedSource {
   slotTimeEnd?: string;
 }
 
-/** A template as the penyunting opens it - `?edit=` needs the whole row. */
-interface TemplateRow {
-  id: string;
-  title: string;
-  subjectCode: string | null;
-  tahap: string | null;
-  curriculum: Curriculum | null;
-  visibility: "private" | "school" | "system";
-  payload: RphPayload;
-}
-
-/**
- * Every template the caller may see, or `[]` when the library cannot be read.
- *
- * Two callers want different things of the same list: `?template=` seeds a
- * *new* plan with someone's template, `?edit=` opens that template for
- * changes. Shaped by the caller rather than fetched twice.
- */
-async function fetchTemplates(): Promise<TemplateRow[]> {
-  const res = await fetch("/api/templates", { credentials: "same-origin" });
-  if (!res.ok) return [];
-  const body = (await res.json()) as {
-    items: {
-      id: string;
-      title: string;
-      subject_code: string | null;
-      tahap: string | null;
-      curriculum: Curriculum | null;
-      visibility: TemplateRow["visibility"];
-      payload: RphPayload;
-    }[];
-  };
-  return body.items.map((t) => ({
-    id: t.id,
-    title: t.title,
-    subjectCode: t.subject_code,
-    tahap: t.tahap,
-    curriculum: t.curriculum,
-    visibility: t.visibility,
-    payload: t.payload,
-  }));
-}
-
-/** The template `?edit=` names, or `null` when it cannot be opened. */
-async function loadTemplateForEdit(id: string): Promise<TemplateRow | null> {
-  try {
-    const all = await fetchTemplates();
-    return all.find((row) => row.id === id) ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Load the source for an unsaved plan, or `null` for a plain blank one.
  *
- * Every failure path returns `null` rather than throwing: a template someone
- * else has since deleted, or a week with nothing in it, should open an empty
+ * Every failure path returns `null` rather than throwing: a plan someone
+ * else has since removed, or a week with nothing in it, should open an empty
  * editor - not an error page for a convenience feature.
  */
-async function loadSeed(
-  copyId?: string,
-  templateId?: string,
-  reuse?: boolean,
-): Promise<SeedSource | null> {
+async function loadSeed(copyId?: string, reuse?: boolean): Promise<SeedSource | null> {
   // `?copy=` is the most specific thing a URL can name - one exact plan the
-  // teacher picked from their archive a moment ago - so it wins over a
-  // template or last week's best plan if a hand-typed URL ever carries both.
+  // teacher picked from their archive a moment ago - so it wins over
+  // last week's best plan if a hand-typed URL ever carries both.
   if (copyId) {
     try {
       // The server only ever returns the caller's own rows, so a hand-edited
@@ -305,19 +243,6 @@ async function loadSeed(
         classIds: doc.classIds,
         slotTime: doc.slotTime,
         slotTimeEnd: doc.slotTimeEnd,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  if (templateId) {
-    try {
-      const template = (await fetchTemplates()).find((row) => row.id === templateId);
-      if (!template) return null;
-      return {
-        payload: template.payload,
-        subjectCode: template.subjectCode ?? undefined,
       };
     } catch {
       return null;
@@ -367,31 +292,9 @@ async function fetchOwnPlans(): Promise<RphDocument[]> {
   return (body.items ?? []).map(toLocalPlan);
 }
 
-/**
- * `mode="template"` is the same wizard pointed at a different destination.
- *
- * A template's whole value is the plan inside it, so the screen that writes
- * one is the screen that writes a plan - with the parts that only make sense
- * for a *filed* plan taken out. Class, week, date and time are dropped
- * because nothing stores them: showing a teacher a date picker whose result
- * goes nowhere is a form that lies about what it does. What is left is what
- * `erph.rph_template` keeps - the payload, and the subject the plan was
- * written for.
- *
- * Nothing is ever written to Dexie in this mode. A template is not a plan for
- * a week, so filing one under the current week would put a row on the
- * dashboard and in the compliance figures that nobody taught.
- */
-export function RphEditor({
-  docId,
-  mode = "plan",
-}: {
-  docId?: string;
-  mode?: "plan" | "template";
-}) {
+export function RphEditor({ docId }: { docId?: string }) {
   const router = useRouter();
   const params = useParams();
-  const asTemplate = mode === "template";
   const id = docId ?? (typeof params.id === "string" ? params.id : undefined);
 
   /**
@@ -441,7 +344,7 @@ export function RphEditor({
       const body = (await res.json()) as { item: DocumentRow };
       return { state: "ok" as const, doc: toLocalPlan(body.item) };
     },
-    enabled: !asTemplate && !!id,
+    enabled: !!id,
     retry: 1,
     staleTime: 30_000,
   });
@@ -451,12 +354,11 @@ export function RphEditor({
     | { state: "unsaved" }
     | { state: "ok"; doc: RphDocument }
     | { state: "missing" }
-    | undefined =
-    !id || asTemplate
-      ? ({ state: "unsaved" } as const)
-      : stored.isLoading
-        ? undefined
-        : (stored.data ?? { state: "missing" as const });
+    | undefined = !id
+    ? ({ state: "unsaved" } as const)
+    : stored.isLoading
+      ? undefined
+      : (stored.data ?? { state: "missing" as const });
 
   const persisted = found !== undefined && found.state === "ok" ? found.doc : undefined;
 
@@ -487,62 +389,37 @@ export function RphEditor({
    * school had said, and nothing later corrects that.
    */
   const calendarReady = useCalendarReady();
-  /** The row being changed, when `?edit=` named one. `null` means "a new template". */
-  const [editingTemplate, setEditingTemplate] = React.useState<TemplateRow | null>(null);
 
   React.useEffect(() => {
     const cls = classes[0];
     const subject = subjects[0];
     // Both lists, not only the class. A plan stamped with a subject code the
-    // school does not have is refused by `sync_rph` on every flush, so
-    // waiting for the list is the difference between a saved plan and one
-    // that queues forever with a bundled "MAT" under its name. Local mode
-    // has both from its fixtures; synced mode re-runs this when they arrive.
-    //
-    // A template needs no class, so in template mode the subject list alone
-    // is enough - a school that has not created a class yet can still curate
-    // its library.
+    // school does not have is refused on every save, so waiting for the list
+    // is the difference between a saved plan and one that queues forever with
+    // a bundled "MAT" under its name. Local mode has both from its fixtures;
+    // synced mode re-runs this when they arrive.
     //
     // And the calendar: seeding *decides* which week this plan files under, so
     // it waits for the school's answer rather than guessing at the term-start
     // grid and stamping a number nothing can later correct. The wait is a
     // skipped pass, not a spinner - nothing renders from `pending` yet.
-    if (id || seeded || !subject || (!asTemplate && !cls) || !calendarReady) return;
+    if (id || seeded || !subject || !cls || !calendarReady) return;
 
     let cancelled = false;
     void (async () => {
       const params = new URLSearchParams(window.location.search);
-      // An imported .docx wins over a template or last week's plan: the
-      // teacher chose that file moments ago, which is more specific than
-      // anything else that could be offered here.
+      // An imported .docx wins over last week's plan: the teacher chose that
+      // file moments ago, which is more specific than anything else that
+      // could be offered here.
       const imported = takeImport();
-      // `?edit=` changes a template in place; `?template=` seeds a new plan
-      // from one. They are different jobs and never both run, so neither can
-      // half-contribute a value the teacher then has to guess the origin of.
-      const editId = asTemplate ? (params.get("edit") ?? undefined) : undefined;
-      const editing = !imported && editId ? await loadTemplateForEdit(editId) : null;
       // `loadSeed` is skipped entirely when an import is present, so the two
       // never both contribute a field and leave the teacher wondering which
       // one a value came from.
       const loaded =
-        imported || editing
+        imported != null
           ? null
-          : await loadSeed(
-              params.get("copy") ?? undefined,
-              params.get("template") ?? undefined,
-              params.get("reuse") === "1",
-            );
+          : await loadSeed(params.get("copy") ?? undefined, params.get("reuse") === "1");
       if (cancelled) return;
-
-      // The template has since been deleted, or this browser cannot reach the
-      // library. Saying so on the library beats opening a blank penyunting
-      // that would save a second copy under the wrong name.
-      if (editId && !editing) {
-        toast.error("Templat tidak dijumpai.");
-        router.push("/templat");
-        return;
-      }
-      setEditingTemplate(editing);
 
       // Which week this plan files under. `/arkib` links here with `?week=`
       // so a missed week can be filled in; anything else - absent, nonsense,
@@ -583,10 +460,8 @@ export function RphEditor({
         // many classes it covers.
         classIds,
         classNames,
-        subjectCode: editing?.subjectCode ?? loaded?.subjectCode ?? subject.code,
-        subjectName: editing?.subjectCode
-          ? (subjects.find((s) => s.code === editing.subjectCode)?.nama ?? subject.nama)
-          : (loaded?.subjectName ?? subject.nama),
+        subjectCode: loaded?.subjectCode ?? subject.code,
+        subjectName: loaded?.subjectName ?? subject.nama,
         session: currentSession(),
         weekNo: week,
         planDate:
@@ -594,10 +469,10 @@ export function RphEditor({
         slotTime: imported?.slotTime ?? loaded?.slotTime ?? "07:30",
         slotTimeEnd: imported?.slotTimeEnd ?? loaded?.slotTimeEnd ?? "12:40",
         status: "draft",
-        // A template, a copied plan or last week's plan arrives *here*, not in
+        // A copied plan or last week's plan arrives *here*, not in
         // the database - readable, editable and discardable before anything
         // exists.
-        payload: imported?.payload ?? editing?.payload ?? loaded?.payload ?? emptyPayload(),
+        payload: imported?.payload ?? loaded?.payload ?? emptyPayload(),
         version: 1,
         clientUpdatedAt: now,
         createdAt: now,
@@ -608,7 +483,7 @@ export function RphEditor({
     return () => {
       cancelled = true;
     };
-  }, [id, seeded, classes, subjects, asTemplate, router, calendarReady]);
+  }, [id, seeded, classes, subjects, calendarReady]);
 
   /** What is on screen: unsaved edits, a stored plan, or a blank slate. */
   const [overlay, setOverlay] = React.useState<RphDocument | null>(null);
@@ -902,105 +777,6 @@ export function RphEditor({
     [overlay, persisted, saving, router, queryClient],
   );
 
-  /** Which of the school's curricula the chosen subject belongs to. */
-  const curriculum = React.useMemo<Curriculum>(() => {
-    const found = subjects.find((s) => s.code === live?.subjectCode);
-    return found?.curriculum ?? "KSSR";
-  }, [subjects, live?.subjectCode]);
-
-  const [saveOpen, setSaveOpen] = React.useState(false);
-
-  /**
-   * Turn what is on screen into a template.
-   *
-   * The counterpart to `savePlan`, pointed somewhere else: the payload goes to
-   * `erph.rph_template`, nothing is written to Dexie and nothing is queued for
-   * sync - a template is not a plan for a week, so filing one would put a row
-   * on the dashboard and in the compliance figures for lessons nobody taught.
-   *
-   * The row needs a title, and a choice about who may use it. Both are asked
-   * at the end rather than up front: until this moment the teacher has been
-   * writing a lesson plan, and a template's name is a decision about the file
-   * they are about to file it under.
-   */
-  const saveTemplate = React.useCallback(
-    async (meta: TemplateMeta) => {
-      // A template being changed keeps its identity and takes the plan as it
-      // stands now; a new one takes only the payload. The `id` is what makes
-      // the first a PATCH rather than a second copy under a similar name.
-      const body = {
-        ...(editingTemplate ? { id: editingTemplate.id } : {}),
-        title: meta.title.trim(),
-        subjectCode: live?.subjectCode || null,
-        tahap: meta.tahap.trim() || null,
-        curriculum: meta.curriculum,
-        visibility: meta.visibility,
-        // Blank rows are where the caret was. `normalisePayload` drops them on
-        // read anyway, and `rphPayloadSchema` requires a non-empty name - so
-        // a half-typed last line would 422 this save the same way an abandoned
-        // "Tambah aktiviti" row used to.
-        payload: {
-          ...payloadRef.current,
-          aktiviti: payloadRef.current.aktiviti.filter((a) => a.nama.trim() !== ""),
-        },
-      };
-      const res = await fetch("/api/templates", {
-        method: editingTemplate ? "PATCH" : "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(
-          data?.error ?? (editingTemplate ? "Gagal mengemas kini" : "Gagal menyimpan templat"),
-        );
-      }
-      return res;
-    },
-    [live?.subjectCode, editingTemplate],
-  );
-
-  const confirmTemplate = React.useCallback(
-    async (meta: TemplateMeta) => {
-      setCreating(true);
-      try {
-        await saveTemplate(meta);
-        setSaveOpen(false);
-        toast.success(editingTemplate ? "Templat dikemas kini" : "Templat dicipta");
-        router.push("/templat");
-      } catch (err) {
-        // The dialog stays open with what was typed: a 503 in local mode or a
-        // dropped connection is not a reason to make someone retype a title.
-        toast.error(err instanceof Error ? err.message : "Gagal menyimpan templat");
-      } finally {
-        setCreating(false);
-      }
-    },
-    [saveTemplate, router, editingTemplate],
-  );
-
-  /**
-   * The metadata the save dialog starts with.
-   *
-   * For a template being changed it is the row's own, because the plan inside
-   * it is already named and filed somewhere. For a new one it is a blank form
-   * with the curriculum the subject already implies.
-   */
-  const initialSaveMeta = React.useMemo<TemplateMeta>(() => {
-    if (editingTemplate) {
-      return {
-        title: editingTemplate.title,
-        tahap: editingTemplate.tahap ?? "",
-        curriculum: editingTemplate.curriculum ?? "KSSR",
-        // `system` is not offered here: an Administrator may edit a school
-        // template, but cannot decide that everyone's library should carry it.
-        visibility: editingTemplate.visibility === "private" ? "private" : "school",
-      };
-    }
-    return { ...EMPTY_TEMPLATE_META, curriculum };
-  }, [editingTemplate, curriculum]);
-
   /**
    * Ctrl/Cmd+S.
    *
@@ -1018,13 +794,6 @@ export function RphEditor({
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey) return;
       if (e.key.toLowerCase() !== "s") return;
       e.preventDefault();
-      // A template has no row to fall back on, so Ctrl+S always means "file
-      // this as a template" - the same promise it makes in a document editor,
-      // pointed at the destination this screen is for.
-      if (asTemplate) {
-        setSaveOpen(true);
-        return;
-      }
       if (dirty && persisted) {
         void saveChanges();
         return;
@@ -1037,7 +806,7 @@ export function RphEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [persisted, dirty, savePlan, saveChanges, asTemplate]);
+  }, [persisted, dirty, savePlan, saveChanges]);
 
   const updatePayload = React.useCallback(
     (patch: Partial<RphPayload>) => {
@@ -1357,17 +1126,12 @@ export function RphEditor({
     // Every field the printed form has. These were missing, so the sheet -
     // and therefore the PDF, which is a browser print of this tree - showed a
     // dash for Subjek, Nama Kelas, Hari and Tarikh on every plan.
-    //
-    // In template mode the plan-specific ones are withheld rather than passed
-    // through: a template has no class, no date and no week, so the sheet
-    // prints the form's own dashes for what it does not have - which is the
-    // truth, and better than borrowing this browser's date.
-    planClassName: asTemplate ? undefined : live.classNames.join(", "),
+    planClassName: live.classNames.join(", "),
     subjectName: live.subjectName,
-    planDate: asTemplate ? undefined : live.planDate,
+    planDate: live.planDate,
     slotTime: live.slotTime,
     slotTimeEnd: live.slotTimeEnd,
-    weekNo: asTemplate ? undefined : live.weekNo,
+    weekNo: live.weekNo,
     signature: signature.signature,
     signatureState: signature.state,
   };
@@ -1476,37 +1240,27 @@ export function RphEditor({
           <section className="rounded-[14px] border border-border bg-surface px-4 py-4 shadow-sm">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <Link
-                href={asTemplate ? "/templat" : "/minggu"}
+                href="/minggu"
                 className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-3 transition-colors hover:text-primary-ink"
               >
                 <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
-                {asTemplate ? ms.nav.templat : ms.nav.minggu}
+                {ms.nav.minggu}
               </Link>
-              {asTemplate ? (
-                <Badge variant="info">{editingTemplate ? "Templat" : "Templat baharu"}</Badge>
-              ) : persisted ? (
+              {persisted ? (
                 <StatusBadge status={live.status} grade={live.grade} />
               ) : (
                 <Badge variant="neutral">RPH baharu</Badge>
               )}
             </div>
             <div className="min-w-0">
-              {/* No class or date here in template mode: a template has
-                  neither, and the header above the wizard is the first place
-                  the screen says which of the two it is. The template's own
-                  name is what is being changed, so it is what is shown. */}
               <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">
-                {asTemplate
-                  ? (editingTemplate?.title ?? live.subjectName)
-                  : `${live.classNames.join(", ")} · ${live.subjectName}`}
+                {`${live.classNames.join(", ")} · ${live.subjectName}`}
               </h2>
-              {!asTemplate && (
-                <p className="text-[12.5px] text-ink-3">
-                  <span className="num">
-                    {longDate(live.planDate)} · {live.slotTime}
-                  </span>
-                </p>
-              )}
+              <p className="text-[12.5px] text-ink-3">
+                <span className="num">
+                  {longDate(live.planDate)} · {live.slotTime}
+                </span>
+              </p>
             </div>
             <div className="mt-3.5 border-t border-dashed border-border pt-3.5">
               {/* Completeness - flat, not a box: count, meter, then the exact gaps.
@@ -1573,7 +1327,7 @@ export function RphEditor({
               key={s.key}
               index={i}
               title={s.title}
-              sub={i === 0 && asTemplate ? ms.editor.step1subTemplate : s.sub}
+              sub={s.sub}
               done={stepDone[i] ?? false}
               open={open.has(i)}
               onToggle={() => toggleSection(i)}
@@ -1585,7 +1339,6 @@ export function RphEditor({
                   payload={payload}
                   onPatch={update}
                   onPayload={updatePayload}
-                  template={asTemplate}
                 />
               )}
               {i === 1 && <StepDskp payload={payload} onPatch={updatePayload} />}
@@ -1633,31 +1386,24 @@ export function RphEditor({
               {ms.editor.preview}
             </span>
             <span className="h-px flex-1 bg-border" aria-hidden />
-            {/* Both write a record of a plan that exists. A template is not a
-                plan: DOCX would log an export against a document that was
-                never made, and a printed sheet would carry a class, a date and
-                a teacher that no template stores. */}
-            {!asTemplate && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    // Browser print → "Save as PDF". Works offline, and RphPaper is
-                    // styled at KPM proportions (§4.2(8) print/PDF fidelity).
-                    toast.info("Pilih “Simpan sebagai PDF” dalam dialog cetak");
-                    window.print();
-                  }}
-                >
-                  <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-                  PDF
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => void exportDocx(live)}>
-                  <FileDown className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-                  DOCX
-                </Button>
-              </>
-            )}
+            {/* Print and export write a record of a plan that exists. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // Browser print → "Save as PDF". Works offline, and RphPaper is
+                // styled at KPM proportions (§4.2(8) print/PDF fidelity).
+                toast.info("Pilih “Simpan sebagai PDF” dalam dialog cetak");
+                window.print();
+              }}
+            >
+              <Download className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              PDF
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void exportDocx(live)}>
+              <FileDown className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              DOCX
+            </Button>
           </div>
 
           {/* The preview is a narrow column - 390px docked at xl, and the full
@@ -1700,12 +1446,7 @@ export function RphEditor({
 
         {/* Nothing exists to submit until Simpan creates the row - offering
             "Hantar" here would send an id that is not in the database. */}
-        {asTemplate ? (
-          <Button className="ml-auto" onClick={() => setSaveOpen(true)}>
-            <Save className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-            {editingTemplate ? "Simpan perubahan templat" : "Simpan sebagai templat"}
-          </Button>
-        ) : persisted ? (
+        {persisted ? (
           dirty ? (
             <Button className="ml-auto" disabled={saving} onClick={() => void saveChanges()}>
               <Save className="h-4 w-4" strokeWidth={1.9} aria-hidden />
@@ -1723,20 +1464,6 @@ export function RphEditor({
           </Button>
         )}
       </div>
-
-      {/* ══ Save-as-template ════════════════════════════════════════════ */}
-      <SaveTemplateDialog
-        // The identity of the target, not its values: remounting on a change
-        // is what lets the dialog seed once and then belong to the person
-        // typing.
-        key={editingTemplate?.id ?? "new"}
-        open={saveOpen}
-        onOpenChange={setSaveOpen}
-        initialMeta={initialSaveMeta}
-        editing={editingTemplate !== null}
-        submitting={creating}
-        onSubmit={confirmTemplate}
-      />
 
       {/* ══ Submit gate dialog ══════════════════════════════════════════ */}
       <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
@@ -1963,18 +1690,11 @@ function StepProfil({
   payload,
   onPatch,
   onPayload,
-  template = false,
 }: {
   doc: RphDocument;
   payload: RphPayload;
   onPatch: (p: Partial<RphDocument>) => void;
   onPayload: (p: Partial<RphPayload>) => void;
-  /**
-   * A template has no class, no week, no date and no lesson time -
-   * `erph.rph_template` stores none of them. Offering the controls would be a
-   * form whose answers go nowhere, so they are not offered.
-   */
-  template?: boolean;
 }) {
   // Live lists, not fixtures: a subject or class the administrator switches off
   // must stop appearing here, and one they add must show up without a redeploy.
@@ -2023,12 +1743,7 @@ function StepProfil({
 
   return (
     <div>
-      <div
-        className={cn(
-          "grid gap-3",
-          template ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-4",
-        )}
-      >
+      <div className={cn("grid gap-3", "sm:grid-cols-2 lg:grid-cols-4")}>
         <div>
           <Label htmlFor="f-14796">{ms.editor.subject}</Label>
           <Select
@@ -2048,145 +1763,130 @@ function StepProfil({
           </Select>
         </div>
         {/* Only a plan files under a class, inside a week, on a date. */}
-        {!template && (
-          <>
-            <div className="min-w-0">
-              {/* A tick list, not a select: a plan is filed once for every class
+        <div className="min-w-0">
+          {/* A tick list, not a select: a plan is filed once for every class
                   it covers, so choosing "5 Amanah and 5 Bidara" is one document
                   covering both, not a copy for each. One class must stay - a
                   plan with none has no school week to file under - so the last
                   remaining tick cannot be unticked until another is. */}
-              <fieldset className="rounded-[10px] border border-border bg-surface-2/40 px-3 py-2.5">
-                <legend className="px-0 text-[12.5px] font-semibold text-ink-2">
-                  {ms.editor.class}
-                </legend>
-                <div className="grid max-h-36 grid-cols-2 content-start gap-x-3 gap-y-1.5 overflow-y-auto">
-                  {classOptions.map((c) => {
-                    const checked = doc.classIds.includes(c.id);
-                    return (
-                      <label
-                        key={c.id}
-                        className="flex min-w-0 items-center gap-2 text-[13px] text-ink-2"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={checked && doc.classIds.length === 1}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              onPatch(
-                                canonicalClasses(
-                                  [...doc.classIds, c.id],
-                                  doc.classNames,
-                                  classes,
-                                ),
-                              );
-                            } else {
-                              const i = doc.classIds.indexOf(c.id);
-                              const ids = doc.classIds.filter((id) => id !== c.id);
-                              const names = doc.classNames.filter((_, j) => j !== i);
-                              onPatch({ classIds: ids, classNames: names });
-                            }
-                          }}
-                        />
-                        {c.nama}
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-              <p className="mt-1.5 text-[11.5px] text-ink-4">
-                Tick semua kelas yang rancangan ini dilaksanakan - satu RPH untuk beberapa
-                kelas.
-              </p>
+          <fieldset className="rounded-[10px] border border-border bg-surface-2/40 px-3 py-2.5">
+            <legend className="px-0 text-[12.5px] font-semibold text-ink-2">
+              {ms.editor.class}
+            </legend>
+            <div className="grid max-h-36 grid-cols-2 content-start gap-x-3 gap-y-1.5 overflow-y-auto">
+              {classOptions.map((c) => {
+                const checked = doc.classIds.includes(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className="flex min-w-0 items-center gap-2 text-[13px] text-ink-2"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={checked && doc.classIds.length === 1}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          onPatch(
+                            canonicalClasses([...doc.classIds, c.id], doc.classNames, classes),
+                          );
+                        } else {
+                          const i = doc.classIds.indexOf(c.id);
+                          const ids = doc.classIds.filter((id) => id !== c.id);
+                          const names = doc.classNames.filter((_, j) => j !== i);
+                          onPatch({ classIds: ids, classNames: names });
+                        }
+                      }}
+                    />
+                    {c.nama}
+                  </label>
+                );
+              })}
             </div>
-            <div>
-              <Label htmlFor="f-week">{ms.editor.week}</Label>
-              <Select
-                id="f-week"
-                value={String(doc.weekNo)}
-                disabled={weekLocked}
-                title={weekLocked ? "Minggu ditetapkan apabila RPH dihantar" : undefined}
-                onChange={(e) => {
-                  const week = Number(e.target.value);
-                  const chosen = weeks.find((o) => o.week === week);
-                  if (!chosen) return;
-                  // A plan belongs to one week. Moving it carries the date with
-                  // it, unless the date already falls inside the week chosen.
-                  const inside = doc.planDate >= chosen.monday && doc.planDate <= chosen.friday;
-                  onPatch(
-                    inside ? { weekNo: week } : { weekNo: week, planDate: chosen.monday },
-                  );
-                }}
-              >
-                {weeks.map((o) => (
-                  <option key={o.week} value={o.week}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-              {/* Stated where it is offered: a week that has gone still had
+          </fieldset>
+          <p className="mt-1.5 text-[11.5px] text-ink-4">
+            Tick semua kelas yang rancangan ini dilaksanakan - satu RPH untuk beberapa kelas.
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="f-week">{ms.editor.week}</Label>
+          <Select
+            id="f-week"
+            value={String(doc.weekNo)}
+            disabled={weekLocked}
+            title={weekLocked ? "Minggu ditetapkan apabila RPH dihantar" : undefined}
+            onChange={(e) => {
+              const week = Number(e.target.value);
+              const chosen = weeks.find((o) => o.week === week);
+              if (!chosen) return;
+              // A plan belongs to one week. Moving it carries the date with
+              // it, unless the date already falls inside the week chosen.
+              const inside = doc.planDate >= chosen.monday && doc.planDate <= chosen.friday;
+              onPatch(inside ? { weekNo: week } : { weekNo: week, planDate: chosen.monday });
+            }}
+          >
+            {weeks.map((o) => (
+              <option key={o.week} value={o.week}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+          {/* Stated where it is offered: a week that has gone still had
               lessons, and their RPH is still owed. */}
-              <p className="mt-1.5 text-[11.5px] text-ink-4">{ms.editor.weekHint}</p>
-            </div>
-            <div>
-              <Label htmlFor="f-807586">{ms.editor.date}</Label>
-              <Input
-                id="f-807586"
-                type="date"
-                className="num"
-                value={doc.planDate}
-                // Offered inside the week the plan files under - Monday to
-                // Friday, the days the school teaches.
-                min={days[0]}
-                max={days[4]}
-                disabled={weekLocked}
-                title={weekLocked ? "Tarikh ditetapkan apabila RPH dihantar" : undefined}
-                onChange={(e) => {
-                  const iso = e.target.value;
-                  if (!iso) return;
-                  // The week follows the date, so the two can never disagree: a
-                  // teacher who sets last Tuesday files under last Tuesday's
-                  // week, and the printed page says what the totals count.
-                  const week = weekOfIso(iso);
-                  onPatch(
-                    week === doc.weekNo ? { planDate: iso } : { planDate: iso, weekNo: week },
-                  );
-                }}
-              />
-            </div>
-          </>
-        )}
+          <p className="mt-1.5 text-[11.5px] text-ink-4">{ms.editor.weekHint}</p>
+        </div>
+        <div>
+          <Label htmlFor="f-807586">{ms.editor.date}</Label>
+          <Input
+            id="f-807586"
+            type="date"
+            className="num"
+            value={doc.planDate}
+            // Offered inside the week the plan files under - Monday to
+            // Friday, the days the school teaches.
+            min={days[0]}
+            max={days[4]}
+            disabled={weekLocked}
+            title={weekLocked ? "Tarikh ditetapkan apabila RPH dihantar" : undefined}
+            onChange={(e) => {
+              const iso = e.target.value;
+              if (!iso) return;
+              // The week follows the date, so the two can never disagree: a
+              // teacher who sets last Tuesday files under last Tuesday's
+              // week, and the printed page says what the totals count.
+              const week = weekOfIso(iso);
+              onPatch(
+                week === doc.weekNo ? { planDate: iso } : { planDate: iso, weekNo: week },
+              );
+            }}
+          />
+        </div>
       </div>
 
       <div className="mt-3.5 grid gap-3 sm:grid-cols-3">
-        {/* A lesson time is a fact about one lesson, so a template has none. */}
-        {!template && (
-          <>
-            <div>
-              <Label htmlFor="f-795300">{ms.editor.time}</Label>
-              <Input
-                id="f-795300"
-                type="time"
-                className="num"
-                value={doc.slotTime}
-                onChange={(e) => onPatch({ slotTime: e.target.value })}
-              />
-            </div>
-            <div>
-              {/* Masa Tamat. The printed form has it, so the plan has to carry it
+        {/* A lesson time is a fact about one lesson. */}
+        <div>
+          <Label htmlFor="f-795300">{ms.editor.time}</Label>
+          <Input
+            id="f-795300"
+            type="time"
+            className="num"
+            value={doc.slotTime}
+            onChange={(e) => onPatch({ slotTime: e.target.value })}
+          />
+        </div>
+        <div>
+          {/* Masa Tamat. The printed form has it, so the plan has to carry it
               - a single start time leaves the page to invent an end time. */}
-              <Label htmlFor="f-masa-tamat">Masa Tamat</Label>
-              <Input
-                id="f-masa-tamat"
-                type="time"
-                className="num"
-                value={doc.slotTimeEnd}
-                onChange={(e) => onPatch({ slotTimeEnd: e.target.value })}
-              />
-            </div>
-          </>
-        )}
+          <Label htmlFor="f-masa-tamat">Masa Tamat</Label>
+          <Input
+            id="f-masa-tamat"
+            type="time"
+            className="num"
+            value={doc.slotTimeEnd}
+            onChange={(e) => onPatch({ slotTimeEnd: e.target.value })}
+          />
+        </div>
         <div>
           <Label htmlFor="f-995730">Fasa / Tema</Label>
           <Input
@@ -2213,82 +1913,6 @@ function StepProfil({
         </div>
       </div>
     </div>
-  );
-}
-
-/* ══ Save as a template ════════════════════════════════════════════════ */
-
-/**
- * The wizard's "Save As…": the plan is already written, so this asks only
- * what a template row needs and cannot be derived - a name, and who may use
- * it.
- *
- * The curriculum is seeded from the subject the plan was written against and
- * offered rather than hidden: a teacher correcting a template's level should
- * not have to do it somewhere else afterwards, and it defaults to what the
- * subject already implies so a template cannot start out describing a
- * syllabus its subject does not have.
- */
-function SaveTemplateDialog({
-  open,
-  onOpenChange,
-  initialMeta,
-  editing,
-  submitting,
-  onSubmit,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialMeta: TemplateMeta;
-  /** Changing a template in place, rather than filing a new one. */
-  editing: boolean;
-  submitting: boolean;
-  onSubmit: (meta: TemplateMeta) => void | Promise<void>;
-}) {
-  // Seeded once from `initialMeta`. The caller remounts this with a fresh key
-  // when the target changes, so a cancelled dialog cannot resurrect a title
-  // someone deleted on purpose.
-  const [meta, setMeta] = React.useState<TemplateMeta>(initialMeta);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const submit = () => {
-    if (!meta.title.trim()) {
-      setError("Tajuk templat diperlukan.");
-      return;
-    }
-    setError(null);
-    void onSubmit(meta);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{editing ? "Sunting templat" : "Simpan sebagai templat"}</DialogTitle>
-          <DialogDescription>
-            {editing
-              ? "Perubahan yang anda buat menjadi kandungan templat ini."
-              : "Apa yang anda tulis menjadi titik permulaan untuk merancang pelajaran yang seterusnya."}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="grid gap-3">
-          <TemplateMetaFields
-            idPrefix="tplnew"
-            meta={meta}
-            onChange={(patch) => setMeta((m) => ({ ...m, ...patch }))}
-          />
-          {error && <FieldError>{error}</FieldError>}
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="ghost" disabled={submitting} onClick={() => onOpenChange(false)}>
-            Batal
-          </Button>
-          <Button disabled={submitting} onClick={submit}>
-            {submitting ? "Menyimpan…" : editing ? "Simpan perubahan templat" : "Cipta templat"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 

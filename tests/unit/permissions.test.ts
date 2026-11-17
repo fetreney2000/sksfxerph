@@ -14,38 +14,25 @@ import { can, homeFor, permissionsFor, REVIEWER_ROLES } from "@/lib/auth/permiss
  *                         read the log
  *   Guru Besar        - supervise only: grade, monitor, report, read the log.
  *                       They teach no class, so no RPH of their own.
- *   Administrator     - set the app up and curate templates; never teach,
+ *   Administrator     - set the app up; never teach,
  *                       grade, monitor or read the log
  */
 describe("permissions", () => {
-  it("Guru Biasa can write their own RPH and use the library", () => {
-    expect(permissionsFor("guru_biasa")).toEqual(["rph", "templat"]);
+  it("Guru Biasa can write their own RPH and nothing else", () => {
+    expect(permissionsFor("guru_biasa")).toEqual(["rph"]);
   });
 
   it("Guru Penolong Kanan supervises", () => {
-    expect(permissionsFor("gpk")).toEqual([
-      "rph",
-      "semak",
-      "pantau",
-      "laporan",
-      "audit",
-      "templat",
-    ]);
+    expect(permissionsFor("gpk")).toEqual(["rph", "semak", "pantau", "laporan", "audit"]);
   });
 
   it("Guru Besar supervises without writing plans", () => {
-    expect(permissionsFor("guru_besar")).toEqual([
-      "semak",
-      "pantau",
-      "laporan",
-      "audit",
-      "templat",
-    ]);
+    expect(permissionsFor("guru_besar")).toEqual(["semak", "pantau", "laporan", "audit"]);
     expect(can("guru_besar", "rph")).toBe(false);
   });
 
   it("Administrator sets up the app and never grades", () => {
-    expect(permissionsFor("pentadbir")).toEqual(["pentadbir", "templat"]);
+    expect(permissionsFor("pentadbir")).toEqual(["pentadbir"]);
     expect(can("pentadbir", "semak")).toBe(false);
     expect(can("pentadbir", "pantau")).toBe(false);
     expect(can("pentadbir", "laporan")).toBe(false);
@@ -57,16 +44,12 @@ describe("permissions", () => {
    *
    * Holding `rph` would let them create, submit and be graded on plans of their
    * own - and would put `/minggu`, `/editor` and `/arkib` in front of someone
-   * whose job is none of that. `templat` is split out precisely so they can
-   * still curate the library without borrowing a permission named "write and
-   * submit one's own plans".
+   * whose job is none of that.
    */
   it("Administrator holds no plans of their own", () => {
     expect(can("pentadbir", "rph")).toBe(false);
-    expect(can("pentadbir", "templat")).toBe(true);
     for (const role of ["guru_biasa", "gpk"]) {
       expect(can(role, "rph"), `${role} should hold plans`).toBe(true);
-      expect(can(role, "templat"), `${role} should reach the library`).toBe(true);
     }
   });
 

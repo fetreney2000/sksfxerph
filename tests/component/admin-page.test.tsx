@@ -151,7 +151,6 @@ const OVERVIEW = {
   members: { total: 18, teachers: 16, byRole: { guru_biasa: 15, gpk: 1, pentadbir: 1 } },
   classes: 12,
   subjects: 9,
-  templates: 4,
   week: {
     expected: 80,
     submitted: 42,

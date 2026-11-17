@@ -1,6 +1,5 @@
 import {
   BookMarked,
-  BookOpen,
   FileText,
   History,
   LayoutGrid,
@@ -27,10 +26,10 @@ export interface NavItem {
   /**
    * Abbreviation for the bottom bar.
    *
-   * Five destinations across 375px is ~75px each, and "Perpustakaan Templat"
-   * measures 126px - so without this the label either truncates to something
-   * unreadable or pushes the bar past the viewport, which is exactly what it
-   * was doing. The sidebar keeps the full label; only the mobile bar uses this.
+   * Five destinations across 375px is ~75px each, and "Laporan dan Eksport"
+   * measures over 130px - so without this the label either truncates to something
+   * unreadable or pushes the bar past the viewport. The sidebar keeps the full
+   * label; only the mobile bar uses this.
    */
   short?: string;
 }
@@ -105,21 +104,6 @@ export const NAV: NavGroup[] = [
       },
     ],
   },
-  {
-    // The template library is a resource for every role, not part of a
-    // teacher's group - otherwise the Administrator's only "Guru" item was a
-    // library they administer but do not use to plan.
-    label: ms.nav.sumber,
-    items: [
-      {
-        href: "/templat",
-        label: ms.nav.templat,
-        short: "Templat",
-        icon: BookOpen,
-        perm: "templat",
-      },
-    ],
-  },
 ];
 
 /** Navigation for a role - groups with nothing permitted in them disappear. */
@@ -147,7 +131,6 @@ export const MOBILE_PRIMARY_ORDER: readonly string[] = [
   "/utama",
   "/arkib",
   "/rpt",
-  "/templat",
 ];
 
 const MOBILE_PRIMARY_LIMIT = 4;
@@ -164,10 +147,10 @@ export interface MobileNav {
  *
  * A role with four or fewer destinations has no sheet - a "Lagi" tab that opens
  * an empty drawer is worse than no tab at all. A GPK gets their four main
- * screens (Minggu, Semakan, Sekolah, Laporan) and finds Arkib, RPT and Templat
- * under Lagi; a Guru Besar - who teaches no class and has no Minggu or Arkib -
- * sees Semakan, Sekolah, Laporan and Templat directly; a Guru Biasa sees all
- * four of their destinations directly.
+ * screens (Minggu, Semakan, Sekolah, Laporan) and finds Arkib and RPT under
+ * Lagi; a Guru Besar - who teaches no class and has no Minggu or Arkib -
+ * sees Semakan, Sekolah and Laporan directly; a Guru Biasa sees all
+ * three of their destinations directly.
  */
 export function mobileNavFor(role: string | null | undefined): MobileNav {
   const rank = (href: string) => {
@@ -194,12 +177,7 @@ export function mobileNavFor(role: string | null | undefined): MobileNav {
 export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/minggu": { title: ms.nav.minggu, crumb: "Ruang kerja" },
   "/editor": { title: ms.nav.editor, crumb: "Draf aktif" },
-  "/templat": { title: ms.nav.templat, crumb: "Templat tersedia" },
   "/rpt": { title: ms.nav.rpt, crumb: "Pautan Drive" },
-  // The wizard is not a library screen, so it does not inherit the library's
-  // crumb - a teacher authoring a plan should be able to tell from the title
-  // bar which of the two screens they are on.
-  "/templat/baru": { title: ms.nav.templat, crumb: "Templat baharu" },
   "/arkib": { title: ms.nav.arkib, crumb: "Rekod sesi" },
   "/utama": { title: ms.nav.utama, crumb: "Papan pemuka pentadbir" },
   "/semakan": { title: ms.nav.semakan, crumb: "Giliran semakan" },
