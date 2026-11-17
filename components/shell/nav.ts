@@ -15,10 +15,9 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   /**
-   * Permission needed to see this entry. Read by `navFor()` - the sidebar,
-   * the mobile bar and the command palette all go through it, so an item a
-   * role cannot reach disappears everywhere at once instead of surviving in
-   * one surface (the old `scope` field was declared and never read).
+   * Permission needed to see this entry. Read by `navFor()` - the sidebar and
+   * the mobile bar go through it, so an item a role cannot reach disappears
+   * everywhere at once instead of surviving in one surface.
    */
   perm: Permission;
   /** Optional live badge source, resolved by the sidebar. */
@@ -53,7 +52,7 @@ export const NAV: NavGroup[] = [
         // badge that used to sit on "Penyunting RPH" belongs on this entry.
         badge: "drafts",
       },
-      { href: "/arkib", label: ms.nav.arkib, short: "Arkib", icon: History, perm: "rph" },
+      { href: "/arkib", label: ms.nav.arkib, short: "Senarai", icon: History, perm: "rph" },
       // Drive links, not files: the RPT itself stays in the teacher's Drive
       // and only the link is stored, so a supervisor can open and check it.
       { href: "/rpt", label: ms.nav.rpt, short: "RPT", icon: BookMarked, perm: "rph" },

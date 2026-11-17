@@ -2,6 +2,7 @@
 
 import { FileText, PenLine, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@/components/shell/user-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { can } from "@/lib/auth/permissions";
 
 /**
  * Reporting & export.
@@ -47,6 +49,11 @@ const EXPORTS = [
 
 export default function LaporanPage() {
   const router = useRouter();
+  const { role } = useUser();
+  // Both exports start from the teacher's own week - a reviewer without plans
+  // of their own would only bounce off /minggu, so they are not offered what
+  // they cannot open.
+  const teacher = can(role, "rph");
 
   return (
     <>
@@ -56,33 +63,42 @@ export default function LaporanPage() {
         <Badge variant="neutral">Dua jenis eksport</Badge>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {EXPORTS.map((e) => {
-          const Icon = e.icon;
-          return (
-            <Card key={e.id} className="flex flex-col overflow-hidden">
-              <span className="h-1 bg-gradient-to-r from-primary to-[#53b1fd]" aria-hidden />
-              <CardHeader className="pb-0">
-                <span
-                  className="grid h-10 w-10 place-items-center rounded-[11px] bg-primary-soft text-primary-ink"
-                  aria-hidden
-                >
-                  <Icon className="h-5 w-5" strokeWidth={1.8} />
-                </span>
-              </CardHeader>
-              <CardContent className="flex flex-1 flex-col">
-                <CardTitle className="mb-1.5">{e.title}</CardTitle>
-                <CardDescription className="mb-4 flex-1 leading-[1.55]">
-                  {e.desc}
-                </CardDescription>
-                <Button onClick={() => router.push(e.href)} className="w-full">
-                  {e.cta}
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {!teacher ? (
+        <Card>
+          <CardContent className="py-10 text-center text-[13px] leading-[1.6] text-ink-3">
+            Eksport dibuat daripada paparan minggu seorang guru - akaun ini tidak mempunyai
+            minggu sendiri, jadi tiada apa-apa untuk dieksport di sini.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {EXPORTS.map((e) => {
+            const Icon = e.icon;
+            return (
+              <Card key={e.id} className="flex flex-col overflow-hidden">
+                <span className="h-1 bg-gradient-to-r from-primary to-[#53b1fd]" aria-hidden />
+                <CardHeader className="pb-0">
+                  <span
+                    className="grid h-10 w-10 place-items-center rounded-[11px] bg-primary-soft text-primary-ink"
+                    aria-hidden
+                  >
+                    <Icon className="h-5 w-5" strokeWidth={1.8} />
+                  </span>
+                </CardHeader>
+                <CardContent className="flex flex-1 flex-col">
+                  <CardTitle className="mb-1.5">{e.title}</CardTitle>
+                  <CardDescription className="mb-4 flex-1 leading-[1.55]">
+                    {e.desc}
+                  </CardDescription>
+                  <Button onClick={() => router.push(e.href)} className="w-full">
+                    {e.cta}
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <Card className="mt-4">
         <CardHeader>

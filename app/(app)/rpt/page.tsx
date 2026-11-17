@@ -31,8 +31,8 @@ import { useSession } from "@/lib/hooks/use-session";
  *
  * The file bytes never enter this app: an RPT lives in the teacher's own
  * Google Drive and only the link is kept here, titled per subject, so a GPK
- * or Guru Besar can open it from /sekolah. Server-only like the template
- * library - no Dexie store, because a Drive link is only usable online anyway.
+ * or Guru Besar can open it from /sekolah. No local store, because a Drive
+ * link is only usable online anyway.
  */
 export default function RptPage() {
   const session = useSession();

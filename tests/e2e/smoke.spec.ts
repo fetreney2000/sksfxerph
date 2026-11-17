@@ -635,9 +635,9 @@ test.describe("mobile layout", () => {
     await expect(nav.getByRole("link", { name: "Semak" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Sekolah" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Laporan" })).toBeVisible();
-    // Arkib and Templat are still reachable; they are just not a fifth and
-    // sixth tab squeezed into 390px.
-    await expect(nav.getByRole("link", { name: "Arkib" })).toHaveCount(0);
+    // Senarai RPH is still reachable; it is just not a fifth tab squeezed
+    // into 390px.
+    await expect(nav.getByRole("link", { name: "Senarai" })).toHaveCount(0);
 
     await nav.getByRole("button", { name: "Lagi" }).click();
     const sheet = page.getByRole("dialog", { name: "Lagi" });
