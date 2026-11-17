@@ -195,7 +195,7 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
 
     // No `rph` means no RPT either - there is nothing of theirs to attach.
-    await expect(page.getByRole("link", { name: /RPT Tahunan/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^RPT\$/ })).toHaveCount(0);
     await page.goto("/rpt");
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
 
@@ -206,11 +206,11 @@ test.describe("authentication", () => {
     const errors = collectErrors(page);
     await login(page);
 
-    await expect(page.getByRole("link", { name: /RPT Tahunan/ }).first()).toBeVisible({
+    await expect(page.getByRole("link", { name: /^RPT\$/ }).first()).toBeVisible({
       timeout: 15_000,
     });
     await page
-      .getByRole("link", { name: /RPT Tahunan/ })
+      .getByRole("link", { name: /^RPT\$/ })
       .first()
       .click();
     await expect(page).toHaveURL(/\/rpt/, { timeout: 15_000 });

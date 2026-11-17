@@ -37,7 +37,7 @@ export const ms = {
     minggu: "Minggu Ini",
     editor: "Penyunting RPH",
     arkib: "Arkib eRPH",
-    rpt: "RPT Tahunan",
+    rpt: "RPT",
     semakan: "Semakan RPH",
     sekolah: "Paparan Sekolah",
     guru: "Guru",

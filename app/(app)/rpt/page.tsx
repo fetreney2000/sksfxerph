@@ -27,7 +27,7 @@ import { supabaseConfigured } from "@/lib/config";
 import { useSession } from "@/lib/hooks/use-session";
 
 /**
- * RPT Tahunan - the teacher's yearly plans, linked rather than stored.
+ * RPT - the teacher's yearly plans, linked rather than stored.
  *
  * The file bytes never enter this app: an RPT lives in the teacher's own
  * Google Drive and only the link is kept here, titled per subject, so a GPK
@@ -196,7 +196,7 @@ export default function RptPage() {
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">RPT Tahunan</h2>
+        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">RPT</h2>
         <span className="h-px flex-1 bg-border" />
         <span className="num text-xs text-ink-3">Sesi {session}</span>
       </div>
