@@ -366,9 +366,22 @@ export default function SemakanPage() {
               window.setTimeout(() => window.location.assign("/login"), 1200);
               return;
             }
-            toast.error(
-              `Gagal menyemak: ${err instanceof Error ? err.message : "ralat rangkaian"}`,
-            );
+            // A failed decision leaves stale rows behind: the teacher may have
+            // saved since this screen loaded, in which case the signature just
+            // bound the wrong version. Re-read everything, so the retry the
+            // reviewer is about to press works on the current row instead of
+            // failing the same way.
+            void refetchPlans();
+            void queryClient.invalidateQueries({ queryKey: ["review-plan", item.id] });
+            void queryClient.invalidateQueries({ queryKey: ["review-queue"] });
+            const message = err instanceof Error ? err.message : "ralat rangkaian";
+            if (/versi/i.test(message)) {
+              toast.error(
+                "RPH telah dikemas kini guru. Data disegar semula - cuba sekali lagi.",
+              );
+            } else {
+              toast.error(`Gagal menyemak: ${message}`);
+            }
           } finally {
             setDeciding(false);
           }

@@ -504,7 +504,11 @@ create index rph_document_queue_idx       on erph.rph_document (school_id, statu
 create index rph_document_search_idx      on erph.rph_document using gin (search_tsv);
 create index rph_document_updated_idx     on erph.rph_document (updated_at desc);
 
--- Append-only revision trail (Akta 550 / Peraturan 8 ⇒ never rewrite history)
+-- Append-only revision trail (Akta 550 / Peraturan 8 ⇒ never rewrite history).
+-- What is versioned is what was *filed*: rows are written when a plan is
+-- submitted (see submit_rph's 'resubmit' insert), not on every draft save, so
+-- the trail answers "what did the teacher hand in, and when" rather than
+-- replaying each keystroke. Draft edits between filings share a version.
 create table erph.rph_revision (
   id           bigint generated always as identity primary key,
   document_id  uuid not null references erph.rph_document(id) on delete cascade,

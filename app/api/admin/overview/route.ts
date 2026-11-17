@@ -22,6 +22,12 @@ export interface Overview {
   members: { total: number; teachers: number; byRole: Record<string, number> };
   classes: number;
   subjects: number;
+  /**
+   * Active Guru Biasa with no supervisor. A GPK only ever sees assigned
+   * teachers, so these plans are reviewable by the Guru Besar alone - worth
+   * a checklist item rather than a silent gap.
+   */
+  unassignedTeachers: number;
   week: {
     expected: number;
     submitted: number;
@@ -45,7 +51,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // dashboard it is a summary of.
   const anchors = await loadCalendarAnchors(schoolId);
 
-  const [members, classes, subjects, stats] = await Promise.all([
+  const [members, classes, subjects, unassigned, stats] = await Promise.all([
     gate.db.rpc("admin_list_members", { p_school: schoolId }),
     gate.db
       .from("class")
@@ -56,6 +62,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .from("subject")
       .select("code", { count: "exact", head: true })
       .eq("is_active", true),
+    gate.db
+      .from("school_member")
+      .select("user_id", { count: "exact", head: true })
+      .eq("school_id", schoolId)
+      .eq("role", "guru_biasa")
+      .eq("is_active", true)
+      .is("supervisor_id", null),
     gate.db.rpc("school_week_stats", {
       p_school: schoolId,
       p_session: session,
@@ -84,10 +97,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const week = (stats.data ?? [])[0] ?? null;
 
+  if (unassigned.error) {
+    console.error("[admin] overview unassigned failed:", unassigned.error.message);
+  }
+
   const overview: Overview = {
     members: { total: rows.length, teachers, byRole },
     classes: classes.count ?? 0,
     subjects: subjects.count ?? 0,
+    unassignedTeachers: unassigned.count ?? 0,
     week: week
       ? {
           expected: week.expected ?? 0,

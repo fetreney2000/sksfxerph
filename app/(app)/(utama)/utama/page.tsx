@@ -172,6 +172,19 @@ export default function UtamaPage() {
       done: o ? o.members.teachers > 0 : null,
     },
     {
+      key: "akaun",
+      // A GPK only ever sees assigned teachers, so a Guru Biasa with no
+      // penyelia is reviewable by the Guru Besar alone. The accounts tab is
+      // where supervisors are set, so that is where this item opens.
+      label: "Penyelia guru",
+      detail: o
+        ? o.unassignedTeachers === 0
+          ? "Semua guru mempunyai penyelia"
+          : `${o.unassignedTeachers} guru tanpa penyelia`
+        : "Memuatkan…",
+      done: o ? o.unassignedTeachers === 0 : null,
+    },
+    {
       key: "kelas",
       label: "Kelas",
       detail: o ? `${o.classes} kelas sesi ini` : "Memuatkan…",
@@ -250,7 +263,7 @@ export default function UtamaPage() {
             {setupLoaded ? `${setupDone}/${setup.length} selesai` : "Memuatkan…"}
           </Badge>
         </CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
           {setup.map((item) => (
             <button
               key={item.key}

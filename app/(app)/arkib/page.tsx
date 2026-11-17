@@ -420,18 +420,23 @@ export default function ArkibPage() {
                                           />
                                           Salin
                                         </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          aria-label={`Padam ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
-                                          onClick={() => setConfirming(d)}
-                                        >
-                                          <Trash2
-                                            className="h-3.5 w-3.5"
-                                            strokeWidth={1.9}
-                                            aria-hidden
-                                          />
-                                        </Button>
+                                        {/* Only working copies can be withdrawn: a filed
+                                            plan is under review or sealed, and the
+                                            server refuses those with a 409. */}
+                                        {(d.status === "draft" || d.status === "returned") && (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            aria-label={`Padam ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
+                                            onClick={() => setConfirming(d)}
+                                          >
+                                            <Trash2
+                                              className="h-3.5 w-3.5"
+                                              strokeWidth={1.9}
+                                              aria-hidden
+                                            />
+                                          </Button>
+                                        )}
                                       </div>
                                     </li>
                                   ))}

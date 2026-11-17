@@ -156,7 +156,7 @@ export async function DELETE(
 
   const { data: row, error: readErr } = await gate.db
     .from("rph_document")
-    .select("owner_id, deleted_at")
+    .select("owner_id, deleted_at, status")
     .eq("id", id)
     .eq("school_id", schoolId)
     .maybeSingle();
@@ -170,15 +170,47 @@ export async function DELETE(
   if (!row || row.owner_id !== gate.user.id || row.deleted_at) {
     return NextResponse.json({ error: "RPH tidak dijumpai" }, { status: 404 });
   }
+  // A filed plan is no longer the teacher's alone to withdraw silently: an
+  // approved plan is a sealed statutory record, and a submitted one may be
+  // sitting open on a reviewer's screen. Drafts and returned plans are still
+  // the teacher's working copies, so those may go.
+  const status = (row as { status?: string }).status;
+  if (status === "approved") {
+    return NextResponse.json(
+      { error: "RPH yang telah disahkan tidak boleh dikeluarkan." },
+      { status: 409 },
+    );
+  }
+  if (status === "submitted") {
+    return NextResponse.json(
+      { error: "RPH yang sedang disemak tidak boleh dikeluarkan. Tunggu keputusan semakan." },
+      { status: 409 },
+    );
+  }
 
+  // Ownership was verified by the lookup above, so the id alone identifies
+  // the row - and a row that changed hands in between answers 404 there.
   const { error } = await gate.db
     .from("rph_document")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("owner_id", gate.user.id);
+    .eq("id", id);
 
   if (error) {
     return toClientError("[rph] delete failed:", error);
+  }
+
+  // Every other write leaves a trail - a deletion that did not would let a
+  // filed plan vanish without a trace of who withdrew it.
+  const { error: auditErr } = await gate.db.from("audit_log").insert({
+    school_id: schoolId,
+    actor_id: gate.user.id,
+    entity: "rph_document",
+    entity_id: id,
+    action: "delete",
+    after: { status: status ?? null },
+  });
+  if (auditErr) {
+    console.error("[rph] delete audit failed:", auditErr.message);
   }
 
   return NextResponse.json({ ok: true });

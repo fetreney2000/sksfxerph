@@ -189,7 +189,7 @@ vi.mock("@/lib/server/db", () => ({
 }));
 
 const { POST } = await import("@/app/api/rph/route");
-const { GET: GET_ONE, PATCH } = await import("@/app/api/rph/[id]/route");
+const { GET: GET_ONE, PATCH, DELETE } = await import("@/app/api/rph/[id]/route");
 
 const VALID_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -443,6 +443,55 @@ describe("PATCH /api/rph/[id]", () => {
     state.rows = [draft({ owner_id: OTHER_ID })];
 
     const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("DELETE /api/rph/[id]", () => {
+  it("soft-deletes a draft and writes the audit row", async () => {
+    state.rows = [draft()];
+
+    const res = await call(DELETE, "DELETE", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(200);
+    expect(state.rows[0]?.deleted_at).not.toBeNull();
+    expect(state.calls.some((c) => c.table === "audit_log" && c.method === "insert")).toBe(
+      true,
+    );
+  });
+
+  it("lets a returned plan go - it is a working copy again", async () => {
+    state.rows = [draft({ status: "returned" })];
+
+    const res = await call(DELETE, "DELETE", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(200);
+    expect(state.rows[0]?.deleted_at).not.toBeNull();
+  });
+
+  it("refuses a sealed plan - approval is not the teacher's to undo", async () => {
+    state.rows = [draft({ status: "approved" })];
+
+    const res = await call(DELETE, "DELETE", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(409);
+    expect(state.rows[0]?.deleted_at).toBeNull();
+  });
+
+  it("refuses a plan under review - it may be open on a reviewer's screen", async () => {
+    state.rows = [draft({ status: "submitted" })];
+
+    const res = await call(DELETE, "DELETE", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
+
+    expect(res.status).toBe(409);
+    expect(state.rows[0]?.deleted_at).toBeNull();
+  });
+
+  it("answers 404 for a colleague's plan", async () => {
+    state.rows = [draft({ owner_id: OTHER_ID })];
+
+    const res = await call(DELETE, "DELETE", `/api/rph/${VALID_ID}`, undefined, VALID_ID);
 
     expect(res.status).toBe(404);
   });
