@@ -1,8 +1,18 @@
 "use client";
 
-import { Check, Info, Undo2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CalendarDays,
+  Check,
+  ChevronRight,
+  FileText,
+  Folder,
+  FolderOpen,
+  Inbox,
+  Info,
+  Undo2,
+} from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { RphPaper } from "@/components/rph/rph-paper";
@@ -19,21 +29,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label, Select, Textarea } from "@/components/ui/field";
+import { Label, Textarea } from "@/components/ui/field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { reviewStageFor } from "@/lib/auth/permissions";
+import { handleExpiredSession } from "@/lib/client/auth-session";
 import { cn } from "@/lib/cn";
 import { supabaseConfigured } from "@/lib/config";
-import { longDate, weekOptions } from "@/lib/date";
+import { longDate, schoolDays, weekRangeLabel } from "@/lib/date";
 import type { QueueItem } from "@/lib/demo/review";
-import { useCurrentWeek } from "@/lib/hooks/use-calendar";
-import { useReviewQueueData, useSchoolStats, useWeekPlans } from "@/lib/hooks/use-remote";
+import type { ReviewPlanLight } from "@/lib/hooks/use-remote";
+import { useReviewPlans, useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
 import { RpcError, submitRph } from "@/lib/rpc";
 import { completeness, normalisePayload } from "@/lib/schemas/rph";
 import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review";
+import type { RphStatus } from "@/lib/types";
 
 /**
  * Review queue - the admin screen.
@@ -43,13 +55,13 @@ import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review
  * Garis Panduan) is the difference between a 5-minute job and a 30-minute one.
  */
 /** The message shown after a decision. Both reviewers now end the flow. */
-function decisionMessage(decision: "sahkan" | "hantar_balik"): string {
+function decisionMessage(decision: ReviewDecision): string {
   if (decision === "hantar_balik") return "Tidak lengkap - dikembalikan kepada guru";
   return "Disahkan dan ditandatangani - guru dimaklumkan";
 }
 
 /**
- * What a week-browse row lets the reviewer actually do.
+ * What a browsed row lets the reviewer actually do.
  *
  * A `draft` is actionable through the submit-on-behalf step (the server's
  * `submit_rph` already permits staff to submit for their teachers), a
@@ -57,39 +69,94 @@ function decisionMessage(decision: "sahkan" | "hantar_balik"): string {
  * returned, forwarded - is listed only so the week reads as a whole. Re-deciding
  * an audited plan would fork the audit trail, so it is view-only here.
  */
-function isActionable(q: QueueItem): boolean {
+function isActionable(q: { status: RphStatus }): boolean {
   return q.status === "draft" || q.status === "submitted";
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => (w[0] ?? "").toUpperCase())
+    .join("");
 }
 
 export default function SemakanPage() {
   // Remote when configured, bundled demo otherwise - same shape either way.
   const { id: meId, role } = useUser();
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const session = useSession();
   const school = useSchool();
   const stage = reviewStageFor(role);
   const { items: QUEUE } = useReviewQueueData(stage?.status ?? null);
+  const {
+    items: plans,
+    loading: plansLoading,
+    assigned,
+    refetch: refetchPlans,
+  } = useReviewPlans();
   const stats = useSchoolStats();
   const [selected, setSelected] = React.useState<string | undefined>(QUEUE[0]?.id);
   const [graded, setGraded] = React.useState<Record<string, 0 | 1>>({});
   const [comment, setComment] = React.useState("");
   const [filter, setFilter] = React.useState<"belum" | "semua">("belum");
 
-  // ── Minggu lampau ────────────────────────────────────────────────────────
-  // Null selects the ordinary pending queue; a number browses that whole
-  // school week, any status. The picker is driven by `weekOptions()`, which
-  // already applies the school's declared weeks - a gap between declarations
-  // is not offered, because its dates belong to nobody.
-  const currentWeekNo = useCurrentWeek();
-  const [weekFilter, setWeekFilter] = React.useState<number | null>(null);
-  // `currentWeekNo` is the trigger, not a value the body reads: `weekOptions()`
-  // reads `currentWeek()` internally, and re-running the memo when the school's
-  // declarations arrive is what keeps the picker from staying empty forever.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: subscribe-then-read - the dependency fires the recompute the store's update needs.
-  const weekOpts = React.useMemo(() => weekOptions(), [currentWeekNo]);
-  const { items: weekPlans, refetch: refetchWeek, assigned } = useWeekPlans(weekFilter);
-  /** The list on screen: the queue, or the browsed week. */
-  const list = weekFilter === null ? QUEUE : weekPlans;
+  // ── Tree ─────────────────────────────────────────────────────────────────
+  // Tahun → Guru → Minggu → Senarai. Sessions newest first; teachers by
+  // pending load, then name; weeks newest first. The pending queue stays a
+  // first-class node on top - it is the work list, the tree is the archive.
+  const tree = React.useMemo(() => {
+    const bySession = new Map<string, ReviewPlanLight[]>();
+    for (const p of plans) {
+      const list = bySession.get(p.session) ?? [];
+      list.push(p);
+      bySession.set(p.session, list);
+    }
+    return [...bySession.entries()]
+      .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+      .map(([s, rows]) => {
+        const byTeacher = new Map<string, ReviewPlanLight[]>();
+        for (const p of rows) {
+          const list = byTeacher.get(p.teacherId) ?? [];
+          list.push(p);
+          byTeacher.set(p.teacherId, list);
+        }
+        const teachers = [...byTeacher.entries()]
+          .map(([teacherId, trows]) => {
+            const byWeek = new Map<number, ReviewPlanLight[]>();
+            for (const p of trows) {
+              const list = byWeek.get(p.weekNo) ?? [];
+              list.push(p);
+              byWeek.set(p.weekNo, list);
+            }
+            const weeks = [...byWeek.entries()].sort((a, b) => b[0] - a[0]);
+            const pending = trows.filter((p) => p.status === "submitted").length;
+            return {
+              teacherId,
+              teacherName: trows[0]?.teacherName ?? "Guru",
+              total: trows.length,
+              pending,
+              weeks,
+            };
+          })
+          .sort((a, b) => b.pending - a.pending || a.teacherName.localeCompare(b.teacherName));
+        return { session: s, total: rows.length, teachers };
+      });
+  }, [plans]);
+
+  const [open, setOpen] = React.useState<Set<string> | null>(null);
+  const toggle = (key: string) => {
+    const base = open ?? new Set(["pending", ...(tree[0] ? [`s:${tree[0].session}`] : [])]);
+    const next = new Set(base);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setOpen(next);
+  };
+  const isOpen = (key: string) =>
+    open !== null
+      ? open.has(key)
+      : key === "pending" || (tree[0] ? key === `s:${tree[0].session}` : false);
 
   /**
    * The detail pane is a full-screen dialog on a phone.
@@ -109,20 +176,90 @@ export default function SemakanPage() {
    */
   const [deciding, setDeciding] = React.useState(false);
 
+  // The pending work list, honouring the Belum/Semua tabs. `graded` is local:
+  // a decision already recorded stays recorded for this sitting.
+  const pendingVisible = React.useMemo(
+    () => (filter === "belum" ? QUEUE.filter((q) => !(q.id in graded)) : QUEUE),
+    [filter, graded, QUEUE],
+  );
+
   // Selection must follow the data: the queue resolves asynchronously in
   // synced mode, so a value captured at first render can be stale.
   React.useEffect(() => {
-    if (!selected && list.length > 0) setSelected(list[0]?.id);
-  }, [list, selected]);
+    if (!selected && pendingVisible.length > 0) setSelected(pendingVisible[0]?.id);
+  }, [pendingVisible, selected]);
 
-  const item = list.find((q) => q.id === selected) ?? list[0];
+  // A plan opened from the tree carries no body - the tree rows are light -
+  // so the full row is fetched for the detail pane. Pending rows already hold
+  // theirs, exactly as the queue always did.
+  const selectedPending = QUEUE.find((q) => q.id === selected);
+  const needFetch = selected !== undefined && !selectedPending;
+  const planQuery = useQuery({
+    queryKey: ["review-plan", selected],
+    queryFn: async (): Promise<QueueItem | null> => {
+      const res = await fetch(`/api/rph/${encodeURIComponent(selected ?? "")}`, {
+        credentials: "same-origin",
+      });
+      if (handleExpiredSession(res.status)) return null;
+      if (!res.ok) return null;
+      const body = (await res.json()) as {
+        item?: {
+          id: string;
+          version: number;
+          class_names?: string[];
+          subject?: { nama: string } | null;
+          subject_code: string;
+          plan_date: string;
+          slot_time: string | null;
+          status: RphStatus;
+          payload: unknown;
+        };
+        teacherName?: string;
+      };
+      const row = body.item;
+      if (!row) return null;
+      const teacherName = body.teacherName ?? "Guru";
+      return {
+        id: row.id,
+        version: row.version,
+        teacherName,
+        initials: initialsOf(teacherName),
+        tone: "blue",
+        className: (row.class_names ?? []).filter(Boolean).join(", ") || "-",
+        subjectName: row.subject?.nama ?? row.subject_code,
+        planDate: row.plan_date,
+        slotTime: row.slot_time ?? "07:30",
+        status: row.status,
+        ageLabel: "",
+        payload: row.payload as QueueItem["payload"],
+      };
+    },
+    enabled: supabaseConfigured && needFetch,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const item: QueueItem | null | undefined = selectedPending ?? planQuery.data ?? null;
+  const detailLoading = needFetch && planQuery.isLoading;
+
+  // The leaf list the keyboard walks and decisions advance through: the
+  // pending list, or the week the selected plan belongs to.
+  const activeLeaves: { id: string; status: RphStatus }[] = React.useMemo(() => {
+    if (!selected || selectedPending) return pendingVisible;
+    const found = plans.find((p) => p.id === selected);
+    if (!found) return pendingVisible;
+    return plans.filter((p) => p.teacherId === found.teacherId && p.weekNo === found.weekNo);
+  }, [selected, selectedPending, pendingVisible, plans]);
+
   /** A return must carry a reason: an empty "RPH perlu dibaiki" is not actionable. */
   const canReturn = comment.trim().length > 0;
   /**
-   * Week mode only: a decided plan cannot be decided again, so the workspace
-   * renders read-only. In queue mode every row is `submitted` by definition.
+   * Tree selections are browse mode: a decided plan is view-only there, the
+   * way the old week browser was. Pending selections are the queue, decidable
+   * by definition.
    */
-  const readOnly = weekFilter !== null && item !== undefined && !isActionable(item);
+  const fromTree = selected !== undefined && !selectedPending;
+  const readOnly = fromTree && item !== undefined && item !== null && !isActionable(item);
   /** The explanatory note for a row the reviewer cannot (yet) decide. */
   const itemNote = item
     ? readOnly
@@ -142,20 +279,10 @@ export default function SemakanPage() {
     }
   };
 
-  const visible = React.useMemo(
-    () =>
-      weekFilter !== null
-        ? list
-        : filter === "belum"
-          ? list.filter((q) => !(q.id in graded))
-          : list,
-    [filter, graded, list, weekFilter],
-  );
-
   const decide = React.useCallback(
     (decision: ReviewDecision) => {
       if (!item || deciding) return;
-      // A decided plan (week mode) is view-only: re-deciding it would fork
+      // A decided plan (browse mode) is view-only: re-deciding it would fork
       // what the audit trail already recorded.
       if (!isActionable(item)) return;
       if (decision === "hantar_balik" && !comment.trim()) {
@@ -173,26 +300,29 @@ export default function SemakanPage() {
        * What a *recorded* decision does to the screen.
        *
        * Called only once the write has landed - or in local mode, where the
-       * write is the screen. Doing it earlier marked a plan as graded while
-       * the toast beside it said the review had failed, and the plan left the
+       * write is the screen. Doing it earlier marked a plan as graded while the
+       * toast beside it said the review had failed, and the plan left the
        * queue the reviewer was working through.
        */
       const applyDecision = () => {
         setGraded((g) => ({ ...g, [item.id]: decision === "sahkan" ? 1 : 0 }));
         setComment("");
-        // Advance to the next actionable, ungraded item - the queue is the
-        // whole workflow. Week mode has decided rows in between; they are
-        // skipped, not landed on.
-        const next = list.find((q) => isActionable(q) && !(q.id in graded) && q.id !== item.id);
+        // Advance to the next actionable, ungraded item in the list being
+        // worked - the reviewer's place, not the top of something else.
+        const next = activeLeaves.find(
+          (q) => isActionable(q) && !(q.id in graded) && q.id !== item.id,
+        );
         if (next) setSelected(next.id);
         // On a phone the dialog is the workspace. Once the last decision is
         // made, leave it so the reviewer sees the finished queue and toast,
         // rather than the plan they just approved still filling the screen.
         else setMobileOpen(false);
-        // Week mode: the decision changed that row's status in place, so the
-        // browsed week must re-read the server to show it - the local copy
-        // still says what it said before.
-        if (weekFilter !== null) void refetchWeek();
+        // A browsed plan changed status in place, so the tree must re-read
+        // the server to show it - the local copy still says what it said.
+        if (fromTree) {
+          void refetchPlans();
+          void queryClient.invalidateQueries({ queryKey: ["review-plan", item.id] });
+        }
       };
 
       if (supabaseConfigured) {
@@ -251,7 +381,7 @@ export default function SemakanPage() {
         setDeciding(false);
       }
     },
-    [item, deciding, graded, comment, list, meId, weekFilter, refetchWeek],
+    [item, deciding, graded, comment, activeLeaves, meId, fromTree, refetchPlans, queryClient],
   );
 
   React.useEffect(() => {
@@ -262,9 +392,9 @@ export default function SemakanPage() {
       if (e.key === "0") decide("hantar_balik");
       if (e.key === "j" || e.key === "k") {
         e.preventDefault();
-        const idx = visible.findIndex((q) => q.id === selected);
+        const idx = activeLeaves.findIndex((q) => q.id === selected);
         const delta = e.key === "j" ? 1 : -1;
-        const next = visible[Math.max(0, Math.min(visible.length - 1, idx + delta))];
+        const next = activeLeaves[Math.max(0, Math.min(activeLeaves.length - 1, idx + delta))];
         if (next) {
           if (next.id !== selected) setComment("");
           setSelected(next.id);
@@ -273,17 +403,28 @@ export default function SemakanPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [decide, visible, selected]);
+  }, [decide, activeLeaves, selected]);
+
+  // ── Tree rows ────────────────────────────────────────────────────────────
+  // One button shape for every leaf, pending or browsed: first name and class
+  // on top, subject and date below. The right-hand badge answers a different
+  // question per node - pending rows show the local grading state, tree rows
+  // the plan's own status.
+  const leafCls = (active: boolean) =>
+    cn(
+      "flex w-full gap-2.5 border-b border-border px-4 py-3 text-left transition-colors last:border-b-0",
+      active
+        ? "bg-primary-soft shadow-[inset_3px_0_0_var(--color-primary)]"
+        : "hover:bg-surface-2",
+    );
+
+  const pendingCount = QUEUE.filter((q) => !(q.id in graded)).length;
 
   return (
     <>
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <Kpi
-          label={ms.review.pending}
-          value={String(QUEUE.length - Object.keys(graded).length)}
-          tone="warn"
-        />
+        <Kpi label={ms.review.pending} value={String(pendingCount)} tone="warn" />
         <Kpi
           label={ms.review.approvedThisSession}
           value={String(Object.values(graded).filter((g) => g === 1).length)}
@@ -304,13 +445,11 @@ export default function SemakanPage() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[336px_1fr] items-start">
-        {/* ── Queue ──────────────────────────────────────────────────────── */}
+      <div className="grid items-start gap-4 lg:grid-cols-[336px_1fr]">
+        {/* ── Tree ───────────────────────────────────────────────────────── */}
         <Card className="overflow-hidden">
           <CardHeader className="flex-wrap gap-2.5">
-            <CardTitle>
-              {weekFilter === null ? ms.review.queue : `${ms.review.weekSuffix} ${weekFilter}`}
-            </CardTitle>
+            <CardTitle>{ms.review.queue}</CardTitle>
             <span className="ml-auto hidden items-center gap-1.5 lg:flex">
               <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono text-[10.5px] font-semibold text-ink-3">
                 J
@@ -323,161 +462,334 @@ export default function SemakanPage() {
           </CardHeader>
 
           <div className="border-b border-border px-4 py-3">
-            {/* Minggu lampau: pick a past week to browse every plan it holds,
-                or leave on "Minggu semasa" for the ordinary pending queue. */}
-            <div className="flex items-center gap-2">
-              <Label
-                htmlFor="week-filter"
-                className="shrink-0 text-[11.5px] font-semibold text-ink-3"
-              >
-                {ms.review.weekLabel}
-              </Label>
-              <Select
-                id="week-filter"
-                value={weekFilter === null ? "" : String(weekFilter)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setWeekFilter(v === "" ? null : Number(v));
-                  // The old selection belongs to the other list.
-                  setSelected(undefined);
-                  setComment("");
-                }}
-                className="h-8 min-w-0 flex-1 py-1 text-[12.5px]"
-              >
-                <option value="">{ms.review.weekCurrent}</option>
-                {weekOpts.map((o) => (
-                  <option key={o.week} value={o.week}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
+            <p className="text-[11.5px] text-ink-4 lg:hidden">{ms.review.tapHint}</p>
+            <div className="mt-2 hidden items-center gap-2 text-[11.5px] text-ink-4 lg:flex">
+              <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
+                1
+              </kbd>
+              {ms.review.approveHint}
+              <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
+                0
+              </kbd>
+              {ms.review.grade0}
             </div>
-            {weekFilter === null ? (
-              <>
-                <div className="mt-2.5">
-                  <Tabs value={filter} onValueChange={(v) => setFilter(v as "belum" | "semua")}>
-                    <TabsList>
-                      <TabsTrigger value="belum">
-                        Belum semak ({QUEUE.length - Object.keys(graded).length})
-                      </TabsTrigger>
-                      <TabsTrigger value="semua">Semua ({QUEUE.length})</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-                <p className="mt-2 text-[11.5px] text-ink-4 lg:hidden">{ms.review.tapHint}</p>
-                <div className="mt-2.5 hidden items-center gap-2 text-[11.5px] text-ink-4 lg:flex">
-                  <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
-                    1
-                  </kbd>
-                  {ms.review.approveHint}
-                  <kbd className="rounded-md border border-border-strong bg-surface-3 px-1.5 py-px font-mono font-semibold text-ink-3">
-                    0
-                  </kbd>
-                  {ms.review.grade0}
-                </div>
-              </>
-            ) : (
-              <p className="mt-2 text-[11.5px] text-ink-4">
-                {assigned ? ms.review.browseHint : ms.review.noSupervised}
-              </p>
-            )}
           </div>
 
           <div className="overflow-y-auto lg:max-h-[560px]">
-            {visible.map((q) => {
-              const g = graded[q.id];
-              return (
-                <button
-                  key={q.id}
-                  type="button"
-                  onClick={() => openReview(q.id)}
-                  className={cn(
-                    "flex w-full gap-2.5 border-b border-border px-4 py-3 text-left transition-colors last:border-b-0",
-                    selected === q.id
-                      ? "bg-primary-soft shadow-[inset_3px_0_0_var(--color-primary)]"
-                      : "hover:bg-surface-2",
-                  )}
-                >
-                  <Avatar initials={q.initials} tone={q.tone} small />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px] font-semibold">
-                      {q.teacherName.split(" ")[0]} · {q.className}
-                    </span>
-                    <span className="block text-[11.5px] text-ink-3">
-                      {q.subjectName} · {longDate(q.planDate)}
-                    </span>
-                    <span className="block text-[11.5px] text-ink-4">{q.ageLabel}</span>
-                  </span>
-                  <span className="flex flex-col items-end gap-1.5">
-                    {weekFilter !== null ? (
-                      // Week mode lists every status, so the badge is the
-                      // plan's own - the "Baru / Lengkap / Baiki" badges below
-                      // answer a queue question, not a week question.
-                      <StatusBadge status={q.status} />
-                    ) : g === undefined ? (
-                      <Badge variant="info">Baru</Badge>
-                    ) : g === 1 ? (
-                      <Badge variant="success">Lengkap</Badge>
-                    ) : (
-                      <Badge variant="danger">Baiki</Badge>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
-            {visible.length === 0 && (
-              <p className="px-4 py-10 text-center text-[13px] text-ink-4">
-                {weekFilter !== null
-                  ? "Tiada RPH untuk minggu ini."
-                  : "Semua RPH sudah disemak. 👍"}
+            {!assigned ? (
+              <p className="px-4 py-10 text-center text-[12.5px] text-ink-4">
+                {ms.review.noSupervised}
               </p>
+            ) : plansLoading ? (
+              <p className="px-4 py-10 text-center text-[12.5px] text-ink-4">Memuatkan…</p>
+            ) : (
+              <>
+                {/* Pending work list - the queue, newest first. */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => toggle("pending")}
+                    aria-expanded={isOpen("pending")}
+                    aria-label={`Menunggu semakan, ${pendingVisible.length} RPH`}
+                    className="flex w-full items-center gap-2 border-b border-border bg-surface-2/50 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                  >
+                    <ChevronRight
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0 text-ink-4 transition-transform duration-200",
+                        isOpen("pending") && "rotate-90",
+                      )}
+                      aria-hidden
+                    />
+                    <Inbox
+                      className="h-4 w-4 shrink-0 text-warning-ink"
+                      strokeWidth={1.9}
+                      aria-hidden
+                    />
+                    <span className="text-[13px] font-bold">Menunggu semakan</span>
+                    <span className="num ml-auto rounded-full border border-warning-line bg-warning-soft px-2 py-px text-[11.5px] font-bold text-warning-ink">
+                      {pendingVisible.length}
+                    </span>
+                  </button>
+                  {isOpen("pending") && (
+                    <div>
+                      <div className="border-b border-border px-4 py-2.5">
+                        <Tabs
+                          value={filter}
+                          onValueChange={(v) => setFilter(v as "belum" | "semua")}
+                        >
+                          <TabsList>
+                            <TabsTrigger value="belum">
+                              {ms.review.pending} ({pendingCount})
+                            </TabsTrigger>
+                            <TabsTrigger value="semua">
+                              {ms.review.all} ({QUEUE.length})
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                      </div>
+                      {pendingVisible.map((q) => {
+                        const g = graded[q.id];
+                        return (
+                          <button
+                            key={q.id}
+                            type="button"
+                            onClick={() => openReview(q.id)}
+                            className={leafCls(selected === q.id)}
+                          >
+                            <Avatar initials={q.initials} tone={q.tone} small />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13.5px] font-semibold">
+                                {q.teacherName.split(" ")[0]} · {q.className}
+                              </span>
+                              <span className="block text-[11.5px] text-ink-3">
+                                {q.subjectName} · {longDate(q.planDate)}
+                              </span>
+                              <span className="block text-[11.5px] text-ink-4">
+                                {q.ageLabel}
+                              </span>
+                            </span>
+                            <span className="flex flex-col items-end gap-1.5">
+                              {g === undefined ? (
+                                <Badge variant="info">Baru</Badge>
+                              ) : g === 1 ? (
+                                <Badge variant="success">Lengkap</Badge>
+                              ) : (
+                                <Badge variant="danger">Baiki</Badge>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {pendingVisible.length === 0 && (
+                        <p className="px-4 py-10 text-center text-[13px] text-ink-4">
+                          Semua RPH sudah disemak. 👍
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tahun → Guru → Minggu → Senarai */}
+                {tree.map((s) => {
+                  const sKey = `s:${s.session}`;
+                  const sOpen = isOpen(sKey);
+                  return (
+                    <div key={s.session} className="border-t border-border">
+                      <button
+                        type="button"
+                        onClick={() => toggle(sKey)}
+                        aria-expanded={sOpen}
+                        aria-label={`Sesi ${s.session}, ${s.total} RPH`}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                      >
+                        <ChevronRight
+                          className={cn(
+                            "h-3.5 w-3.5 shrink-0 text-ink-4 transition-transform duration-200",
+                            sOpen && "rotate-90",
+                          )}
+                          aria-hidden
+                        />
+                        {sOpen ? (
+                          <FolderOpen
+                            className="h-4 w-4 shrink-0 text-warning-ink"
+                            strokeWidth={1.9}
+                            aria-hidden
+                          />
+                        ) : (
+                          <Folder
+                            className="h-4 w-4 shrink-0 text-warning-ink"
+                            strokeWidth={1.9}
+                            aria-hidden
+                          />
+                        )}
+                        <span className="text-[13px] font-bold">Sesi {s.session}</span>
+                        <span className="num ml-auto rounded-full border border-border bg-surface-2 px-2 py-px text-[11px] font-semibold text-ink-3">
+                          {s.total}
+                        </span>
+                      </button>
+
+                      {sOpen && (
+                        <div className="pb-1">
+                          {s.teachers.map((t) => {
+                            const tKey = `t:${t.teacherId}`;
+                            const tOpen = isOpen(tKey);
+                            return (
+                              <div
+                                key={t.teacherId}
+                                className="ml-3 border-l border-border pl-1"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggle(tKey)}
+                                  aria-expanded={tOpen}
+                                  aria-label={`${t.teacherName}, ${t.pending} menunggu, ${t.total} RPH`}
+                                  className="flex w-full items-center gap-2 rounded-[8px] px-2 py-2 text-left transition-colors hover:bg-surface-2"
+                                >
+                                  <ChevronRight
+                                    className={cn(
+                                      "h-3.5 w-3.5 shrink-0 text-ink-4 transition-transform duration-200",
+                                      tOpen && "rotate-90",
+                                    )}
+                                    aria-hidden
+                                  />
+                                  <Avatar
+                                    initials={initialsOf(t.teacherName)}
+                                    tone="blue"
+                                    small
+                                  />
+                                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+                                    {t.teacherName}
+                                  </span>
+                                  {t.pending > 0 && (
+                                    <span className="num shrink-0 rounded-full border border-warning-line bg-warning-soft px-2 py-px text-[11px] font-bold text-warning-ink">
+                                      {t.pending}
+                                    </span>
+                                  )}
+                                  <span className="num shrink-0 pr-1 text-[11px] text-ink-4">
+                                    {t.total}
+                                  </span>
+                                </button>
+
+                                {tOpen && (
+                                  <div className="ml-4 border-l border-border pl-1">
+                                    {t.weeks.map(([weekNo, wplans]) => {
+                                      const wKey = `w:${t.teacherId}:${weekNo}`;
+                                      const wOpen = isOpen(wKey);
+                                      const waiting = wplans.filter(
+                                        (p) => p.status === "submitted",
+                                      ).length;
+                                      const range = schoolDays(weekNo);
+                                      return (
+                                        <div key={weekNo}>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggle(wKey)}
+                                            aria-expanded={wOpen}
+                                            aria-label={`Minggu ${weekNo}, ${wplans.length} RPH`}
+                                            className="flex w-full items-center gap-1.5 rounded-[8px] px-2 py-[7px] text-left transition-colors hover:bg-surface-2"
+                                          >
+                                            <ChevronRight
+                                              className={cn(
+                                                "h-3 w-3 shrink-0 text-ink-4 transition-transform duration-200",
+                                                wOpen && "rotate-90",
+                                              )}
+                                              aria-hidden
+                                            />
+                                            <CalendarDays
+                                              className="h-3.5 w-3.5 shrink-0 text-primary-ink"
+                                              strokeWidth={1.9}
+                                              aria-hidden
+                                            />
+                                            <span className="num shrink-0 text-[12.5px] font-bold">
+                                              Minggu {weekNo}
+                                            </span>
+                                            {range[0] && (
+                                              <span className="num hidden truncate text-[10.5px] text-ink-4 xl:block">
+                                                {weekRangeLabel(weekNo)}
+                                              </span>
+                                            )}
+                                            <span className="num ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-ink-4">
+                                              {waiting > 0 && (
+                                                <span
+                                                  className="h-1.5 w-1.5 rounded-full bg-warning"
+                                                  aria-hidden
+                                                />
+                                              )}
+                                              {wplans.length}
+                                            </span>
+                                          </button>
+
+                                          {wOpen && (
+                                            <div className="ml-3 border-l border-border pl-1">
+                                              {wplans.map((p) => (
+                                                <button
+                                                  key={p.id}
+                                                  type="button"
+                                                  onClick={() => openReview(p.id)}
+                                                  className={leafCls(selected === p.id)}
+                                                >
+                                                  <FileText
+                                                    className="mt-0.5 h-4 w-4 shrink-0 text-ink-4"
+                                                    strokeWidth={1.9}
+                                                    aria-hidden
+                                                  />
+                                                  <span className="min-w-0 flex-1">
+                                                    <span className="block truncate text-[13px] font-semibold">
+                                                      {p.teacherName.split(" ")[0]} ·{" "}
+                                                      {p.className}
+                                                    </span>
+                                                    <span className="block truncate text-[11.5px] text-ink-3">
+                                                      {p.subjectName} · {longDate(p.planDate)}
+                                                    </span>
+                                                  </span>
+                                                  <StatusBadge status={p.status} />
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
             )}
           </div>
         </Card>
 
-        {/* ── Document + decision (desktop split view) ───────────────────── */}
-        {item && (
+        {/* ── Document + decision (desktop) ──────────────────────────────── */}
+        {detailLoading ? (
           <Card className="hidden lg:block">
-            <CardHeader>
-              <Avatar initials={item.initials} tone={item.tone} />
-              <div className="min-w-0">
-                <CardTitle>
-                  {item.teacherName} · {item.className}
-                </CardTitle>
-                <p className="text-xs text-ink-3">
-                  {item.subjectName} ·{" "}
-                  <span className="num">
-                    {longDate(item.planDate)} · {item.slotTime}
-                  </span>{" "}
-                  · {item.ageLabel}
-                </p>
-              </div>
-              <span className="ml-auto flex gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => router.push(`/semakan/${item.id}`)}
-                >
-                  Buka penuh
-                </Button>
-              </span>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ReviewWorkspace
-                item={item}
-                mode="desktop"
-                session={session}
-                schoolName={school.name}
-                comment={comment}
-                onComment={setComment}
-                canReturn={canReturn}
-                deciding={deciding}
-                onDecide={decide}
-                readOnly={readOnly}
-                note={itemNote}
-              />
-            </CardContent>
+            <CardContent className="py-12 text-center text-ink-4">Memuatkan…</CardContent>
           </Card>
+        ) : (
+          item && (
+            <Card className="hidden lg:block">
+              <CardHeader>
+                <Avatar initials={item.initials} tone={item.tone} />
+                <div className="min-w-0">
+                  <CardTitle>
+                    {item.teacherName} · {item.className}
+                  </CardTitle>
+                  <p className="text-xs text-ink-3">
+                    {item.subjectName} ·{" "}
+                    <span className="num">
+                      {longDate(item.planDate)} · {item.slotTime}
+                    </span>{" "}
+                    · {item.ageLabel}
+                  </p>
+                </div>
+                <span className="ml-auto flex gap-2">
+                  <Button size="sm" variant="ghost" asChild>
+                    <Link href={`/semakan/${item.id}`}>Buka penuh</Link>
+                  </Button>
+                </span>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ReviewWorkspace
+                  item={item}
+                  mode="desktop"
+                  session={session}
+                  schoolName={school.name}
+                  comment={comment}
+                  onComment={setComment}
+                  canReturn={canReturn}
+                  deciding={deciding}
+                  onDecide={decide}
+                  readOnly={readOnly}
+                  note={itemNote}
+                />
+              </CardContent>
+            </Card>
+          )
         )}
       </div>
 
@@ -544,7 +856,7 @@ export default function SemakanPage() {
  * Shared by the desktop card and the phone dialog so a field added to the
  * review checklist cannot appear in one layout and be missing from the other.
  * The decisions themselves are separate: the desktop stacks them under the
- * comment, while the phone keeps them in `DecisionBar` outside the scroll.
+ * comment, while the phone keeps them in a `DecisionBar` outside the scroll.
  */
 function ReviewWorkspace({
   item,
@@ -568,7 +880,7 @@ function ReviewWorkspace({
   canReturn: boolean;
   deciding: boolean;
   onDecide: (decision: ReviewDecision) => void;
-  /** Week mode only: a decided plan renders without the decision controls. */
+  /** Browse mode: a decided plan renders without the decision controls. */
   readOnly?: boolean;
   /** Why the row is not (yet) decidable - the draft or decided note. */
   note?: string;

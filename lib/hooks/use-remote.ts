@@ -6,6 +6,7 @@ import { schoolCode, supabaseConfigured, weekOfIso } from "@/lib/config";
 import { QUEUE, type QueueItem, SCHOOL_STATS } from "@/lib/demo/review";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSession } from "@/lib/hooks/use-session";
+import type { RphStatus } from "@/lib/types";
 
 /**
  * Remote data hooks.
@@ -213,6 +214,82 @@ export function useWeekPlans(week: number | null): {
  * nothing at all - least of all the bundled demo figures, which describe a
  * different school and would be shown as this one's.
  */
+/**
+ * Every in-scope plan of the session, without bodies - the review tree.
+ *
+ * One fetch for Tahun → Guru → Minggu → Senarai, so expanding a node never
+ * waits on the network. The payload stays behind: opening a plan fetches
+ * that single row in full through `GET /api/rph/[id]`, which reviewers may
+ * now read. Local mode maps the bundled queue the same way the week browser
+ * does, with the session stamped on and the week derived from the taught date.
+ */
+export interface ReviewPlanLight {
+  id: string;
+  version: number;
+  teacherId: string;
+  teacherName: string;
+  className: string;
+  subjectName: string;
+  planDate: string;
+  slotTime: string | null;
+  weekNo: number;
+  session: string;
+  status: RphStatus;
+  submittedAt: string | null;
+}
+
+export function useReviewPlans(): {
+  items: ReviewPlanLight[];
+  loading: boolean;
+  assigned: boolean;
+  refetch: () => Promise<unknown>;
+} {
+  const session = useSession();
+  const remote = useQuery<{ items: ReviewPlanLight[]; assigned?: boolean }>({
+    queryKey: ["review-plans", schoolCode, session],
+    queryFn: async () => {
+      const res = await fetch("/api/review/plans", { credentials: "same-origin" });
+      if (handleExpiredSession(res.status)) return { items: [] };
+      if (!res.ok) return { items: [] };
+      return (await res.json()) as { items: ReviewPlanLight[]; assigned?: boolean };
+    },
+    enabled: supabaseConfigured,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  if (!supabaseConfigured) {
+    return {
+      items: QUEUE.map((q) => ({
+        id: q.id,
+        version: q.version,
+        teacherId: q.teacherName,
+        teacherName: q.teacherName,
+        className: q.className,
+        subjectName: q.subjectName,
+        planDate: q.planDate,
+        slotTime: q.slotTime,
+        weekNo: weekOfIso(q.planDate),
+        session,
+        status: q.status,
+        submittedAt: null,
+      })),
+      loading: false,
+      assigned: true,
+      refetch: async () => undefined,
+    };
+  }
+  if (remote.isLoading) {
+    return { items: [], loading: true, assigned: true, refetch: remote.refetch };
+  }
+  return {
+    items: remote.data?.items ?? [],
+    loading: false,
+    assigned: remote.data?.assigned ?? true,
+    refetch: () => remote.refetch(),
+  };
+}
+
 export function useSchoolStats(
   range?: { first: number; last: number },
   enabled = true,

@@ -52,7 +52,7 @@ function collectErrors(page: Page): string[] {
 
 async function login(page: Page, identifier = DEMO_EMAIL, password = DEMO_PASS): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel(/^Emel$/).fill(identifier);
+  await page.getByLabel("Emel").fill(identifier);
   await page.getByLabel(/Kata laluan/).fill(password);
   await page.getByRole("button", { name: "Log masuk" }).click();
   // Either home, per `homeFor`: every teaching role lands on /minggu, the
@@ -73,7 +73,7 @@ test.describe("authentication", () => {
   test("rejects a wrong password without revealing which field was wrong", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/login");
-    await page.getByLabel(/^Emel$/).fill(DEMO_EMAIL);
+    await page.getByLabel("Emel").fill(DEMO_EMAIL);
     await page.getByLabel(/Kata laluan/).fill("salah-sangat");
     await page.getByRole("button", { name: "Log masuk" }).click();
 
@@ -376,7 +376,7 @@ test.describe("eRPH smoke", () => {
     await page.goto("/semakan");
 
     await expect(page.getByRole("heading", { name: "Giliran semakan" })).toBeVisible();
-    const before = await page.getByText(/Belum semak \((\d+)\)/).textContent();
+    const before = await page.getByText(/Belum disemak \((\d+)\)/).textContent();
 
     // `1` = sahkan. There is no longer a Guru Besar to forward to: a GPK
     // approves here, and the Guru Besar does exactly the same thing on any
@@ -388,7 +388,7 @@ test.describe("eRPH smoke", () => {
     await expect(page.getByText(/Disahkan dan ditandatangani/)).toBeVisible({
       timeout: 10_000,
     });
-    const after = await page.getByText(/Belum semak \((\d+)\)/).textContent();
+    const after = await page.getByText(/Belum disemak \((\d+)\)/).textContent();
     expect(after).not.toBe(before);
 
     expect(errors, errors.join("\n")).toEqual([]);
@@ -607,11 +607,12 @@ test.describe("eRPH smoke", () => {
     await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{8}-/, { timeout: 15_000 });
 
     await page.goto("/arkib");
-    const week1 = page
-      .getByRole("row")
-      .filter({ has: page.getByRole("cell", { name: "Minggu 1", exact: true }) });
-    await expect(week1.getByText("0 / 1")).toBeVisible({ timeout: 15_000 });
-    await expect(week1.getByRole("button", { name: /Buka/ })).toBeVisible();
+    // Open the week's node: the plan list lives inside it now.
+    const weekBtn = page.getByRole("button", { name: /Minggu 1,/ });
+    await weekBtn.click();
+    const section = weekBtn.locator("xpath=ancestor::div[2]");
+    await expect(section.getByText("0/1")).toBeVisible({ timeout: 15_000 });
+    await expect(section.getByRole("button", { name: "Buka", exact: true })).toBeVisible();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -645,9 +646,11 @@ test.describe("eRPH smoke", () => {
     });
 
     // 3. Copy it from the archive. Nothing is written yet - the copy opens as
-    //    an unsaved draft the teacher can discard.
+    //    an unsaved draft the teacher can discard. The tree only opens the
+    //    branches that match, so searching for the marker is what surfaces it.
     await page.goto("/arkib");
-    const source = page.getByRole("row").filter({ hasText: marker });
+    await page.getByLabel("Cari dalam arkib").fill(marker);
+    const source = page.locator("li").filter({ hasText: marker });
     await expect(source.first()).toBeVisible({ timeout: 15_000 });
     await expect(source).toHaveCount(1);
     await source.first().getByRole("button", { name: /Salin/ }).click();
@@ -681,7 +684,8 @@ test.describe("eRPH smoke", () => {
     await expect(page).toHaveURL(/\/editor\/[0-9a-f-]{8}-/, { timeout: 15_000 });
 
     await page.goto("/arkib");
-    await expect(page.getByRole("row").filter({ hasText: marker })).toHaveCount(2, {
+    await page.getByLabel("Cari dalam arkib").fill(marker);
+    await expect(page.locator("li").filter({ hasText: marker })).toHaveCount(2, {
       timeout: 15_000,
     });
 
@@ -742,7 +746,9 @@ test.describe("mobile layout", () => {
     await page.goto("/semakan");
 
     await expect(page.getByRole("heading", { name: "Giliran semakan" })).toBeVisible();
-    await page.getByRole("button", { name: /Ramlan/ }).click();
+    // The pending work list comes before the browsing tree, so the first
+    // match is the queue row - the tree holds the same plan further down.
+    await page.getByRole("button", { name: /Ramlan/ }).first().click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();

@@ -1,13 +1,22 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Search, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronRight,
+  Copy,
+  FileText,
+  Folder,
+  FolderOpen,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Dialog,
   DialogBody,
@@ -18,18 +27,81 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/field";
-import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { removePlan } from "@/lib/actions/plans";
+import { cn } from "@/lib/cn";
 import { weekExists } from "@/lib/config";
 import { longDateOf, schoolDays, weekRangeLabel } from "@/lib/date";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
+import { useSession } from "@/lib/hooks/use-session";
 import { useArchive } from "@/lib/hooks/use-week";
 import type { RphDocument } from "@/lib/types";
+
+/** Plans grouped under one week, newest date first. */
+interface WeekGroup {
+  week: number;
+  plans: RphDocument[];
+  submitted: number;
+  approved: number;
+  returned: number;
+  reviewer?: string | null;
+  reviewed?: number;
+}
+
+function groupWeek(plans: RphDocument[]): WeekGroup {
+  const submitted = plans.filter((r) => r.status !== "draft").length;
+  const approved = plans.filter((r) => r.status === "approved").length;
+  const returned = plans.filter((r) => r.status === "returned").length;
+  const newest = plans
+    .filter((r) => typeof r.reviewedAt === "number")
+    .sort((a, b) => (b.reviewedAt ?? 0) - (a.reviewedAt ?? 0))[0];
+  return {
+    week: plans[0]?.weekNo ?? 0,
+    plans: [...plans].sort((a, b) =>
+      a.planDate < b.planDate ? 1 : a.planDate > b.planDate ? -1 : 0,
+    ),
+    submitted,
+    approved,
+    returned,
+    reviewer: newest?.reviewerName,
+    reviewed: typeof newest?.reviewedAt === "number" ? newest.reviewedAt : undefined,
+  };
+}
+
+function WeekPill({ group }: { group: WeekGroup }) {
+  const { plans, approved, returned } = group;
+  if (plans.length === 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-[3px] text-[11.5px] font-semibold text-ink-3">
+        Belum ada RPH
+      </span>
+    );
+  }
+  if (approved === plans.length) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-success-line bg-success-soft px-2.5 py-[3px] text-[11.5px] font-semibold text-success-ink">
+        Lengkap semua
+      </span>
+    );
+  }
+  if (returned > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger-line bg-danger-soft px-2.5 py-[3px] text-[11.5px] font-semibold text-danger-ink">
+        {returned} perlu dibaiki
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-warning-line bg-warning-soft px-2.5 py-[3px] text-[11.5px] font-semibold text-warning-ink">
+      Dalam semakan
+    </span>
+  );
+}
 
 export default function ArkibPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const archive = useArchive() ?? [];
+  const session = useSession();
   const [confirming, setConfirming] = React.useState<RphDocument | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -50,64 +122,101 @@ export default function ArkibPage() {
       )
     : archive;
 
-  /**
-   * The flat list is a year of teaching - a full-time teacher is past a
-   * hundred plans by December - and it used to render every one of them at
-   * once. The newest page is what anyone opening this screen wants; the rest
-   * is one press away, and searching starts the window again from the top.
-   */
-  const PAGE = 20;
-  const [shown, setShown] = React.useState(PAGE);
-  /**
-   * A new search starts the window again at the top.
-   *
-   * Adjusted during render rather than in an effect: the effect version
-   * depends on `needle` without reading it, which is exactly the shape a
-   * linter warns about - and clearing one render late is a row of the wrong
-   * week's results on screen while it catches up.
-   */
-  const [searched, setSearched] = React.useState(needle);
-  if (searched !== needle) {
-    setSearched(needle);
-    setShown(PAGE);
-  }
-  const visible = docs.slice(0, shown);
+  // Sessions newest first. The current one is the tree's home; older ones are
+  // history the teacher can still open, copy from and (through the editor)
+  // read, but not file new plans under.
+  const sessions = React.useMemo(() => {
+    const set = new Set(docs.map((d) => d.session).filter(Boolean));
+    if (!needle && session && !set.has(session)) set.add(session);
+    return [...set].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+  }, [docs, needle, session]);
 
-  const byWeek = new Map<number, typeof docs>();
-  for (const d of docs) {
-    const list = byWeek.get(d.weekNo) ?? [];
-    list.push(d);
-    byWeek.set(d.weekNo, list);
-  }
+  const bySessionWeek = React.useMemo(() => {
+    const map = new Map<string, RphDocument[]>();
+    for (const d of docs) {
+      const key = `${d.session}::${d.weekNo}`;
+      const list = map.get(key) ?? [];
+      list.push(d);
+      map.set(key, list);
+    }
+    return map;
+  }, [docs]);
 
-  /**
-   * Every week that has happened, not only the weeks with plans in them.
-   *
-   * A week with nothing filed under it used not to appear here at all, which
-   * made the one week a teacher most needs to see - the one they missed - the
-   * one the archive hid. It is now a row like any other, empty and with a way
-   * to fill it in.
-   *
-   * While searching, only the weeks that match: a list of empty rows beside a
-   * result is noise.
-   */
-  // Subscribed rather than read once: the archive lists the weeks that have
-  // *started*, and a declared week changes which one that is.
+  // Every week that has happened, not only the weeks with plans in them.
+  // A week with nothing filed under it used not to appear here at all, which
+  // hid the one week a teacher most needs to see - the one they missed.
+  // While searching, only the weeks that match: a list of empty rows beside
+  // a result is noise.
   const now = useCurrentWeek();
-  const past = Array.from({ length: Math.max(0, now - 1) }, (_, i) => now - 1 - i)
-    // Only weeks whose numbers have dates belonging to them. `byWeek` below is
-    // deliberately *not* filtered: a plan filed under week 32 before the school
-    // renumbered still happened, and the archive is where that history lives.
-    // What is filtered is the offer to file something new there.
-    .filter((w) => weekExists(w));
-  const weeks = needle
-    ? [...byWeek.keys()].sort((a, b) => b - a)
-    : [...new Set([...byWeek.keys(), ...past])].sort((a, b) => b - a);
+  const past = React.useMemo(
+    () =>
+      Array.from({ length: Math.max(0, now - 1) }, (_, i) => now - 1 - i).filter((w) =>
+        weekExists(w),
+      ),
+    [now],
+  );
+
+  const weeksOf = React.useCallback(
+    (s: string): number[] => {
+      const withPlans = [...bySessionWeek.keys()]
+        .filter((k) => k.startsWith(`${s}::`))
+        .map((k) => Number(k.split("::")[1]));
+      // Only weeks whose numbers have dates belonging to them. Plans filed
+      // under a renumbered-away week still happened, and the archive is where
+      // that history lives.
+      const weeks = (
+        needle || s !== session ? withPlans : [...new Set([...withPlans, ...past])]
+      ).filter((w) => weekExists(w) || withPlans.includes(w));
+      return [...new Set(weeks)].sort((a, b) => b - a);
+    },
+    [bySessionWeek, needle, past, session],
+  );
+
+  // Expansion. The current session opens on the newest week; anything the
+  // teacher closed stays closed across renders. Searching overrides: every
+  // branch holding a match opens, and clearing the search restores the manual
+  // state rather than everything it was.
+  const [openSessions, setOpenSessions] = React.useState<Set<string> | null>(null);
+  const [openWeeks, setOpenWeeks] = React.useState<Set<string> | null>(null);
+
+  const defaultSession = session || sessions[0];
+  const defaultWeeks = React.useMemo(() => {
+    if (!defaultSession) return new Set<string>();
+    const weeks = weeksOf(defaultSession);
+    const first = weeks[0];
+    return new Set(first !== undefined ? [`${defaultSession}::${first}`] : []);
+  }, [defaultSession, weeksOf]);
+
+  const effSessions = openSessions ?? new Set(defaultSession ? [defaultSession] : []);
+  const effWeeks = openWeeks ?? defaultWeeks;
+
+  const toggleSession = (s: string) => {
+    const next = new Set(effSessions);
+    if (next.has(s)) next.delete(s);
+    else next.add(s);
+    setOpenSessions(next);
+  };
+  const toggleWeek = (key: string) => {
+    const next = new Set(effWeeks);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setOpenWeeks(next);
+  };
+
+  // While searching, every branch with a match stands open.
+  const searching = needle.length > 0;
+  const sessionOpen = (s: string) => (searching ? true : effSessions.has(s));
+  const weekOpen = (key: string) => (searching ? true : effWeeks.has(key));
+
+  const totalPlans = docs.length;
 
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Arkib mengikut minggu</h2>
+        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Arkib eRPH</h2>
+        <span className="num rounded-full border border-border bg-surface-2 px-2.5 py-[3px] text-[11.5px] font-semibold text-ink-3">
+          {searching ? `${totalPlans} daripada ${archive.length}` : `${totalPlans} rekod`}
+        </span>
         <span className="h-px flex-1 bg-border" />
         <div className="relative w-full sm:w-72">
           <Search
@@ -125,254 +234,236 @@ export default function ArkibPage() {
         </div>
       </div>
 
-      <Card>
-        <TableContainer>
-          <Table>
-            <THead>
-              <tr>
-                <TH>Minggu</TH>
-                <TH>Tarikh</TH>
-                <TH>RPH dihantar</TH>
-                <TH>Status semakan</TH>
-                <TH>Disemak</TH>
-                <TH className="text-right">Tindakan</TH>
-              </tr>
-            </THead>
-            <TBody>
-              {weeks.length === 0 && (
-                <tr>
-                  <TD colSpan={6} className="py-10 text-center text-ink-4">
-                    {/* Different message, because it is a different situation.
-                        "Belum ada rekod" tells a teacher they have written
-                        nothing; saying that to someone whose search simply
-                        matched nothing reads as a lost year. */}
-                    {needle ? `Tiada RPH sepadan dengan "${q.trim()}".` : "Belum ada rekod."}
-                  </TD>
-                </tr>
-              )}
-              {weeks.map((w) => {
-                const rows = byWeek.get(w) ?? [];
-                // The week's most recent review. Name and date come from the
-                // same document, so the pair describes one decision rather
-                // than one person's name beside another's date.
-                const newest = rows
-                  .filter((r) => typeof r.reviewedAt === "number")
-                  .sort((a, b) => (b.reviewedAt ?? 0) - (a.reviewedAt ?? 0))[0];
-                const reviewed = newest?.reviewedAt;
-                const reviewer = newest?.reviewerName;
-                const approved = rows.filter((r) => r.status === "approved").length;
-                const returned = rows.filter((r) => r.status === "returned").length;
-                const submitted = rows.filter((r) => r.status !== "draft").length;
-                const range = schoolDays(w);
+      {sessions.length === 0 && (
+        <Card>
+          <CardContent className="py-10 text-center text-ink-4">
+            {searching ? `Tiada RPH sepadan dengan "${q.trim()}".` : "Belum ada rekod."}
+          </CardContent>
+        </Card>
+      )}
 
-                return (
-                  <TR key={w}>
-                    <TD>
-                      <b className="num">Minggu {w}</b>
-                    </TD>
-                    <TD className="num whitespace-nowrap text-ink-3">
-                      {range[0] ? weekRangeLabel(w) : "-"}
-                    </TD>
-                    <TD className="num">
-                      {rows.length === 0 ? (
-                        <span className="text-ink-4">0 / 0</span>
-                      ) : (
-                        `${submitted} / ${rows.length}`
-                      )}
-                    </TD>
-                    <TD>
-                      {rows.length === 0 ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-[3px] text-[11.5px] font-semibold text-ink-3">
-                          Belum ada RPH
-                        </span>
-                      ) : approved === rows.length && rows.length > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-success-line bg-success-soft px-2.5 py-[3px] text-[11.5px] font-semibold text-success-ink">
-                          Lengkap semua (1)
-                        </span>
-                      ) : returned > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-danger-line bg-danger-soft px-2.5 py-[3px] text-[11.5px] font-semibold text-danger-ink">
-                          {returned} tidak lengkap (0)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-warning-line bg-warning-soft px-2.5 py-[3px] text-[11.5px] font-semibold text-warning-ink">
-                          Dalam semakan
-                        </span>
-                      )}
-                    </TD>
-                    <TD>
-                      {/* Name and date from the same document - the week's
-                          most recent review. The reviewer is whoever wrote the
-                          newest `rph_review` row, which for a plan returned
-                          and then approved is the approver. */}
-                      {rows.length === 0 ? (
-                        <span className="text-[12.5px] text-ink-4">-</span>
-                      ) : reviewer || reviewed ? (
-                        <div className="min-w-0">
-                          {reviewer && (
-                            <span className="block truncate text-[12.5px] font-semibold text-ink">
-                              {reviewer}
-                            </span>
-                          )}
-                          {reviewed && (
-                            <span className="num block text-[11px] text-ink-4">
-                              {longDateOf(reviewed)}
-                            </span>
+      <div className="grid gap-3">
+        {sessions.map((s) => {
+          const sOpen = sessionOpen(s);
+          const weeks = weeksOf(s);
+          const sPlans = docs.filter((d) => d.session === s);
+          return (
+            <Card key={s} className="overflow-hidden">
+              <div>
+                <button
+                  type="button"
+                  onClick={() => toggleSession(s)}
+                  aria-expanded={sOpen}
+                  aria-label={`Sesi ${s}, ${sPlans.length} RPH`}
+                  className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-surface-2"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-ink-4 transition-transform duration-200",
+                      sOpen && "rotate-90",
+                    )}
+                    aria-hidden
+                  />
+                  {sOpen ? (
+                    <FolderOpen
+                      className="h-[18px] w-[18px] shrink-0 text-warning-ink"
+                      strokeWidth={1.9}
+                      aria-hidden
+                    />
+                  ) : (
+                    <Folder
+                      className="h-[18px] w-[18px] shrink-0 text-warning-ink"
+                      strokeWidth={1.9}
+                      aria-hidden
+                    />
+                  )}
+                  <span className="text-[14px] font-bold tracking-[-0.2px]">Sesi {s}</span>
+                  <span className="num rounded-full border border-border bg-surface-2 px-2 py-px text-[11.5px] font-semibold text-ink-3">
+                    {sPlans.length} RPH
+                  </span>
+                </button>
+
+                {sOpen && (
+                  <div className="border-t border-border px-2 py-2 sm:px-3">
+                    {weeks.length === 0 && (
+                      <p className="px-2 py-6 text-center text-[12.5px] text-ink-4">
+                        {searching
+                          ? `Tiada RPH sepadan dengan "${q.trim()}".`
+                          : "Belum ada RPH sesi ini."}
+                      </p>
+                    )}
+                    {weeks.map((w) => {
+                      const key = `${s}::${w}`;
+                      const g = groupWeek(bySessionWeek.get(key) ?? []);
+                      const wOpen = weekOpen(key);
+                      const range = schoolDays(w);
+                      const isCurrent = s === session;
+                      return (
+                        <div key={key}>
+                          <div
+                            className={cn(
+                              "flex items-center gap-1 rounded-[10px] transition-colors",
+                              wOpen ? "bg-surface-2/70" : "hover:bg-surface-2/50",
+                            )}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleWeek(key)}
+                              aria-expanded={wOpen}
+                              aria-label={`Minggu ${w}, ${g.plans.length} RPH`}
+                              className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left"
+                            >
+                              <ChevronRight
+                                className={cn(
+                                  "h-3.5 w-3.5 shrink-0 text-ink-4 transition-transform duration-200",
+                                  wOpen && "rotate-90",
+                                )}
+                                aria-hidden
+                              />
+                              <CalendarDays
+                                className="h-4 w-4 shrink-0 text-primary-ink"
+                                strokeWidth={1.9}
+                                aria-hidden
+                              />
+                              <span className="num shrink-0 text-[13px] font-bold">
+                                Minggu {w}
+                              </span>
+                              {range[0] && (
+                                <span className="num hidden truncate text-[11.5px] text-ink-4 md:block">
+                                  {weekRangeLabel(w)}
+                                </span>
+                              )}
+                              <span className="ml-auto flex shrink-0 items-center gap-2">
+                                {g.plans.length > 0 && (
+                                  <span className="num text-[11.5px] text-ink-4">
+                                    {g.submitted}/{g.plans.length}
+                                  </span>
+                                )}
+                                <WeekPill group={g} />
+                              </span>
+                            </button>
+                            {isCurrent && !searching && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="mr-1 shrink-0"
+                                onClick={() => router.push(`/editor?week=${w}`)}
+                              >
+                                Tambah RPH
+                              </Button>
+                            )}
+                          </div>
+
+                          {wOpen && (
+                            <div className="ml-4 border-l border-border pl-3 sm:ml-5">
+                              {g.plans.length === 0 ? (
+                                <div className="flex items-center justify-between gap-2 py-2 pr-1">
+                                  <p className="text-[12.5px] text-ink-4">
+                                    Tiada RPH minggu ini.
+                                  </p>
+                                  {isCurrent && !searching && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => router.push(`/editor?week=${w}`)}
+                                    >
+                                      Tambah RPH
+                                    </Button>
+                                  )}
+                                </div>
+                              ) : (
+                                <ul className="grid gap-1.5 py-1.5">
+                                  {g.plans.map((d) => (
+                                    <li
+                                      key={d.id}
+                                      className="flex items-center gap-2.5 rounded-[10px] border border-border/70 bg-surface px-3 py-2 transition-colors hover:border-border-strong"
+                                    >
+                                      <FileText
+                                        className="h-4 w-4 shrink-0 text-ink-4"
+                                        strokeWidth={1.9}
+                                        aria-hidden
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-[13px] font-semibold">
+                                          {d.classNames.join(", ")} · {d.subjectName}
+                                        </p>
+                                        <p className="num truncate text-[11.5px] text-ink-3">
+                                          {d.planDate}
+                                          {d.payload.standard_kandungan
+                                            ? ` · ${d.payload.standard_kandungan}`
+                                            : ""}
+                                        </p>
+                                      </div>
+                                      <StatusBadge
+                                        status={d.status}
+                                        grade={d.grade}
+                                        className="hidden shrink-0 sm:inline-flex"
+                                      />
+                                      <div className="flex shrink-0 items-center">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => router.push(`/editor/${d.id}`)}
+                                        >
+                                          Buka
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          aria-label={`Salin ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
+                                          onClick={() => router.push(`/editor?copy=${d.id}`)}
+                                        >
+                                          <Copy
+                                            className="h-3.5 w-3.5"
+                                            strokeWidth={1.9}
+                                            aria-hidden
+                                          />
+                                          Salin
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          aria-label={`Padam ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
+                                          onClick={() => setConfirming(d)}
+                                        >
+                                          <Trash2
+                                            className="h-3.5 w-3.5"
+                                            strokeWidth={1.9}
+                                            aria-hidden
+                                          />
+                                        </Button>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {g.plans.length > 0 && (g.reviewer || g.reviewed) && (
+                                <p className="num pb-1.5 text-[11px] text-ink-4">
+                                  Disemak terakhir
+                                  {g.reviewer ? ` oleh ${g.reviewer}` : ""}
+                                  {g.reviewed ? ` · ${longDateOf(g.reviewed)}` : ""}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
-                      ) : (
-                        <span className="text-[12.5px] text-ink-4">Belum disemak</span>
-                      )}
-                    </TD>
-                    <TD className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {rows.length > 0 && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              const first = rows[0];
-                              if (first) router.push(`/editor/${first.id}`);
-                            }}
-                          >
-                            Buka
-                          </Button>
-                        )}
-                        {/* The way a missed week gets filled in: the penyunting
-                            opens already filed under this one, so the RPH is
-                            written for the lessons that were actually missed
-                            rather than for whatever week happens to be current. */}
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => router.push(`/editor?week=${w}`)}
-                        >
-                          Tambah RPH
-                        </Button>
-                      </div>
-                    </TD>
-                  </TR>
-                );
-              })}
-            </TBody>
-          </Table>
-        </TableContainer>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
 
+      <Card className="mt-3">
         <CardFooter>
           <span className="text-[12.5px] text-ink-3">
             Rekod disimpan mengikut Peraturan 8, Akta Pendidikan 1996 - memadam menyembunyikan
             rancangan daripada aplikasi, tetapi rekod kekal dalam pangkalan data.
           </span>
         </CardFooter>
-      </Card>
-
-      {/* Individual plans, most recent first */}
-      <div className="mt-6 mb-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Semua RPH</h2>
-        <span className="h-px flex-1 bg-border" />
-        <span className="num text-xs text-ink-3">
-          {/* "N daripada M" while filtering. A bare filtered count reads as
-              the size of the archive, and a teacher who searched for one
-              lesson would conclude they have three plans in a year. */}
-          {needle ? `${docs.length} daripada ${archive.length} rekod` : `${docs.length} rekod`}
-        </span>
-      </div>
-
-      <Card>
-        <TableContainer>
-          <Table>
-            <THead>
-              <tr>
-                <TH>Tarikh</TH>
-                <TH>Kelas · Subjek</TH>
-                <TH>Standard Kandungan</TH>
-                <TH>Status</TH>
-                <TH className="text-right">Tindakan</TH>
-              </tr>
-            </THead>
-            <TBody>
-              {visible.map((d) => (
-                <TR key={d.id}>
-                  <TD className="num whitespace-nowrap">{d.planDate}</TD>
-                  <TD>
-                    <div className="font-semibold">
-                      {d.classNames.join(", ")} · {d.subjectName}
-                    </div>
-                  </TD>
-                  <TD>
-                    <span className="ellip block max-w-[280px] text-ink-3">
-                      {d.payload.standard_kandungan || "-"}
-                    </span>
-                  </TD>
-                  <TD>
-                    <StatusBadge status={d.status} grade={d.grade} />
-                  </TD>
-                  <TD className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => router.push(`/editor/${d.id}`)}
-                      >
-                        Buka
-                      </Button>
-                      {/* Salin: open the penyunting with this plan's content
-                          pre-filled as an unsaved draft - nothing is written
-                          until the teacher saves it under a week of their
-                          choosing. */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-label={`Salin ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
-                        onClick={() => router.push(`/editor?copy=${d.id}`)}
-                      >
-                        <Copy className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                        Salin
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-label={`Padam ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
-                        onClick={() => setConfirming(d)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-                      </Button>
-                    </div>
-                  </TD>
-                </TR>
-              ))}
-              {docs.length === 0 && (
-                <tr>
-                  <TD colSpan={5} className="py-10 text-center text-ink-4">
-                    {needle
-                      ? `Tiada RPH sepadan dengan "${q.trim()}".`
-                      : "Belum ada RPH. Mulakan daripada Minggu Ini."}
-                  </TD>
-                </tr>
-              )}
-            </TBody>
-          </Table>
-        </TableContainer>
-
-        {/* Stated rather than implied: a teacher who has written eighty plans
-            sees twenty of them and is told there are eighty, so scrolling to
-            the bottom is a choice rather than a surprise. */}
-        {docs.length > 0 && (
-          <CardFooter>
-            <span className="text-[12.5px] text-ink-3">
-              Menunjukkan {visible.length} daripada {docs.length} rekod
-            </span>
-            {docs.length > visible.length && (
-              <Button
-                className="ml-auto"
-                size="sm"
-                variant="secondary"
-                onClick={() => setShown((n) => n + PAGE)}
-              >
-                Tunjuk lagi {Math.min(PAGE, docs.length - visible.length)}
-              </Button>
-            )}
-          </CardFooter>
-        )}
       </Card>
 
       <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
@@ -386,9 +477,6 @@ export default function ArkibPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
-            {/* The distinction the footer promises, spelled out at the moment
-                it matters: "gone from the app" and "gone from the record" are
-                not the same thing, and only one of them is happening. */}
             <p className="text-[13px] leading-[1.6] text-ink-3">
               Rancangan ini tidak akan dipaparkan dalam arkib, papan pemuka mahupun laporan.
               <b className="text-ink-2"> Rekod kekal disimpan</b> mengikut Peraturan 8, Akta
