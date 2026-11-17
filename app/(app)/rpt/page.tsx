@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Link2, Trash2 } from "lucide-react";
+import { ExternalLink, Link2, Pencil, Trash2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
 import type { RptLink } from "@/app/api/rpt/route";
@@ -40,6 +40,11 @@ export default function RptPage() {
   const [url, setUrl] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [confirming, setConfirming] = React.useState<RptLink | null>(null);
+  const [editing, setEditing] = React.useState<RptLink | null>(null);
+  const [editTitle, setEditTitle] = React.useState("");
+  const [editUrl, setEditUrl] = React.useState("");
+  const [editBusy, setEditBusy] = React.useState(false);
+  const [carrying, setCarrying] = React.useState(false);
 
   const query = useQuery<{ items: RptLink[] }>({
     queryKey: ["rpt-links", session],
@@ -53,6 +58,22 @@ export default function RptPage() {
   });
 
   const items = supabaseConfigured ? (query.data?.items ?? []) : [];
+
+  // A new session starts empty while the Drive files live on: offer last
+  // session's titles in one press rather than making the teacher retype
+  // every link. Only asked while the current list is empty - once the
+  // teacher has started filing, the banner would be noise.
+  const carryQuery = useQuery<{ fromSession: string | null; count: number }>({
+    queryKey: ["rpt-carry", session],
+    queryFn: async () => {
+      const res = await fetch("/api/rpt/carry-forward", { credentials: "same-origin" });
+      if (!res.ok) return { fromSession: null, count: 0 };
+      return (await res.json()) as { fromSession: string | null; count: number };
+    },
+    enabled: supabaseConfigured && !query.isLoading && items.length === 0,
+    retry: false,
+  });
+  const carry = carryQuery.data ?? null;
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,6 +121,78 @@ export default function RptPage() {
     }
   };
 
+  const openEdit = (link: RptLink) => {
+    setEditTitle(link.title);
+    setEditUrl(link.url);
+    setEditing(link);
+  };
+
+  const saveEdit = async () => {
+    if (!editing || editBusy) return;
+    setEditBusy(true);
+    try {
+      const res = await fetch("/api/rpt", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          id: editing.id,
+          title: editTitle.trim(),
+          url: editUrl.trim(),
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        toast.error(body?.error ?? "Gagal menyimpan perubahan.");
+        return;
+      }
+      toast.success("Pautan dikemas kini.");
+      setEditing(null);
+      void query.refetch();
+    } catch {
+      toast.error("Rangkaian bermasalah. Cuba lagi.");
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const carryForward = async () => {
+    if (!carry?.fromSession || carrying) return;
+    setCarrying(true);
+    try {
+      const res = await fetch("/api/rpt/carry-forward", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ fromSession: carry.fromSession }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        copied?: number;
+        skipped?: number;
+      } | null;
+      if (!res.ok) {
+        toast.error(body?.error ?? "Gagal menyalin pautan.");
+        return;
+      }
+      const copied = body?.copied ?? 0;
+      const skipped = body?.skipped ?? 0;
+      toast.success(
+        copied > 0
+          ? `${copied} pautan sesi ${carry.fromSession} disalin ke sesi ini${
+              skipped > 0 ? ` (${skipped} tajuk sudah wujud)` : ""
+            }.`
+          : "Tiada pautan baharu untuk disalin - semuanya sudah ada.",
+      );
+      void query.refetch();
+      void carryQuery.refetch();
+    } catch {
+      toast.error("Rangkaian bermasalah. Cuba lagi.");
+    } finally {
+      setCarrying(false);
+    }
+  };
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -107,6 +200,20 @@ export default function RptPage() {
         <span className="h-px flex-1 bg-border" />
         <span className="num text-xs text-ink-3">Sesi {session}</span>
       </div>
+
+      {supabaseConfigured && carry?.fromSession && carry.count > 0 && (
+        <Card className="mb-4 border-info-line bg-info-soft">
+          <CardContent className="flex flex-wrap items-center gap-3 py-3.5">
+            <p className="min-w-0 flex-1 text-[13px] leading-[1.5] text-info-ink">
+              Sesi {carry.fromSession} mempunyai {carry.count} pautan. Salin semuanya ke sesi
+              ini dalam satu tekan.
+            </p>
+            <Button size="sm" disabled={carrying} onClick={() => void carryForward()}>
+              {carrying ? "Menyalin…" : "Salin pautan sesi lepas"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {!supabaseConfigured ? (
         <Card>
@@ -204,6 +311,14 @@ export default function RptPage() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    aria-label={`Sunting ${link.title}`}
+                    onClick={() => openEdit(link)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     aria-label={`Padam ${link.title}`}
                     onClick={() => setConfirming(link)}
                   >
@@ -235,6 +350,55 @@ export default function RptPage() {
             </Button>
             <Button variant="danger" onClick={() => void remove()}>
               Padam pautan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sunting pautan RPT</DialogTitle>
+            <DialogDescription>
+              Tukar tajuk atau gantikan pautan. Tajuk yang sudah digunakan oleh pautan lain
+              tidak dibenarkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="grid gap-3">
+            <div>
+              <Label htmlFor="rpt-edit-title" required>
+                Tajuk
+              </Label>
+              <Input
+                id="rpt-edit-title"
+                value={editTitle}
+                autoComplete="off"
+                onChange={(e) => setEditTitle(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="rpt-edit-url" required>
+                Pautan Google Drive
+              </Label>
+              <Input
+                id="rpt-edit-url"
+                type="url"
+                inputMode="url"
+                value={editUrl}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setEditUrl(e.target.value)}
+                required
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" disabled={editBusy} onClick={() => setEditing(null)}>
+              Batal
+            </Button>
+            <Button disabled={editBusy} onClick={() => void saveEdit()}>
+              {editBusy ? "Menyimpan…" : "Simpan perubahan"}
             </Button>
           </DialogFooter>
         </DialogContent>

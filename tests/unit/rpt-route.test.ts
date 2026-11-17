@@ -47,6 +47,8 @@ const state = vi.hoisted(() => ({
   rows: [] as RptRow[],
   /** Rows the `pantau_teachers` RPC answers with (already scoped by the RPC). */
   pantauRows: [] as Record<string, unknown>[],
+  /** The next insert fails with this - a lost update race on demand. */
+  failNextInsert: null as { code: string; message: string } | null,
 }));
 
 vi.mock("@/lib/config", async (importOriginal) => {
@@ -98,6 +100,15 @@ vi.mock("@/lib/server/db", () => ({
           : [];
       chain.insert = (rows: Record<string, unknown> | Record<string, unknown>[]) => {
         state.calls.push({ table, method: "insert", args: [rows] });
+        if (state.failNextInsert) {
+          const err = state.failNextInsert;
+          state.failNextInsert = null;
+          return {
+            select: () => ({
+              single: async () => ({ data: null, error: err }),
+            }),
+          };
+        }
         const list = Array.isArray(rows) ? rows : [rows];
         const inserted = list.map((r, i) => ({
           id: `rpt-${state.rows.length + i + 1}`,
@@ -213,8 +224,9 @@ vi.mock("@/lib/server/db", () => ({
   }),
 }));
 
-const { GET, POST, DELETE } = await import("@/app/api/rpt/route");
+const { GET, POST, DELETE, PATCH } = await import("@/app/api/rpt/route");
 const { GET: GET_TEACHERS } = await import("@/app/api/pantau/teachers/route");
+const { GET: GET_CARRY, POST: POST_CARRY } = await import("@/app/api/rpt/carry-forward/route");
 
 function authed(method: string, path: string, body?: unknown): NextRequest {
   return new NextRequest(
@@ -249,6 +261,7 @@ beforeEach(() => {
   state.userId = TEACHER_ID;
   state.calls.length = 0;
   state.pantauRows = [];
+  state.failNextInsert = null;
   seedRows();
 });
 
@@ -412,5 +425,203 @@ describe("GET /api/pantau/teachers - RPT decoration", () => {
     };
     expect(body.items).toHaveLength(1);
     expect(body.items[0]?.rptLinks.map((l) => l.title)).toEqual(["RPT Matematik Tahun 5"]);
+  });
+});
+
+describe("POST /api/rpt - lost the race", () => {
+  it("takes the update path when the insert collides", async () => {
+    // A second save slipped in between the lookup and the insert: the unique
+    // index caught it, but the row is the teacher's own under another case,
+    // so the save lands as an update instead of an error.
+    state.failNextInsert = { code: "23505", message: "duplicate key" };
+
+    const res = await POST(
+      authed("POST", "/api/rpt", {
+        title: "rpt matematik tahun 5",
+        url: "https://drive.google.com/file/d/race",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(state.rows).toHaveLength(1);
+    expect(state.rows[0]?.url).toBe("https://drive.google.com/file/d/race");
+  });
+
+  it("still fails when the twin cannot be found either", async () => {
+    state.rows = [];
+    state.failNextInsert = { code: "23505", message: "duplicate key" };
+
+    const res = await POST(
+      authed("POST", "/api/rpt", {
+        title: "RPT Sains",
+        url: "https://drive.google.com/file/d/x",
+      }),
+    );
+
+    expect(res.status).toBe(500);
+  });
+});
+
+describe("PATCH /api/rpt", () => {
+  it("renames a link and keeps its URL", async () => {
+    const res = await PATCH(
+      authed("PATCH", "/api/rpt", {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "RPT Matematik Tahun 6",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(state.rows[0]?.title).toBe("RPT Matematik Tahun 6");
+    expect(state.rows[0]?.url).toBe("https://drive.google.com/file/d/abc");
+  });
+
+  it("replaces the URL without touching the title", async () => {
+    const res = await PATCH(
+      authed("PATCH", "/api/rpt", {
+        id: "11111111-1111-4111-8111-111111111111",
+        url: "https://docs.google.com/document/d/baru",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(state.rows[0]?.url).toBe("https://docs.google.com/document/d/baru");
+  });
+
+  it("allows a case-only rename of the same row", async () => {
+    const res = await PATCH(
+      authed("PATCH", "/api/rpt", {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "rpt matematik tahun 5",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(state.rows[0]?.title).toBe("rpt matematik tahun 5");
+  });
+
+  it("refuses a title another link already holds", async () => {
+    state.rows.push({
+      id: "22222222-2222-4111-8111-222222222222",
+      school_id: SCHOOL_ID,
+      owner_id: TEACHER_ID,
+      session: "2026/2027",
+      title: "RPT Sains",
+      url: "https://drive.google.com/file/d/sains",
+      created_at: new Date(0).toISOString(),
+      updated_at: new Date(0).toISOString(),
+    });
+
+    const res = await PATCH(
+      authed("PATCH", "/api/rpt", {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "rpt sains",
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    expect(state.rows[0]?.title).toBe("RPT Matematik Tahun 5");
+  });
+
+  it("answers 404 for another teacher's link", async () => {
+    const only = state.rows[0];
+    expect(only).toBeDefined();
+    if (only) only.owner_id = "00000000-0000-4000-8000-000000000006";
+
+    const res = await PATCH(
+      authed("PATCH", "/api/rpt", {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "RPT Saya",
+      }),
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  it("refuses a bad URL and an empty patch", async () => {
+    const bad = await PATCH(
+      authed("PATCH", "/api/rpt", {
+        id: "11111111-1111-4111-8111-111111111111",
+        url: "https://example.com/rpt.pdf",
+      }),
+    );
+    expect(bad.status).toBe(422);
+
+    const empty = await PATCH(
+      authed("PATCH", "/api/rpt", { id: "11111111-1111-4111-8111-111111111111" }),
+    );
+    expect(empty.status).toBe(422);
+    expect(state.rows[0]?.title).toBe("RPT Matematik Tahun 5");
+  });
+});
+
+describe("GET + POST /api/rpt/carry-forward", () => {
+  const prior = (over: Partial<RptRow> = {}): RptRow => ({
+    id: "33333333-3333-4111-8333-333333333333",
+    school_id: SCHOOL_ID,
+    owner_id: TEACHER_ID,
+    session: "2025/2026",
+    title: "RPT Matematik Tahun 5",
+    url: "https://drive.google.com/file/d/lama",
+    created_at: new Date(0).toISOString(),
+    updated_at: new Date(0).toISOString(),
+    ...over,
+  });
+
+  it("names the newest prior session and its count", async () => {
+    state.rows.push(prior(), prior({ id: "rpt-lama-2", title: "RPT Sains" }));
+
+    const res = await GET_CARRY(authed("GET", "/api/rpt/carry-forward"));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ fromSession: "2025/2026", count: 2 });
+  });
+
+  it("reports nothing when no prior session has links", async () => {
+    const res = await GET_CARRY(authed("GET", "/api/rpt/carry-forward"));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ fromSession: null, count: 0 });
+  });
+
+  it("copies missing titles and skips the ones already filed", async () => {
+    state.rows.push(prior(), prior({ id: "rpt-lama-2", title: "RPT Sains" }));
+
+    const res = await POST_CARRY(
+      authed("POST", "/api/rpt/carry-forward", { fromSession: "2025/2026" }),
+    );
+
+    expect(res.status).toBe(200);
+    // "RPT Matematik Tahun 5" already exists (case-insensitively), so only
+    // Sains is copied.
+    expect(await res.json()).toEqual({
+      ok: true,
+      fromSession: "2025/2026",
+      copied: 1,
+      skipped: 1,
+    });
+    expect(state.rows).toHaveLength(4);
+  });
+
+  it("refuses an empty session and the current one", async () => {
+    const blank = await POST_CARRY(
+      authed("POST", "/api/rpt/carry-forward", { fromSession: "" }),
+    );
+    expect(blank.status).toBe(422);
+
+    const current = await POST_CARRY(
+      authed("POST", "/api/rpt/carry-forward", { fromSession: "2026/2027" }),
+    );
+    expect(current.status).toBe(422);
+  });
+
+  it("refuses a Guru Besar - they hold no links to carry", async () => {
+    state.role = "guru_besar";
+
+    const res = await POST_CARRY(
+      authed("POST", "/api/rpt/carry-forward", { fromSession: "2025/2026" }),
+    );
+
+    expect(res.status).toBe(403);
   });
 });
