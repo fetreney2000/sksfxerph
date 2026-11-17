@@ -68,8 +68,6 @@ export const ms = {
     weeklySchedule: "Jadual PdP minggu ini",
     newRph: "RPH baharu",
     printWeek: "Cetak minggu",
-    reuseLast: "Guna semula minggu lepas",
-    shortcuts: "Pintasan",
     activity: "Aktiviti semakan terkini",
     noPrint: "Tiada keperluan mencetak - dokumen hanya perlu disediakan apabila diminta.",
   },

@@ -1,6 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Bolt,
@@ -8,21 +7,14 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Clock3,
-  FileText,
-  History,
-  Layers,
   Plus,
   Printer,
-  School,
-  ScrollText,
   Target,
-  Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type * as React from "react";
-import { useMemo, useRef } from "react";
-import { toast } from "sonner";
+import { useMemo } from "react";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { WeekSheets } from "@/components/rph/week-sheets";
 import { givenName, useUser } from "@/components/shell/user-context";
@@ -38,7 +30,6 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableContainer, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { reuseLastWeek } from "@/lib/actions/plans";
 import { can, reviewStageFor } from "@/lib/auth/permissions";
 import { cn } from "@/lib/cn";
 import { weekDeadline } from "@/lib/config";
@@ -49,15 +40,12 @@ import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data
 import { useSignature } from "@/lib/hooks/use-signature";
 import { useWeek } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
-import { parseDocx } from "@/lib/import/docx";
-import { stashImport } from "@/lib/import/pending";
 import { completeness } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
 
 export default function MingguPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const me = useUser();
   // Inside the component and subscribed to the calendar: a module constant is
   // fixed when the bundle loads, which is before the school's declared week has
@@ -94,16 +82,6 @@ export default function MingguPage() {
     router.push("/editor");
   };
 
-  const onReuse = async () => {
-    const { created, skipped } = await reuseLastWeek(WEEK - 1, WEEK, classes);
-    toast.success(
-      created > 0
-        ? `${created} RPH minggu lepas disalin ke Minggu ${WEEK}${skipped > 0 ? ` (${skipped} slot sudah diisi)` : ""}`
-        : "Tiada slot kosong - semua RPH minggu ini sudah wujud",
-    );
-    await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
-  };
-
   /**
    * The week's pentadbir, for the cover sheet.
    *
@@ -126,28 +104,6 @@ export default function MingguPage() {
   const printable = week.documents.filter((d) => d.status !== "draft");
 
   const onPrint = () => window.print();
-
-  /**
-   * Bring an existing .docx RPH into the penyunting.
-   *
-   * The parse is heuristic - Word documents disagree about labels - so
-   * nothing is saved here. The file is read, stashed and handed to the
-   * penyunting, where the teacher corrects it and presses Simpan like any
-   * other plan. Importing a file must not leave a draft behind if they
-   * look at the result and decide against it.
-   */
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const onImportFile = async (file: File | undefined) => {
-    if (!file) return;
-    try {
-      const imported = await parseDocx(file);
-      stashImport(imported);
-      router.push("/editor");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Fail ini tidak dapat dibaca.");
-    }
-  };
 
   return (
     <>
@@ -226,10 +182,6 @@ export default function MingguPage() {
             has after the page's own padding, and a flex row does not wrap or
             shrink on its own. */}
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <Button variant="secondary" className="flex-1 sm:flex-none" onClick={onReuse}>
-              <Layers className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-              {ms.dashboard.reuseLast}
-            </Button>
             <Button
               variant="secondary"
               className="flex-1 sm:flex-none"
@@ -463,123 +415,59 @@ export default function MingguPage() {
           </TableContainer>
         </Card>
 
-        {/* ── Feed + shortcuts ─────────────────────────────────────────────── */}
-        <div className="grid gap-4 lg:grid-cols-[1fr_348px]">
-          <Card>
-            <CardHeader>
-              <CardTitle>{ms.dashboard.activity}</CardTitle>
-              <CardDescription>Kemas kini langsung</CardDescription>
-              <span className="ml-auto">
-                <Badge variant="success">Masa nyata</Badge>
-              </span>
-            </CardHeader>
-            <CardContent className="pt-1 pb-2">
-              <ul className="list-none">
-                {week.documents
-                  .filter((d) => d.status !== "draft")
-                  .slice(0, 4)
-                  .map((d) => (
-                    <li
-                      key={d.id}
-                      className="flex gap-3 border-b border-dashed border-border py-3 last:border-b-0"
-                    >
-                      {/* The document's own status, not a person's face. The
+        {/* ── Feed ───────────────────────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{ms.dashboard.activity}</CardTitle>
+            <CardDescription>Kemas kini langsung</CardDescription>
+            <span className="ml-auto">
+              <Badge variant="success">Masa nyata</Badge>
+            </span>
+          </CardHeader>
+          <CardContent className="pt-1 pb-2">
+            <ul className="list-none">
+              {week.documents
+                .filter((d) => d.status !== "draft")
+                .slice(0, 4)
+                .map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex gap-3 border-b border-dashed border-border py-3 last:border-b-0"
+                  >
+                    {/* The document's own status, not a person's face. The
                           reviewer's name is not on this record - it lives on
                           the signature, fetched per plan - and a feed that
                           attributes a decision to a named colleague who may
                           never have seen the plan is worse than one that
                           simply does not say who. */}
-                      <StatusBadge status={d.status} grade={d.grade} />
-                      <div className="min-w-0">
-                        <p className="text-[12.8px] leading-[1.5] text-ink-2">
-                          <b className="text-ink">
-                            RPH {d.classNames.join(", ")} · {d.subjectName}
-                          </b>{" "}
-                          {d.status === "approved"
-                            ? "telah disahkan"
-                            : d.status === "returned"
-                              ? "dikembalikan untuk dibaiki"
-                              : d.status === "forwarded"
-                                ? "diteruskan kepada Guru Besar"
-                                : "dihantar untuk semakan"}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-ink-4">
-                          {daySlot(d.planDate, d.slotTime)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                {week.documents.filter((d) => d.status !== "draft").length === 0 && (
-                  <li className="py-6 text-center text-[13px] text-ink-4">
-                    Belum ada aktiviti semakan minggu ini.
+                    <StatusBadge status={d.status} grade={d.grade} />
+                    <div className="min-w-0">
+                      <p className="text-[12.8px] leading-[1.5] text-ink-2">
+                        <b className="text-ink">
+                          RPH {d.classNames.join(", ")} · {d.subjectName}
+                        </b>{" "}
+                        {d.status === "approved"
+                          ? "telah disahkan"
+                          : d.status === "returned"
+                            ? "dikembalikan untuk dibaiki"
+                            : d.status === "forwarded"
+                              ? "diteruskan kepada Guru Besar"
+                              : "dihantar untuk semakan"}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-ink-4">
+                        {daySlot(d.planDate, d.slotTime)}
+                      </p>
+                    </div>
                   </li>
-                )}
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{ms.dashboard.shortcuts}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2.5">
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                // Hidden on purpose, and hidden from the accessibility tree as
-                // well. The button beside it is the control a person uses; a
-                // second, unnamed file input in the tab order is one more stop
-                // between a keyboard user and everything below it.
-                aria-hidden="true"
-                tabIndex={-1}
-                className="sr-only"
-                onChange={(e) => {
-                  // Reset after handling: without it, choosing the same file
-                  // twice fires nothing, and a teacher correcting a document
-                  // and re-uploading it is exactly the case that matters.
-                  void onImportFile(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-              <Shortcut
-                icon={<Upload className="h-4 w-4" />}
-                label="Masukkan RPH sedia ada"
-                onClick={() => fileRef.current?.click()}
-              />
-              {/* Gated with `can`, the same predicate the sidebar filters on.
-                  A shortcut to a page a teacher cannot open is a button that
-                  fails, and the sidebar hiding it while this offered it would
-                  be two parts of one screen disagreeing. */}
-              <Shortcut
-                icon={<History className="h-4 w-4" />}
-                label="Sejarah RPH"
-                onClick={() => router.push("/arkib")}
-              />
-              {can(me.role, "semak") && (
-                <Shortcut
-                  icon={<ScrollText className="h-4 w-4" />}
-                  label="Semakan"
-                  onClick={() => router.push("/semakan")}
-                />
+                ))}
+              {week.documents.filter((d) => d.status !== "draft").length === 0 && (
+                <li className="py-6 text-center text-[13px] text-ink-4">
+                  Belum ada aktiviti semakan minggu ini.
+                </li>
               )}
-              {can(me.role, "laporan") && (
-                <Shortcut
-                  icon={<FileText className="h-4 w-4" />}
-                  label="Laporan dan Eksport"
-                  onClick={() => router.push("/laporan")}
-                />
-              )}
-              {can(me.role, "pantau") && (
-                <Shortcut
-                  icon={<School className="h-4 w-4" />}
-                  label="Pantau guru"
-                  onClick={() => router.push("/sekolah")}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            </ul>
+          </CardContent>
+        </Card>
       </div>
 
       {/* The artefact. `hidden` on screen - it is not a preview, it is the
@@ -816,26 +704,5 @@ function StatCard({
         </div>
       )}
     </Card>
-  );
-}
-
-function Shortcut({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-[9px] border border-border-strong bg-surface px-3 py-2.5 text-[13.5px] font-semibold text-ink-2 shadow-xs transition-colors hover:bg-surface-3"
-    >
-      {icon}
-      <span className="truncate">{label}</span>
-    </button>
   );
 }
