@@ -186,7 +186,7 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Giliran semakan" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Minggu Ini/ })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /Senarai RPH/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Arkib eRPH/ })).toHaveCount(0);
 
     // And the gate bites server-side too, not just in the navigation.
     await page.goto("/minggu");
@@ -635,15 +635,15 @@ test.describe("mobile layout", () => {
     await expect(nav.getByRole("link", { name: "Semak" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Sekolah" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Laporan" })).toBeVisible();
-    // Senarai RPH is still reachable; it is just not a fifth tab squeezed
+    // Arkib eRPH is still reachable; it is just not a fifth tab squeezed
     // into 390px.
-    await expect(nav.getByRole("link", { name: "Senarai" })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Arkib" })).toHaveCount(0);
 
     await nav.getByRole("button", { name: "Lagi" }).click();
     const sheet = page.getByRole("dialog", { name: "Lagi" });
-    await expect(sheet.getByRole("link", { name: /Senarai RPH/ })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: /Arkib eRPH/ })).toBeVisible();
 
-    await sheet.getByRole("link", { name: /Senarai RPH/ }).click();
+    await sheet.getByRole("link", { name: /Arkib eRPH/ }).click();
     await expect(page).toHaveURL(/\/arkib/, { timeout: 15_000 });
     await expect(page.getByRole("dialog", { name: "Lagi" })).toBeHidden();
 

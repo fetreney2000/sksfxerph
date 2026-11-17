@@ -36,7 +36,7 @@ export const ms = {
   nav: {
     minggu: "Minggu Ini",
     editor: "Penyunting RPH",
-    arkib: "Senarai RPH",
+    arkib: "Arkib eRPH",
     rpt: "RPT Tahunan",
     semakan: "Semakan RPH",
     sekolah: "Paparan Sekolah",

@@ -52,7 +52,7 @@ export const NAV: NavGroup[] = [
         // badge that used to sit on "Penyunting RPH" belongs on this entry.
         badge: "drafts",
       },
-      { href: "/arkib", label: ms.nav.arkib, short: "Senarai", icon: History, perm: "rph" },
+      { href: "/arkib", label: ms.nav.arkib, short: "Arkib", icon: History, perm: "rph" },
       // Drive links, not files: the RPT itself stays in the teacher's Drive
       // and only the link is stored, so a supervisor can open and check it.
       { href: "/rpt", label: ms.nav.rpt, short: "RPT", icon: BookMarked, perm: "rph" },
