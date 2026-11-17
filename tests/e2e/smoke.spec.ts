@@ -186,7 +186,7 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Giliran semakan" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Minggu Ini/ })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /Sejarah dan Arkib/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Senarai RPH/ })).toHaveCount(0);
 
     // And the gate bites server-side too, not just in the navigation.
     await page.goto("/minggu");
@@ -713,10 +713,10 @@ test.describe("mobile layout", () => {
 
     await nav.getByRole("button", { name: "Lagi" }).click();
     const sheet = page.getByRole("dialog", { name: "Lagi" });
-    await expect(sheet.getByRole("link", { name: /Sejarah dan Arkib/ })).toBeVisible();
+    await expect(sheet.getByRole("link", { name: /Senarai RPH/ })).toBeVisible();
     await expect(sheet.getByRole("link", { name: /Perpustakaan Templat/ })).toBeVisible();
 
-    await sheet.getByRole("link", { name: /Sejarah dan Arkib/ }).click();
+    await sheet.getByRole("link", { name: /Senarai RPH/ }).click();
     await expect(page).toHaveURL(/\/arkib/, { timeout: 15_000 });
     await expect(page.getByRole("dialog", { name: "Lagi" })).toBeHidden();
 
@@ -748,7 +748,10 @@ test.describe("mobile layout", () => {
     await expect(page.getByRole("heading", { name: "Giliran semakan" })).toBeVisible();
     // The pending work list comes before the browsing tree, so the first
     // match is the queue row - the tree holds the same plan further down.
-    await page.getByRole("button", { name: /Ramlan/ }).first().click();
+    await page
+      .getByRole("button", { name: /Ramlan/ })
+      .first()
+      .click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
