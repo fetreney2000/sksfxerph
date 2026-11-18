@@ -259,7 +259,19 @@ export default function SemakanPage() {
    * by definition.
    */
   const fromTree = selected !== undefined && !selectedPending;
-  const readOnly = fromTree && item !== undefined && item !== null && !isActionable(item);
+  /**
+   * A locally-graded queue row is decided too, wherever the tab lists it.
+   *
+   * The queue row keeps the `submitted` status it was fetched with - a
+   * decision updates `graded`, not the row - so without this, re-opening the
+   * plan from the Semua tab offered active Sahkan/Kembalikan buttons for a
+   * decision that had already been recorded, and pressing one only died at
+   * the server RPC.
+   */
+  const gradedSelected = selectedPending ? graded[selectedPending.id] : undefined;
+  const readOnly =
+    (fromTree && item !== undefined && item !== null && !isActionable(item)) ||
+    gradedSelected !== undefined;
   /** The explanatory note for a row the reviewer cannot (yet) decide. */
   const itemNote = item
     ? readOnly
@@ -282,9 +294,10 @@ export default function SemakanPage() {
   const decide = React.useCallback(
     (decision: ReviewDecision) => {
       if (!item || deciding) return;
-      // A decided plan (browse mode) is view-only: re-deciding it would fork
-      // what the audit trail already recorded.
-      if (!isActionable(item)) return;
+      // A decided plan (browse mode, or graded earlier this sitting) is
+      // view-only: re-deciding it would fork what the audit trail already
+      // recorded.
+      if (!isActionable(item) || item.id in graded) return;
       if (decision === "hantar_balik" && !comment.trim()) {
         toast.info(ms.review.returnReasonRequired);
         return;
