@@ -128,6 +128,7 @@ export const ms = {
     preview: "Pratonton langsung",
     submit: "Hantar untuk semakan",
     submitIncomplete: "Hantar juga (tidak lengkap)",
+    copy: "Salin RPH",
     exportPdf: "Eksport PDF",
     required: "diperlukan",
     totalTime: "Jumlah masa aktif",

@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  Copy,
   Download,
   FileDown,
   Save,
@@ -1032,6 +1033,16 @@ export function RphEditor({ docId }: { docId?: string }) {
   const blocking = allNotes.filter((n) => n.blocking);
   const ready = blocking.length === 0;
 
+  /**
+   * A plan whose submission is no longer the teacher's to repeat.
+   *
+   * `submitted` sits open on a reviewer's screen and `approved` is sealed -
+   * pressing Hantar on either would only bounce off the server. A returned
+   * plan is deliberately excluded: it came back for changes, and Hantar is
+   * exactly how the revised version goes back.
+   */
+  const outOfTeacherHands = live.status === "submitted" || live.status === "approved";
+
   const onSubmit = async (force: boolean) => {
     if (!live) return;
     // Hantar always files what is on screen: unsaved edits are flushed first
@@ -1451,6 +1462,16 @@ export function RphEditor({ docId }: { docId?: string }) {
             <Button className="ml-auto" disabled={saving} onClick={() => void saveChanges()}>
               <Save className="h-4 w-4" strokeWidth={1.9} aria-hidden />
               {saving ? "Menyimpan…" : "Simpan perubahan"}
+            </Button>
+          ) : outOfTeacherHands ? (
+            /* A plan the reviewer holds (or has sealed) is not going anywhere
+               by pressing Hantar again - the only move left is to start the
+               next one from it. The copy opens a fresh unsaved editor seeded
+               with this plan's content, classes and slot; nothing is written
+               until its own Simpan is pressed. */
+            <Button className="ml-auto" onClick={() => router.push(`/editor?copy=${live.id}`)}>
+              <Copy className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+              {ms.editor.copy}
             </Button>
           ) : (
             <Button className="ml-auto" onClick={() => void onSubmit(false)}>
