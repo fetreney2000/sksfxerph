@@ -64,7 +64,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) return NextResponse.json({ items: [] as DocumentRow[] });
 
-  const { data, error } = await gate.db
+  const query = gate.db
     .from("rph_document")
     .select(
       "id, owner_id, class_ids, subject_code, session, week_no, plan_date, slot_time, " +
@@ -84,15 +84,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // mirror left to delete them from, so the exclusion lives here.
     .is("deleted_at", null)
     .order("updated_at", { ascending: false })
-    .limit(200);
+    .order("id", { ascending: true });
 
-  if (error) {
-    // Reads fail the same way writes do when the database and the app
-    // disagree - name the cause instead of a bare 500.
-    console.error("[rph] pull failed:", error.message);
-    const known = dbFailureMessage(error);
-    if (known) return NextResponse.json({ error: known }, { status: 422 });
-    return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+  const raw: DocumentRow[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await query.range(offset, offset + 999);
+    if (error) {
+      console.error("[rph] pull failed:", error.message);
+      const known = dbFailureMessage(error);
+      if (known) return NextResponse.json({ error: known }, { status: 422 });
+      return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+    }
+    const page = (data ?? []) as unknown as DocumentRow[];
+    raw.push(...page);
+    if (page.length < 1000) break;
   }
 
   // PostgREST cannot embed `class.nama` through an array column (`class_ids`
@@ -107,7 +112,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     (classes ?? []).map((c: { id: string; nama: string }) => [c.id, c.nama]),
   );
 
-  const raw = (data ?? []) as unknown as DocumentRow[];
   const rows = raw.map((row) => ({
     ...row,
     class_names: (row.class_ids ?? []).map((id) => names.get(id) ?? ""),

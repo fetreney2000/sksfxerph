@@ -65,7 +65,7 @@ export const ms = {
     waiting: "Menunggu semakan",
     needsAction: "Perlu tindakan",
     onTime: "Ketepatan masa",
-    weeklySchedule: "Jadual PdP minggu ini",
+    weeklySchedule: "RPH minggu ini",
     newRph: "RPH baharu",
     printWeek: "Cetak minggu",
     activity: "Aktiviti semakan terkini",

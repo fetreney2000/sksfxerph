@@ -8,15 +8,12 @@ import {
   ClipboardCheck,
   Clock3,
   Plus,
-  Printer,
   Target,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type * as React from "react";
-import { useMemo } from "react";
 import { StatusBadge } from "@/components/rph/status-badge";
-import { WeekSheets } from "@/components/rph/week-sheets";
 import { givenName, useUser } from "@/components/shell/user-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -36,12 +33,9 @@ import { weekDeadline } from "@/lib/config";
 import { daySlot, deadlineLabel, greetingPart, longDateOf } from "@/lib/date";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
-import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
-import { useSignature } from "@/lib/hooks/use-signature";
 import { useWeek } from "@/lib/hooks/use-week";
 import { ms } from "@/lib/i18n/ms";
 import { completeness } from "@/lib/schemas/rph";
-import { currentSession } from "@/lib/session";
 import type { RphDocument } from "@/lib/types";
 
 export default function MingguPage() {
@@ -66,8 +60,6 @@ export default function MingguPage() {
   // nothing this week. Both read as "-" rather than as a school that has
   // handed in zero plans: a number nobody has measured is not zero.
   const noFigures = stats.expected === 0 && stats.submitted === 0 && stats.approved === 0;
-  const { items: classes } = useSchoolClasses();
-  const { items: subjects } = useSchoolSubjects();
 
   const deadline = weekDeadline(WEEK);
   // approved + waiting + action is the whole week; the greeting, cards and
@@ -81,29 +73,6 @@ export default function MingguPage() {
   const onNew = () => {
     router.push("/editor");
   };
-
-  /**
-   * The week's pentadbir, for the cover sheet.
-   *
-   * Signatures are per plan, but the cover carries one - and every plan in a
-   * week is sealed by the same person, so any of them speaks for the sheet.
-   * The newest is taken rather than the first: if the week was returned and
-   * then re-approved, the cover should carry the approval that stands, not
-   * the rejection that preceded it.
-   */
-  const sealedPlan = useMemo(() => {
-    const approved = week.documents.filter((d) => d.status === "approved");
-    if (approved.length === 0) return undefined;
-    return approved.reduce((a, b) => (a.clientUpdatedAt >= b.clientUpdatedAt ? a : b));
-  }, [week.documents]);
-  const weekSignature = useSignature(sealedPlan?.id, sealedPlan?.payload);
-
-  // The whole week, or nothing: a stack with one plan missing is a stack the
-  // district will send back, so it is better for the teacher to see the gap
-  // here than on paper.
-  const printable = week.documents.filter((d) => d.status !== "draft");
-
-  const onPrint = () => window.print();
 
   return (
     <>
@@ -182,17 +151,6 @@ export default function MingguPage() {
             has after the page's own padding, and a flex row does not wrap or
             shrink on its own. */}
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <Button
-              variant="secondary"
-              className="flex-1 sm:flex-none"
-              onClick={onPrint}
-              // Nothing to print yet. A cover sheet over an empty week is a page
-              // that says a teacher teaches nothing.
-              disabled={printable.length === 0}
-            >
-              <Printer className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-              {ms.dashboard.printWeek}
-            </Button>
             <Button className="flex-1 sm:flex-none" onClick={onNew}>
               <Plus className="h-4 w-4" strokeWidth={2.2} aria-hidden />
               {ms.dashboard.newRph}
@@ -220,7 +178,6 @@ export default function MingguPage() {
                       : ` (${week.returned} dikembalikan). `}
                 </>
               ) : null}
-              <b>{ms.dashboard.noPrint}</b>
             </p>
             <Progress
               value={week.approvedPct}
@@ -242,10 +199,8 @@ export default function MingguPage() {
           <StatCard
             label={`${ms.dashboard.approved} · Minggu ${WEEK}`}
             value={`${week.approved}`}
-            sub={` / ${week.total}`}
             icon={<CheckCircle2 className="h-4 w-4" strokeWidth={2} />}
             tone="ok"
-            footer={<Progress value={week.approvedPct} tone="success" />}
           />
           <StatCard
             label={ms.dashboard.waiting}
@@ -348,9 +303,6 @@ export default function MingguPage() {
             {ms.dashboard.weeklySchedule}
           </h2>
           <span className="h-px flex-1 bg-border" />
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink-2">
-            {classes.length} kelas · {subjects.length} subjek
-          </span>
         </div>
 
         {/* The six-column table is usable on a desktop and clips status and
@@ -469,22 +421,6 @@ export default function MingguPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* The artefact. `hidden` on screen - it is not a preview, it is the
-          thing the printer takes - and `@media print` in globals.css makes it
-          the whole page. */}
-      {printable.length > 0 && (
-        <div data-print="page" className="hidden">
-          <WeekSheets
-            weekNo={WEEK}
-            session={currentSession()}
-            teacherName={me.fullName}
-            documents={printable}
-            signature={weekSignature.signature}
-            signatureState={weekSignature.state}
-          />
-        </div>
-      )}
     </>
   );
 }

@@ -2679,6 +2679,9 @@ select docs.school_id, docs.session, docs.week_no,
 grant usage on schema erph to anon, authenticated, service_role;
 grant all on all tables in schema erph to anon, authenticated, service_role;
 grant all on all routines in schema erph to anon, authenticated, service_role;
+-- Reminder sending is no longer offered, including through direct RPC calls.
+revoke execute on function erph.remind_teachers(uuid, text, smallint, uuid[])
+  from public, anon, authenticated, service_role;
 grant all on all sequences in schema erph to anon, authenticated, service_role;
 alter default privileges for role postgres in schema erph
   grant all on tables to anon, authenticated, service_role;

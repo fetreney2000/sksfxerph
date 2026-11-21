@@ -628,35 +628,12 @@ def main() -> int:
         )
         conn.commit()
 
-        # ── a reminder reaches only the teachers the caller supervises ──────
-        # The write path is where scope has to live *inside* the function:
-        # SECURITY DEFINER means the caller's RLS is never consulted, so a
-        # handler that resolved the roster in JavaScript and posted ids would
-        # be one careless edit from a school-wide nudge.
-        act_as("gpk.uji")
-        reached = read_as_authenticated(
-            f"select erph.remind_teachers({SK}::uuid, '2026/2027'::text, 1::smallint)"
-        )
-        stage.append(
-            ("a GPK's reminder reaches their own teacher", reached == 1, f"got {reached}")
-        )
-        # Asked for by id, an out-of-scope target still does not match. The
-        # pentadbir shares the school but is not supervised by this GPK - and
-        # the id is inlined rather than selected, because `authenticated` is
-        # denied SELECT on erph.user by design.
-        act_as("gpk.uji")
-        admin_id = "00000000-0000-4000-8000-000000000001"
-        stray = read_as_authenticated(
-            f"select erph.remind_teachers({SK}::uuid, '2026/2027'::text, 1::smallint, "
-            f"array['{admin_id}']::uuid[])"
-        )
-        stage.append(("a GPK cannot remind outside their scope", stray == 0, f"got {stray}"))
-
-        # Tapping the button again the same week reaches nobody, so a Guru
-        # Besar cannot fill a teacher's bell with identical rows.
-        act_as("gpk.uji")
-        again = read_as_authenticated(f"select erph.remind_teachers({SK}::uuid, '2026/2027'::text, 1::smallint)")
-        stage.append(("the same week is nudged only once", again == 0, f"got {again}"))
+        for role in ("anon", "authenticated", "service_role"):
+            allowed = r.one(
+                f"select has_function_privilege('{role}', "
+                "'erph.remind_teachers(uuid,text,smallint,uuid[])', 'execute')"
+            )[0]
+            stage.append((f"{role} cannot send reminders", not allowed))
 
         # ── the trend and the headline must agree ──────────────────────────
         # Two separate implementations compute the same compliance figure: one

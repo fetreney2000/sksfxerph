@@ -23,6 +23,7 @@ export type SignatureState = "none" | "pending" | "valid" | "invalid";
 export interface SignatureResult {
   signature: SignaturePayload | null;
   state: SignatureState;
+  loading: boolean;
 }
 
 export function useSignature(
@@ -79,5 +80,12 @@ export function useSignature(
     };
   }, [stored, payload]);
 
-  return { signature: stored, state };
+  return {
+    signature: stored,
+    state,
+    loading:
+      Boolean(documentId) &&
+      supabaseConfigured &&
+      (query.isLoading || (stored !== null && (state === "none" || state === "pending"))),
+  };
 }

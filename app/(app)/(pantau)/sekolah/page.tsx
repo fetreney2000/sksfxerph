@@ -1,13 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bell, ExternalLink, Users } from "lucide-react";
+import { ExternalLink, Info, Users } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import type { TeacherRow } from "@/app/api/pantau/teachers/route";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -246,40 +244,6 @@ export default function SekolahPage() {
       ? lastWeek.compliance - firstWeek.compliance
       : null;
 
-  /**
-   * Nudge the teachers who are late.
-   *
-   * The server decides who that is and reports how many it reached. Both
-   * buttons used to print a count the client had guessed - "3 peringatan
-   * dihantar" - and send nothing, so a Guru Besar was told their staff had
-   * been reminded while the staff heard nothing at all. Reporting the
-   * server's number also means a second tap against the same week says
-   * "tiada guru perlu diberi peringatan" rather than claiming a second round.
-   */
-  const remind = async (targets?: string[]) => {
-    if (!supabaseConfigured) {
-      toast("Peringatan hanya boleh dihantar dalam mod disegerakkan.");
-      return;
-    }
-    try {
-      const res = await fetch("/api/reminder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify(targets ? { targets } : {}),
-      });
-      const out = (await res.json()) as { notified?: number; error?: string };
-      if (!res.ok) throw new Error(out.error ?? "Gagal menghantar peringatan.");
-      toast.success(
-        out.notified
-          ? `Peringatan dihantar kepada ${out.notified} guru.`
-          : "Tiada guru yang perlu diberi peringatan.",
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Gagal menghantar peringatan.");
-    }
-  };
-
   return (
     <>
       {/* ── Filter bar ───────────────────────────────────────────────────── */}
@@ -306,17 +270,6 @@ export default function SekolahPage() {
             </button>
           ))}
         </div>
-        <span className="ml-auto flex gap-2">
-          {/* Deliberately not disabled off the roster's count. A reminder is
-              always about the *current* week, and lateCount now describes
-              whichever window is loaded - so a "Sepanjang sesi" view would
-              enable a button about a week nobody is late in, and a single-week
-              view would silence one where someone is. The server decides and
-              reports how many it reached. */}
-          <Button size="sm" onClick={() => void remind()}>
-            <Bell className="h-4 w-4" strokeWidth={1.9} aria-hidden /> Hantar peringatan
-          </Button>
-        </span>
       </div>
 
       {/* ── Stats ────────────────────────────────────────────────────────── */}
@@ -447,13 +400,10 @@ export default function SekolahPage() {
               <Progress value={pct} tone={pct >= 95 ? "success" : "warning"} />
             </div>
             <div className="flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
-              <Bell className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
+              <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
               <div>
                 {lateCount > 0 ? (
-                  <>
-                    {lateCount} guru belum lengkap dalam tempoh ini. Peringatan sentiasa merujuk{" "}
-                    <b>minggu semasa</b> - itulah yang perlu diselesaikan.
-                  </>
+                  <>{lateCount} guru belum lengkap dalam tempoh ini.</>
                 ) : (
                   <>Semua guru di bawah seliaan anda lengkap untuk {scope.toLowerCase()}.</>
                 )}
@@ -506,7 +456,6 @@ export default function SekolahPage() {
                 <TH>Dikembalikan → dibetulkan</TH>
                 <TH>Terakhir disemak</TH>
                 <TH>RPT</TH>
-                <TH className="text-right">Tindakan</TH>
               </tr>
             </THead>
             <TBody>
@@ -583,18 +532,6 @@ export default function SekolahPage() {
                           </a>
                         ))}
                       </span>
-                    )}
-                  </TD>
-                  <TD className="text-right">
-                    {/* Offered only where it does something. A teacher who is
-                        up to date has nothing to nudge, and the branch this
-                        replaced printed a toast about calling up their plans
-                        and fetched nothing - so the control is absent rather
-                        than present and inert. */}
-                    {(t.week === "Lewat" || t.week === "Tiada") && (
-                      <Button size="sm" variant="ghost" onClick={() => void remind([t.id])}>
-                        Peringat
-                      </Button>
                     )}
                   </TD>
                 </TR>

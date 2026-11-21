@@ -61,7 +61,7 @@ export function useOwnPlans(): { items: RphDocument[]; loading: boolean } {
   const local = useLiveQuery(async () => {
     if (supabaseConfigured) return [] as RphDocument[];
     const owner = ownerId();
-    return db.documents.where("[ownerId+session]").equals([owner, session]).toArray();
+    return db.documents.filter((document) => document.ownerId === owner).toArray();
   }, [session]);
 
   if (!supabaseConfigured) {

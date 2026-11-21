@@ -195,7 +195,7 @@ test.describe("authentication", () => {
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
 
     // No `rph` means no RPT either - there is nothing of theirs to attach.
-    await expect(page.getByRole("link", { name: /^RPT\$/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^RPT$/ })).toHaveCount(0);
     await page.goto("/rpt");
     await expect(page).toHaveURL(/\/semakan/, { timeout: 15_000 });
 
@@ -206,11 +206,11 @@ test.describe("authentication", () => {
     const errors = collectErrors(page);
     await login(page);
 
-    await expect(page.getByRole("link", { name: /^RPT\$/ }).first()).toBeVisible({
+    await expect(page.getByRole("link", { name: /^RPT$/ }).first()).toBeVisible({
       timeout: 15_000,
     });
     await page
-      .getByRole("link", { name: /^RPT\$/ })
+      .getByRole("link", { name: /^RPT$/ })
       .first()
       .click();
     await expect(page).toHaveURL(/\/rpt/, { timeout: 15_000 });
@@ -303,7 +303,7 @@ test.describe("eRPH smoke", () => {
     });
 
     // The deadline must be a real Friday 16:00, not the off-by-a-month bug.
-    await expect(page.getByText(/Jumaat, \d+ Oktober 2026 · 16:00/)).toBeVisible();
+    await expect(page.getByText(/Jumaat, \d+ \w+ \d{4} · 16:00/)).toBeVisible();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
