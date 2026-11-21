@@ -42,6 +42,7 @@ import { useReviewPlans, useReviewQueueData, useSchoolStats } from "@/lib/hooks/
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { ms } from "@/lib/i18n/ms";
+import { isPastReviewWeek } from "@/lib/review-week";
 import { RpcError, submitRph } from "@/lib/rpc";
 import { completeness, normalisePayload } from "@/lib/schemas/rph";
 import { decide as decideRph, type ReviewDecision } from "@/lib/signature/review";
@@ -248,7 +249,12 @@ export default function SemakanPage() {
     if (!selected || selectedPending) return pendingVisible;
     const found = plans.find((p) => p.id === selected);
     if (!found) return pendingVisible;
-    return plans.filter((p) => p.teacherId === found.teacherId && p.weekNo === found.weekNo);
+    return plans.filter(
+      (p) =>
+        p.teacherId === found.teacherId &&
+        p.weekNo === found.weekNo &&
+        p.session === found.session,
+    );
   }, [selected, selectedPending, pendingVisible, plans]);
 
   /** A return must carry a reason: an empty "RPH perlu dibaiki" is not actionable. */
@@ -271,14 +277,17 @@ export default function SemakanPage() {
   const gradedSelected = selectedPending ? graded[selectedPending.id] : undefined;
   const readOnly =
     (fromTree && item !== undefined && item !== null && !isActionable(item)) ||
+    (item != null && !isPastReviewWeek(item.planDate)) ||
     gradedSelected !== undefined;
   /** The explanatory note for a row the reviewer cannot (yet) decide. */
   const itemNote = item
-    ? readOnly
-      ? ms.review.decidedNote
-      : item.status === "draft"
-        ? ms.review.draftNote
-        : undefined
+    ? !isPastReviewWeek(item.planDate)
+      ? "RPH hanya boleh disemak selepas minggu tersebut tamat."
+      : readOnly
+        ? ms.review.decidedNote
+        : item.status === "draft"
+          ? ms.review.draftNote
+          : undefined
     : undefined;
 
   const openReview = (id: string) => {
@@ -297,7 +306,7 @@ export default function SemakanPage() {
       // A decided plan (browse mode, or graded earlier this sitting) is
       // view-only: re-deciding it would fork what the audit trail already
       // recorded.
-      if (!isActionable(item) || item.id in graded) return;
+      if (!isActionable(item) || !isPastReviewWeek(item.planDate) || item.id in graded) return;
       if (decision === "hantar_balik" && !comment.trim()) {
         toast.info(ms.review.returnReasonRequired);
         return;
@@ -637,7 +646,7 @@ export default function SemakanPage() {
                       {sOpen && (
                         <div className="pb-1">
                           {s.teachers.map((t) => {
-                            const tKey = `t:${t.teacherId}`;
+                            const tKey = `t:${s.session}:${t.teacherId}`;
                             const tOpen = isOpen(tKey);
                             return (
                               <div
@@ -679,7 +688,7 @@ export default function SemakanPage() {
                                 {tOpen && (
                                   <div className="ml-4 border-l border-border pl-1">
                                     {t.weeks.map(([weekNo, wplans]) => {
-                                      const wKey = `w:${t.teacherId}:${weekNo}`;
+                                      const wKey = `w:${s.session}:${t.teacherId}:${weekNo}`;
                                       const wOpen = isOpen(wKey);
                                       const waiting = wplans.filter(
                                         (p) => p.status === "submitted",

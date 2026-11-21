@@ -1079,6 +1079,29 @@ returns boolean language sql stable security definer set search_path = erph, pub
      where not erph.teaches_class(u.id));
 $$;
 
+-- Review decisions and staff submissions are allowed only after the plan's
+-- calendar week ends in Malaysia. Enforced on the row, including direct RPC
+-- callers, rather than only by the browser.
+create or replace function erph.guard_past_week_review()
+returns trigger language plpgsql security definer set search_path = erph, public as $$
+begin
+  if (old.status = 'submitted' and new.status in ('approved', 'returned'))
+     or (old.status = 'draft' and new.status = 'submitted'
+         and old.owner_id is distinct from erph.actor()) then
+    if old.plan_date >= date_trunc('week', (now() at time zone 'UTC') + interval '8 hours')::date then
+      raise exception 'RPH hanya boleh disemak selepas minggu tersebut tamat';
+    end if;
+    if old.owner_id is distinct from erph.actor()
+       and not erph.may_supervise(old.school_id, old.owner_id) then
+      raise exception 'RPH di luar bidang penyeliaan anda';
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger guard_past_week_review before update on erph.rph_document
+for each row execute function erph.guard_past_week_review();
+
 -- SUBMIT ─ enforce KPM completeness, stamp state, keep history
 create or replace function erph.submit_rph(p_document uuid, p_force boolean default false)
 returns jsonb language plpgsql security definer set search_path = erph, public as $$

@@ -242,6 +242,7 @@ export function useReviewPlans(): {
   items: ReviewPlanLight[];
   loading: boolean;
   assigned: boolean;
+  error: boolean;
   refetch: () => Promise<unknown>;
 } {
   const session = useSession();
@@ -250,7 +251,7 @@ export function useReviewPlans(): {
     queryFn: async () => {
       const res = await fetch("/api/review/plans", { credentials: "same-origin" });
       if (handleExpiredSession(res.status)) return { items: [] };
-      if (!res.ok) return { items: [] };
+      if (!res.ok) throw new Error("Gagal memuatkan RPH");
       return (await res.json()) as { items: ReviewPlanLight[]; assigned?: boolean };
     },
     enabled: supabaseConfigured,
@@ -276,16 +277,18 @@ export function useReviewPlans(): {
       })),
       loading: false,
       assigned: true,
+      error: false,
       refetch: async () => undefined,
     };
   }
   if (remote.isLoading) {
-    return { items: [], loading: true, assigned: true, refetch: remote.refetch };
+    return { items: [], loading: true, assigned: true, error: false, refetch: remote.refetch };
   }
   return {
     items: remote.data?.items ?? [],
     loading: false,
     assigned: remote.data?.assigned ?? true,
+    error: remote.isError,
     refetch: () => remote.refetch(),
   };
 }

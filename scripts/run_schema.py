@@ -276,7 +276,7 @@ def main() -> int:
     # 015 added `admin_set_profile` and `admin_edit_subject`; 019 added
     # `admin_set_calendar_week` and `admin_clear_calendar_week`; 020 added
     # `classes_in_school` and `teaches_classes`.
-    check("43 functions in erph", n_funcs == 43, f"found {n_funcs}")
+    check("44 functions in erph", n_funcs == 44, f"found {n_funcs}")
 
     # NOTE: group into lists - a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -746,6 +746,35 @@ def main() -> int:
             conn.commit()
 
         sign_as("gpk.uji")
+        # The trigger protects RPC callers too, not just the review UI.
+        r.q(f"""
+            insert into erph.rph_document
+              (school_id, owner_id, class_ids, subject_code, session, week_no, plan_date, payload)
+            select school_id, owner_id, class_ids, subject_code, session, 52,
+                   date_trunc('week', (now() at time zone 'UTC') + interval '8 hours')::date,
+                   payload
+              from erph.rph_document where id = {DOC}
+        """)
+        conn.commit()
+        current_doc = r.one(f"select id from erph.rph_document where school_id = {SK} and week_no = 52")[0]
+        act_as("gpk.uji")
+        msg = refused(f"select erph.submit_rph('{current_doc}', false)")
+        stage.append(("a reviewer cannot submit a current-week draft", "minggu tersebut tamat" in msg, msg))
+        act_as("uji")
+        r.q(f"select erph.submit_rph('{current_doc}', false)")
+        conn.commit()
+        act_as("gpk.uji")
+        msg = refused(f"select erph.hantar_balik_rph('{current_doc}', 'Ujian')")
+        stage.append(("a reviewer cannot return a current-week plan", "minggu tersebut tamat" in msg, msg))
+        r.q(f"""
+            insert into erph.rph_signature (document_id, document_version, signer_id, alg, public_key, signature, envelope)
+            select d.id, d.version, u.id, 'ES256', 'cHVibGlj', 'c2ln', '{{}}'::jsonb
+              from erph.rph_document d, erph.user u
+             where d.id = '{current_doc}' and u.username = 'gpk.uji'
+        """)
+        conn.commit()
+        msg = refused(f"select erph.sahkan_rph('{current_doc}')")
+        stage.append(("a reviewer cannot approve a current-week plan", "minggu tersebut tamat" in msg, msg))
         r.q(f"select erph.hantar_balik_rph({DOC}, 'Objektif belum jelas')")
         conn.commit()
         status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]

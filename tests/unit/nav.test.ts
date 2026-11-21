@@ -33,7 +33,13 @@ describe("navigation - the home matches the role", () => {
     const groups = navFor("gpk");
     const supervision = groups.find((g) => g.label === "Penyeliaan");
 
-    expect(supervision?.items.map((i) => i.href)).toEqual(["/semakan", "/sekolah", "/laporan"]);
+    expect(supervision?.items.map((i) => i.href)).toEqual([
+      "/semakan",
+      "/direktori-rph",
+      "/direktori-rpt",
+      "/sekolah",
+      "/laporan",
+    ]);
     expect(groups.some((g) => g.label === "Pentadbiran")).toBe(false);
   });
 
@@ -55,7 +61,13 @@ describe("navigation - the home matches the role", () => {
   it("gives the Guru Besar the supervision screens but no week or archive", () => {
     // A Guru Besar teaches no class: /minggu and /arkib are `rph` screens and
     // must not appear, while the review queue is their landing page.
-    expect(hrefsFor("guru_besar")).toEqual(["/semakan", "/sekolah", "/laporan"]);
+    expect(hrefsFor("guru_besar")).toEqual([
+      "/semakan",
+      "/direktori-rph",
+      "/direktori-rpt",
+      "/sekolah",
+      "/laporan",
+    ]);
   });
 });
 
@@ -72,6 +84,8 @@ describe("mobile navigation - four tabs, then Lagi", () => {
     expect(secondary.flatMap((group) => group.items.map((item) => item.href))).toEqual([
       "/arkib",
       "/rpt",
+      "/direktori-rph",
+      "/direktori-rpt",
     ]);
   });
 
@@ -85,8 +99,15 @@ describe("mobile navigation - four tabs, then Lagi", () => {
   it("gives the Guru Besar their three supervision screens directly", () => {
     const { primary, secondary } = mobileNavFor("guru_besar");
 
-    expect(primary.map((item) => item.href)).toEqual(["/semakan", "/sekolah", "/laporan"]);
-    expect(secondary).toEqual([]);
+    expect(primary.map((item) => item.href)).toEqual([
+      "/semakan",
+      "/sekolah",
+      "/laporan",
+      "/direktori-rph",
+    ]);
+    expect(secondary.flatMap((group) => group.items.map((item) => item.href))).toEqual([
+      "/direktori-rpt",
+    ]);
   });
 
   it("gives the Administrator the console and nothing else", () => {

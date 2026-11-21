@@ -110,6 +110,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .order("title", { ascending: true });
     if (linkErr) {
       console.error("[pantau] RPT links failed:", linkErr.message);
+      return NextResponse.json(
+        { error: "Ralat pelayan semasa mengambil pautan RPT." },
+        { status: 500 },
+      );
     } else {
       linksByOwner = new Map<string, { title: string; url: string }[]>();
       for (const row of (linkRows ?? []) as unknown as {

@@ -85,7 +85,7 @@ vi.mock("@/lib/server/db", () => ({
           ops.push({ method, args });
           return chain;
         };
-      for (const method of ["select", "eq", "neq", "in", "is", "order", "limit"]) {
+      for (const method of ["select", "eq", "neq", "in", "is", "order", "limit", "range"]) {
         chain[method] = record(method);
       }
       const members: MemberRow[] = [
@@ -178,6 +178,14 @@ beforeEach(() => {
 });
 
 describe("GET /api/review/plans", () => {
+  it("includes drafts from earlier sessions", async () => {
+    state.plans = [plan({ session: "2025/2026", status: "draft" })];
+    const response = await GET(req());
+    const body = (await response.json()) as { items: { session: string; status: string }[] };
+    expect(body.items).toEqual([
+      expect.objectContaining({ session: "2025/2026", status: "draft" }),
+    ]);
+  });
   it("gives a Guru Besar the whole school's plans, without bodies", async () => {
     state.plans = [plan(), plan({ id: OTHER_ID, owner_id: TEACHER_B })];
 

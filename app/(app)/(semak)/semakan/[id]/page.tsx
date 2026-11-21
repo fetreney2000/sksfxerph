@@ -11,7 +11,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { handleExpiredSession } from "@/lib/client/auth-session";
 import { longDate } from "@/lib/date";
 import { useSchool } from "@/lib/hooks/use-school";
-import { useSession } from "@/lib/hooks/use-session";
 import { normalisePayload } from "@/lib/schemas/rph";
 import type { RphStatus } from "@/lib/types";
 
@@ -32,7 +31,6 @@ export default function SemakanDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const router = useRouter();
-  const session = useSession();
   const school = useSchool();
 
   const [plan, setPlan] = React.useState<PlanRow | null>(null);
@@ -126,7 +124,7 @@ export default function SemakanDetailPage() {
 
       <RphPaper
         payload={normalisePayload(plan.payload)}
-        session={session}
+        session={plan.session}
         schoolName={school.name}
         teacherName={teacherName}
         planClassName={className}

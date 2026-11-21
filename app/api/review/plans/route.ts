@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireReviewer, schoolIdFor } from "@/lib/server/auth/guard";
 import { dbFailureMessage } from "@/lib/server/http/errors";
-import { resolveSession } from "@/lib/server/session";
 import type { RphStatus } from "@/lib/types";
 
 /**
@@ -25,7 +24,7 @@ export interface ReviewPlanRow {
 }
 
 /**
- * GET /api/review/plans - every in-scope plan of the session, without bodies.
+ * GET /api/review/plans - every in-scope plan across sessions, without bodies.
  *
  * The review tree (Tahun → Guru → Minggu → Senarai) expands instantly from a
  * single fetch instead of one request per teacher or week. Scope is the queue's
@@ -40,8 +39,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) return NextResponse.json({ items: [] as ReviewPlanRow[], assigned: true });
-
-  const session = await resolveSession(gate.user.id);
 
   let ownerIds: string[] | null = null;
   if (gate.user.role !== "guru_besar") {
@@ -72,18 +69,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         "subject:subject_code(nama), owner:owner_id(full_name)",
     )
     .eq("school_id", schoolId)
-    .eq("session", session)
     .is("deleted_at", null);
   if (ownerIds) query = query.in("owner_id", ownerIds);
-
-  const { data, error } = await query.order("plan_date", { ascending: false }).limit(2000);
-
-  if (error) {
-    console.error("[review-plans] query failed:", error.message);
-    const known = dbFailureMessage(error);
-    if (known) return NextResponse.json({ error: known }, { status: 422 });
-    return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
-  }
 
   interface PlanRow {
     id: string;
@@ -101,7 +88,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     owner: { full_name: string } | null;
   }
 
-  const rows = (data ?? []) as unknown as PlanRow[];
+  const rows: PlanRow[] = [];
+  const pageSize = 1000;
+  const ordered = query
+    .order("plan_date", { ascending: false })
+    .order("id", { ascending: true });
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await ordered.range(offset, offset + pageSize - 1);
+    if (error) {
+      console.error("[review-plans] query failed:", error.message);
+      const known = dbFailureMessage(error);
+      if (known) return NextResponse.json({ error: known }, { status: 422 });
+      return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+    }
+    const page = (data ?? []) as unknown as PlanRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
 
   // `class_ids` is an array with no FK to embed through, so the names are
   // resolved here - the same read the queue does.
