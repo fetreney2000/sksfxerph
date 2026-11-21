@@ -60,6 +60,7 @@ export interface SchoolStatsView {
   /** Six weeks ending now. */
   weeks: SchoolWeekPoint[];
   loading: boolean;
+  error?: boolean;
 }
 
 interface WeekStatsRow {
@@ -320,7 +321,7 @@ export function useSchoolStats(
       });
       const empty = { stats: null, history: [] as SchoolWeekPoint[] };
       if (handleExpiredSession(res.status)) return empty;
-      if (!res.ok) return empty; // local mode (503), signed out (401), no school
+      if (!res.ok) throw new Error("Gagal memuatkan statistik sekolah");
       return (await res.json()) as { stats: WeekStatsRow | null; history: SchoolWeekPoint[] };
     },
     // Not asked for at all when the role may not see it - a request that can
@@ -342,6 +343,7 @@ export function useSchoolStats(
     prevAvgMinutes: null,
     weeks: [],
     loading: enabled && remote.isLoading,
+    error: enabled && remote.isError,
   };
 
   if (!enabled) return empty;

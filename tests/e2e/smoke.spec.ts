@@ -209,10 +209,7 @@ test.describe("authentication", () => {
     await expect(page.getByRole("link", { name: /^RPT$/ }).first()).toBeVisible({
       timeout: 15_000,
     });
-    await page
-      .getByRole("link", { name: /^RPT$/ })
-      .first()
-      .click();
+    await page.getByRole("link", { name: /^RPT$/ }).first().click();
     await expect(page).toHaveURL(/\/rpt/, { timeout: 15_000 });
     // Local mode has no backend and no reviewers: the page says so instead of
     // offering a form whose saves would go nowhere.
