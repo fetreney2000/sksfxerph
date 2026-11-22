@@ -2,7 +2,6 @@
 
 import { schoolCode, supabaseConfigured } from "@/lib/config";
 import { db } from "@/lib/db";
-import { hashPayload } from "@/lib/hash";
 import { ownerId } from "@/lib/owner";
 import type { WeekCopyCandidate } from "@/lib/week-copy";
 
@@ -95,7 +94,6 @@ export async function copyCandidatesToWeek(
           slotTime: candidate.slotTime,
           slotTimeEnd: candidate.slotTimeEnd,
           payload: candidate.payload,
-          contentHash: hashPayload(candidate.payload),
         }),
       });
       const body = (await response.json().catch(() => null)) as {

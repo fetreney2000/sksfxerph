@@ -1086,7 +1086,7 @@ create or replace function erph.guard_past_week_review()
 returns trigger language plpgsql security definer set search_path = erph, public as $$
 begin
   if (old.status = 'submitted' and new.status in ('approved', 'returned'))
-     or (old.status = 'draft' and new.status = 'submitted'
+     or (new.status = 'submitted' and old.status is distinct from 'submitted'
          and old.owner_id is distinct from erph.actor()) then
     if old.plan_date >= date_trunc('week', (now() at time zone 'UTC') + interval '8 hours')::date then
       raise exception 'RPH hanya boleh disemak selepas minggu tersebut tamat';
@@ -1127,13 +1127,27 @@ begin
     raise exception 'Belum log masuk';
   end if;
 
-  -- owner OR staff (a GPK or Guru Besar may resubmit on the teacher's behalf)
-  if v_doc.owner_id is distinct from erph.actor()
-     and not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[])
-  then raise exception 'Tidak dibenarkan'; end if;
-  if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
-  -- With the Guru Besar already: only the reviewer rung may move it from here.
-  if v_doc.status = 'forwarded' then raise exception 'Sedang menunggu kelulusan Guru Besar'; end if;
+  -- Owner, or a reviewer who actually supervises that teacher. Holding the
+  -- GPK role is not enough: a GPK acting on a plan outside their assignment
+  -- would be a second authorization path around may_supervise.
+  if v_doc.owner_id is distinct from erph.actor() then
+    if not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[]) then
+      raise exception 'Tidak dibenarkan';
+    end if;
+    if not erph.may_supervise(v_doc.school_id, v_doc.owner_id) then
+      raise exception 'RPH di luar bidang penyeliaan anda';
+    end if;
+  end if;
+
+  -- Only a working copy may be filed. A submitted plan cannot be re-submitted:
+  -- that would reset submitted_at (and the on-time figure built from it) and
+  -- append a second audit row for the same filing.
+  if v_doc.status not in ('draft','returned') then
+    if v_doc.status = 'approved' then raise exception 'Telah disahkan lengkap'; end if;
+    -- With the Guru Besar already: only the reviewer rung may move it from here.
+    if v_doc.status = 'forwarded' then raise exception 'Sedang menunggu kelulusan Guru Besar'; end if;
+    raise exception 'RPH sudah dihantar untuk semakan';
+  end if;
 
   v_pct := erph.rph_completeness(v_doc.payload);
 
@@ -1146,10 +1160,10 @@ begin
   -- console did nothing at all - a setting that looked like a control and was
   -- not one.
   --
-  -- `p_force` is the teacher's acknowledged escape hatch, not a bypass: it is
-  -- what the editor's "send it anyway" button sends, and the reviewer sees
-  -- what it cost in the AutoCheck panel. When the school does not require
-  -- completeness, the force flag has nothing left to do.
+  -- `p_force` is retained for controlled fixtures that need a submitted
+  -- incomplete plan. No HTTP route exposes it: `/api/rpc/submit` always calls
+  -- with the default, so a school's completeness rule cannot be bypassed by a
+  -- crafted request.
   select coalesce(
            (select require_complete from erph.school_setting
              where school_id = v_doc.school_id),
@@ -1178,6 +1192,111 @@ begin
 
   return jsonb_build_object('ok', true, 'status', 'submitted', 'completeness', v_pct,
                             'version', v_doc.version);
+end $$;
+
+-- BATCH SUBMIT ─ one week, one transaction
+--
+-- The archive's whole-week action must not leave half a week filed when a
+-- later plan is refused. This validates every plan first, then updates them
+-- together; any raise rolls the function back, so either the whole set is
+-- submitted or none of it is.
+create or replace function erph.submit_rph_batch(p_documents uuid[])
+returns jsonb language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_actor uuid := erph.actor();
+  v_ids uuid[];
+  v_count int;
+  v_doc erph.rph_document%rowtype;
+  v_pct smallint;
+  v_require boolean;
+  v_items jsonb := '[]'::jsonb;
+begin
+  perform set_config('app.rpc', '1', true);
+
+  if v_actor is null then
+    raise exception 'Belum log masuk';
+  end if;
+  if p_documents is null or coalesce(array_length(p_documents, 1), 0) = 0
+     or array_length(p_documents, 1) > 50 then
+    raise exception 'Senarai RPH tidak sah';
+  end if;
+
+  v_ids := array(select distinct unnest(p_documents) order by 1);
+
+  -- Lock every row before validating, so two tabs cannot both pass the status
+  -- check and then write the same set.
+  perform 1 from erph.rph_document
+   where id = any(v_ids) and deleted_at is null
+   order by id
+   for update;
+  select count(*) into v_count
+    from erph.rph_document
+   where id = any(v_ids) and deleted_at is null;
+  if v_count <> array_length(v_ids, 1) then
+    raise exception 'Sebahagian RPH tidak dijumpai';
+  end if;
+
+  -- Validate every row before writing any of them.
+  for v_doc in
+    select * from erph.rph_document
+     where id = any(v_ids)
+     order by plan_date, id
+  loop
+    if v_doc.owner_id is distinct from v_actor then
+      if not erph.has_role(v_doc.school_id,
+                           array['gpk','guru_besar']::erph.member_role[]) then
+        raise exception 'Tidak dibenarkan';
+      end if;
+      if not erph.may_supervise(v_doc.school_id, v_doc.owner_id) then
+        raise exception 'RPH di luar bidang penyeliaan anda';
+      end if;
+    end if;
+
+    if v_doc.status not in ('draft','returned') then
+      raise exception 'RPH % (%) tidak boleh dihantar - sudah dihantar atau disahkan',
+        v_doc.plan_date, v_doc.subject_code;
+    end if;
+
+    v_pct := erph.rph_completeness(v_doc.payload);
+    select coalesce(
+             (select require_complete from erph.school_setting
+               where school_id = v_doc.school_id),
+             true)
+      into v_require;
+    if v_pct < 100 and v_require then
+      raise exception 'RPH % (%) belum lengkap - lengkapkan setiap seksyen wajib',
+        v_doc.plan_date, v_doc.subject_code;
+    end if;
+  end loop;
+
+  update erph.rph_document
+     set status = 'submitted', submitted_at = now(),
+         grade = null, reviewed_by = null, reviewed_at = null,
+         version = version + 1, client_updated_at = now()
+   where id = any(v_ids);
+
+  for v_doc in
+    select * from erph.rph_document
+     where id = any(v_ids)
+     order by plan_date, id
+  loop
+    v_pct := erph.rph_completeness(v_doc.payload);
+    insert into erph.rph_revision (document_id, version, payload, completeness,
+                                   actor_id, reason)
+    values (v_doc.id, v_doc.version, v_doc.payload, v_pct, v_actor, 'resubmit')
+    on conflict (document_id, version) do nothing;
+
+    insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
+    values (v_doc.school_id, v_actor, 'rph_document', v_doc.id, 'submit',
+            jsonb_build_object('completeness', v_pct, 'status', 'submitted',
+                               'batch', true));
+
+    v_items := v_items || jsonb_build_array(
+      jsonb_build_object('id', v_doc.id, 'version', v_doc.version));
+  end loop;
+
+  return jsonb_build_object('ok', true, 'count', array_length(v_ids, 1),
+                            'items', v_items);
 end $$;
 
 -- REVIEW ─ KPM Lampiran 7: 1 = lengkap, 0 = tidak lengkap

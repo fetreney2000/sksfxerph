@@ -1,17 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  Copy,
-  Download,
-  FileDown,
-  Save,
-  Send,
-} from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, Download, FileDown, Save } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
@@ -24,15 +14,6 @@ import { useUser } from "@/components/shell/user-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/field";
 import { HelpHint } from "@/components/ui/help-hint";
 import { Progress } from "@/components/ui/progress";
@@ -48,8 +29,7 @@ import {
   weekOfIso,
 } from "@/lib/config";
 import { longDate, schoolDays, weekOptions } from "@/lib/date";
-import { db } from "@/lib/db";
-import { hashPayload } from "@/lib/hash";
+import { db, findByNaturalKey } from "@/lib/db";
 import { useCalendarReady } from "@/lib/hooks/use-calendar";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSchoolClasses, useSchoolSubjects } from "@/lib/hooks/use-school-data";
@@ -58,7 +38,6 @@ import { useSignature } from "@/lib/hooks/use-signature";
 import { ms } from "@/lib/i18n/ms";
 import { takeImport } from "@/lib/import/pending";
 import { ownerId } from "@/lib/owner";
-import { RpcError, submitRph } from "@/lib/rpc";
 import { toLocalPlan } from "@/lib/rph-doc";
 import {
   aktivitiFromText,
@@ -362,6 +341,14 @@ export function RphEditor({ docId }: { docId?: string }) {
       : (stored.data ?? { state: "missing" as const });
 
   const persisted = found !== undefined && found.state === "ok" ? found.doc : undefined;
+  /**
+   * A plan the teacher no longer owns the text of.
+   *
+   * `submitted` belongs to the reviewer until they return it, and `approved`
+   * is a sealed record. Neither may be edited here; the inputs are disabled and
+   * the write callbacks refuse even if something dispatches a change anyway.
+   */
+  const locked = persisted?.status === "submitted" || persisted?.status === "approved";
 
   const { items: classes } = useSchoolClasses();
   const { items: subjects } = useSchoolSubjects();
@@ -378,6 +365,14 @@ export function RphEditor({ docId }: { docId?: string }) {
    */
   const [pending, setPending] = React.useState<RphDocument | null>(null);
   const [seeded, setSeeded] = React.useState(false);
+  /**
+   * A slot clash, kept on screen instead of navigating away.
+   *
+   * The teacher's text lives only in this component until a save lands; pushing
+   * them into the existing plan threw it away. The banner offers that plan as a
+   * choice, not as a surprise.
+   */
+  const [conflict, setConflict] = React.useState<{ id: string; message: string } | null>(null);
   /**
    * Whether the calendar has been answered for.
    *
@@ -489,7 +484,7 @@ export function RphEditor({ docId }: { docId?: string }) {
   /** What is on screen: unsaved edits, a stored plan, or a blank slate. */
   const [overlay, setOverlay] = React.useState<RphDocument | null>(null);
   const live = overlay ?? persisted ?? pending;
-  /** Unsaved changes to a stored plan exist - Simpan writes them, Hantar waits for them. */
+  /** Unsaved changes to a stored plan exist - Simpan is the only writer. */
   const dirty = overlay !== null;
 
   // The school year the preview prints - server-resolved, so the paper shows
@@ -497,7 +492,6 @@ export function RphEditor({ docId }: { docId?: string }) {
   const session = useSession();
   const school = useSchool();
 
-  const [submitOpen, setSubmitOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
   // ── Tier B: the gated wizard became four collapsible sections ────────────
@@ -562,12 +556,13 @@ export function RphEditor({ docId }: { docId?: string }) {
     if (liveId) {
       setDraft(null);
       setOverlay(null);
+      setConflict(null);
     }
   }, [liveId]);
 
   const update = React.useCallback(
     (patch: Partial<RphDocument>) => {
-      if (!live) return;
+      if (!live || locked) return;
 
       const next: RphDocument = {
         ...live,
@@ -592,7 +587,7 @@ export function RphEditor({ docId }: { docId?: string }) {
     },
     // `persisted` (not `live`) decides the branch: an overlay must not send
     // the next keystroke down the unsaved path.
-    [live, persisted],
+    [live, persisted, locked],
   );
 
   /**
@@ -613,23 +608,22 @@ export function RphEditor({ docId }: { docId?: string }) {
       if (!supabaseConfigured) {
         // Development harness: Dexie *is* the database. Same overlap rule as
         // the server enforces below, so the demo behaves like the deployment.
-        const clash = await db.documents
-          .where("[ownerId+session+weekNo+planDate]")
-          .equals([draft.ownerId, draft.session, draft.weekNo, draft.planDate])
-          .filter(
-            (d) =>
-              d.id !== draft.id &&
-              d.subjectCode === draft.subjectCode &&
-              Array.isArray(d.classIds) &&
-              d.classIds.some((c) => draft.classIds.includes(c)),
-          )
-          .first();
-        if (clash) {
+        const clash = await findByNaturalKey(
+          draft.ownerId,
+          draft.classIds,
+          draft.subjectCode,
+          draft.session,
+          draft.weekNo,
+          draft.planDate,
+        );
+        if (clash && clash.id !== draft.id) {
+          const message = `Anda sudah mempunyai RPH untuk ${
+            clash.classNames[clash.classIds.findIndex((c) => draft.classIds.includes(c))] ?? ""
+          } · ${draft.subjectName} pada ${draft.planDate}.`;
+          setConflict({ id: clash.id, message });
           toast.error(
-            `Anda sudah mempunyai RPH untuk ${clash.classNames[clash.classIds.findIndex((c) => draft.classIds.includes(c))] ?? ""} · ${draft.subjectName} pada ` +
-              `${draft.planDate}. Buka yang sedia ada, atau tukar kelas, subjek atau tarikh.`,
+            `${message} Kandungan anda masih di sini - pilih RPH sedia ada atau tukar slot.`,
           );
-          router.push(`/editor/${clash.id}`);
           return;
         }
         await db.documents.put(draft);
@@ -649,7 +643,6 @@ export function RphEditor({ docId }: { docId?: string }) {
           slotTime: draft.slotTime,
           slotTimeEnd: draft.slotTimeEnd,
           payload: draft.payload,
-          contentHash: hashPayload(draft.payload),
         }),
       });
       const body = (await res.json().catch(() => null)) as {
@@ -660,13 +653,11 @@ export function RphEditor({ docId }: { docId?: string }) {
       } | null;
       if (res.status === 409 && body?.clashId) {
         // The slot is already filed - possibly by this same press, retried
-        // after a dropped response. Either way the plan exists, so open it
-        // instead of filing a second row the reviewer would have to guess
-        // between.
-        toast.error(
-          body.error ?? "Anda sudah mempunyai RPH untuk slot ini. Buka yang sedia ada.",
-        );
-        router.push(`/editor/${body.clashId}`);
+        // after a dropped response. Keep the draft on screen; the teacher
+        // chooses whether to open the existing row or change the slot.
+        const message = body.error ?? "Anda sudah mempunyai RPH untuk slot ini.";
+        setConflict({ id: body.clashId, message });
+        toast.error(`${message} Kandungan anda masih di sini.`);
         return;
       }
       if (!res.ok || !body?.id) {
@@ -686,6 +677,7 @@ export function RphEditor({ docId }: { docId?: string }) {
       });
       setPending(null);
       setOverlay(null);
+      setConflict(null);
       await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
       router.replace(`/editor/${body.id}`);
     } catch (err) {
@@ -702,81 +694,102 @@ export function RphEditor({ docId }: { docId?: string }) {
    * carries its new version back, and the cache is updated in place so the
    * screen never flashes the old row it just replaced.
    */
-  const saveChanges = React.useCallback(
-    async (opts?: { silent?: boolean }): Promise<boolean> => {
-      if (!overlay || !persisted || saving) return false;
-      setSaving(true);
-      try {
-        const next: RphDocument = {
-          ...overlay,
-          payload: payloadRef.current,
-          clientUpdatedAt: Date.now(),
-        };
+  const saveChanges = React.useCallback(async (): Promise<boolean> => {
+    if (!overlay || !persisted || saving) return false;
+    setSaving(true);
+    try {
+      const next: RphDocument = {
+        ...overlay,
+        payload: payloadRef.current,
+        clientUpdatedAt: Date.now(),
+      };
 
-        if (!supabaseConfigured) {
-          // Development harness: Dexie *is* the database.
-          await db.documents.put(next);
-          setOverlay(null);
-          queryClient.invalidateQueries({ queryKey: ["rph-plan", persisted.id] });
-          if (!opts?.silent) toast.success("Disimpan");
-          return true;
-        }
-
-        const res = await fetch(`/api/rph/${encodeURIComponent(persisted.id)}`, {
-          method: "PATCH",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            classIds: next.classIds,
-            subjectCode: next.subjectCode,
-            weekNo: next.weekNo,
-            planDate: next.planDate,
-            slotTime: next.slotTime,
-            slotTimeEnd: next.slotTimeEnd,
-            payload: next.payload,
-            contentHash: hashPayload(next.payload),
-          }),
-        });
-        const body = (await res.json().catch(() => null)) as {
-          error?: string;
-          clashId?: string;
-          version?: number;
-        } | null;
-        if (res.status === 409 && body?.clashId) {
-          toast.error(body.error ?? "Slot ini sudah diisi oleh RPH lain. Buka yang sedia ada.");
-          router.push(`/editor/${body.clashId}`);
+      if (!supabaseConfigured) {
+        // Development harness: Dexie *is* the database. The same overlap
+        // check `savePlan` and the server apply - an edit that moves this
+        // draft onto another plan's slot must not create a duplicate.
+        const clash = await findByNaturalKey(
+          next.ownerId,
+          next.classIds,
+          next.subjectCode,
+          next.session,
+          next.weekNo,
+          next.planDate,
+        );
+        if (clash && clash.id !== next.id) {
+          const message = `Slot ini sudah diisi oleh RPH lain (${clash.subjectName} · ${clash.planDate}).`;
+          setConflict({ id: clash.id, message });
+          toast.error(`${message} Kandungan anda masih di sini.`);
           return false;
         }
-        if (!res.ok) {
-          // A sealed plan changed under the teacher's hands elsewhere: the
-          // server wins, the local edits cannot land, and saying so plainly
-          // beats a spinner that never resolves.
-          if (res.status === 409) {
-            toast.error(body?.error ?? "RPH ini telah disahkan dan tidak boleh diubah.");
+        await db.documents.put(next);
+        setOverlay(null);
+        setConflict(null);
+        queryClient.invalidateQueries({ queryKey: ["rph-plan", persisted.id] });
+        toast.success("Disimpan");
+        return true;
+      }
+
+      const res = await fetch(`/api/rph/${encodeURIComponent(persisted.id)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          classIds: next.classIds,
+          subjectCode: next.subjectCode,
+          weekNo: next.weekNo,
+          planDate: next.planDate,
+          slotTime: next.slotTime,
+          slotTimeEnd: next.slotTimeEnd,
+          payload: next.payload,
+          expectedVersion: persisted.version,
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        clashId?: string;
+        version?: number;
+      } | null;
+      if (res.status === 409 && body?.clashId) {
+        const message = body.error ?? "Slot ini sudah diisi oleh RPH lain.";
+        setConflict({ id: body.clashId, message });
+        toast.error(`${message} Kandungan anda masih di sini.`);
+        return false;
+      }
+      if (!res.ok) {
+        // A sealed or submitted plan changed under the teacher's hands
+        // elsewhere: the server wins and the local edits cannot land. A
+        // version conflict is different - the overlay is kept so nothing is
+        // thrown away while the teacher reloads.
+        if (res.status === 409) {
+          const message = body?.error ?? "RPH ini tidak boleh diubah.";
+          toast.error(message);
+          const closed = /tidak boleh diubah/i.test(message);
+          if (closed) {
             setOverlay(null);
             await queryClient.invalidateQueries({ queryKey: ["rph-plan", persisted.id] });
-            return false;
           }
-          throw new Error(body?.error ?? "Gagal menyimpan perubahan");
+          return false;
         }
-        const saved: RphDocument = { ...next, version: body?.version ?? next.version + 1 };
-        queryClient.setQueryData(["rph-plan", persisted.id], {
-          state: "ok" as const,
-          doc: saved,
-        });
-        setOverlay(null);
-        await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
-        if (!opts?.silent) toast.success("Disimpan");
-        return true;
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Gagal menyimpan perubahan");
-        return false;
-      } finally {
-        setSaving(false);
+        throw new Error(body?.error ?? "Gagal menyimpan perubahan");
       }
-    },
-    [overlay, persisted, saving, router, queryClient],
-  );
+      const saved: RphDocument = { ...next, version: body?.version ?? next.version + 1 };
+      queryClient.setQueryData(["rph-plan", persisted.id], {
+        state: "ok" as const,
+        doc: saved,
+      });
+      setOverlay(null);
+      setConflict(null);
+      await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
+      toast.success("Disimpan");
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan perubahan");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [overlay, persisted, saving, queryClient]);
 
   /**
    * Ctrl/Cmd+S.
@@ -811,6 +824,7 @@ export function RphEditor({ docId }: { docId?: string }) {
 
   const updatePayload = React.useCallback(
     (patch: Partial<RphPayload>) => {
+      if (locked) return;
       const next = { ...payloadRef.current, ...patch };
       // Update the ref *before* anything can render - `update()` reads it to
       // build the commit - then let React render from the same value.
@@ -818,7 +832,7 @@ export function RphEditor({ docId }: { docId?: string }) {
       setDraft(next);
       void update({ payload: next });
     },
-    [update],
+    [update, locked],
   );
 
   // Park the section nav flush under the topbar. Measured rather than assumed:
@@ -1030,84 +1044,15 @@ export function RphEditor({ docId }: { docId?: string }) {
   const doneCount = stepDone.filter(Boolean).length;
 
   const allNotes = notes(payload);
-  const blocking = allNotes.filter((n) => n.blocking);
-  const ready = blocking.length === 0;
+  const ready = allNotes.every((n) => !n.blocking);
 
   /**
-   * A plan whose submission is no longer the teacher's to repeat.
+   * A plan the reviewer already holds or has sealed.
    *
-   * `submitted` sits open on a reviewer's screen and `approved` is sealed -
-   * pressing Hantar on either would only bounce off the server. A returned
-   * plan is deliberately excluded: it came back for changes, and Hantar is
-   * exactly how the revised version goes back.
+   * Submission happens in Arkib now, so the editor's only remaining action for
+   * these is to start the next plan from the sealed content.
    */
   const outOfTeacherHands = live.status === "submitted" || live.status === "approved";
-
-  const onSubmit = async (force: boolean) => {
-    if (!live) return;
-    // Hantar always files what is on screen: unsaved edits are flushed first
-    // rather than submitting the version before them.
-    if (dirty) {
-      const saved = await saveChanges({ silent: true });
-      if (!saved) return;
-    }
-
-    if (!supabaseConfigured) {
-      // Development harness: no server, so the local completeness meter is
-      // the gate and the status flips in IndexedDB.
-      if (score < 100 && !force) {
-        setSubmitOpen(true);
-        return;
-      }
-      await db.documents.put({
-        ...live,
-        payload: payloadRef.current,
-        status: "submitted",
-        submittedAt: Date.now(),
-        grade: undefined,
-        clientUpdatedAt: Date.now(),
-      });
-      setOverlay(null);
-      await queryClient.invalidateQueries({ queryKey: ["rph-plan", live.id] });
-      setSubmitOpen(false);
-      toast.success(`Dihantar untuk semakan · status: ${ms.status.submitted}`);
-      router.push("/minggu");
-      return;
-    }
-
-    // The server is authoritative - `submit_rph` owns the completeness rule
-    // and may disagree with our local meter. If it refuses, show the gate
-    // instead of submitting.
-    setSaving(true);
-    try {
-      const verdict = await submitRph(live.id, force);
-      if (verdict && !verdict.ok) {
-        setSubmitOpen(true);
-        return;
-      }
-    } catch (err) {
-      // An expired session is NOT a hiccup: claiming "Dihantar" while the
-      // server never saw it would be a lie. Send them to re-auth.
-      if (err instanceof RpcError && err.isAuthFailure) {
-        toast.error("Sesi anda telah tamat. Sila log masuk semula.");
-        window.setTimeout(() => window.location.assign("/login"), 1200);
-        return;
-      }
-      toast.error(err instanceof Error ? err.message : "Gagal menghantar");
-      return;
-    } finally {
-      setSaving(false);
-    }
-
-    // Re-read the row the RPC just decided on: status, version and timestamps
-    // all moved server-side, and the screen should show what was filed.
-    await queryClient.invalidateQueries({ queryKey: ["rph-plan", live.id] });
-    await queryClient.refetchQueries({ queryKey: ["rph-plan", live.id] });
-    await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
-    setSubmitOpen(false);
-    toast.success(`Dihantar untuk semakan · status: ${ms.status.submitted}`);
-    router.push("/minggu");
-  };
 
   const open = openSet ?? new Set<number>();
   // One boolean drives both layouts: below xl it is the active tab, at xl it
@@ -1343,6 +1288,7 @@ export function RphEditor({ docId }: { docId?: string }) {
               open={open.has(i)}
               onToggle={() => toggleSection(i)}
               scrollMarginTop={topInset + 56}
+              disabled={locked}
             >
               {i === 0 && (
                 <StepProfil
@@ -1428,6 +1374,28 @@ export function RphEditor({ docId }: { docId?: string }) {
         </div>
       </div>
 
+      {conflict && (
+        <div
+          data-print="screen"
+          role="alert"
+          className="mb-3 flex flex-wrap items-center gap-3 rounded-[12px] border border-danger-line bg-danger-soft px-4 py-3 text-[13px] text-danger-ink"
+        >
+          <p className="min-w-0 flex-1 leading-[1.55]">
+            <b>{conflict.message}</b> Kandungan anda masih di sini.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => router.push(`/editor/${conflict.id}`)}
+          >
+            Buka RPH sedia ada
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setConflict(null)}>
+            Teruskan menyunting
+          </Button>
+        </div>
+      )}
+
       {/* ══ Single sticky action bar ═════════════════════════════════════
           Save state lives here (not 300px up in the header) next to the one
           primary action. No Back/Next: the section nav is the navigation, and
@@ -1455,27 +1423,37 @@ export function RphEditor({ docId }: { docId?: string }) {
               : "Belum disimpan"}
         </span>
 
-        {/* Nothing exists to submit until Simpan creates the row - offering
-            "Hantar" here would send an id that is not in the database. */}
+        {/* The editor saves. Submission lives in Arkib, where a teacher can
+            send one plan or a whole week with the completeness consequences in
+            front of them. */}
         {persisted ? (
-          dirty ? (
+          outOfTeacherHands ? (
+            /* A submitted plan belongs to the reviewer and an approved one is
+               sealed. The fields are disabled; the only move left is to start
+               the next plan from it. */
+            <div className="ml-auto flex flex-wrap items-center gap-2.5">
+              <span className="text-[12px] text-ink-3">
+                {live.status === "approved"
+                  ? "Telah disahkan - baca sahaja."
+                  : "Telah dihantar - baca sahaja sehingga dikembalikan."}
+              </span>
+              <Button onClick={() => router.push(`/editor?copy=${live.id}`)}>
+                <Copy className="h-4 w-4" strokeWidth={1.9} aria-hidden />
+                {ms.editor.copy}
+              </Button>
+            </div>
+          ) : dirty ? (
             <Button className="ml-auto" disabled={saving} onClick={() => void saveChanges()}>
               <Save className="h-4 w-4" strokeWidth={1.9} aria-hidden />
               {saving ? "Menyimpan…" : "Simpan perubahan"}
             </Button>
-          ) : outOfTeacherHands ? (
-            /* A plan the reviewer holds (or has sealed) is not going anywhere
-               by pressing Hantar again - the only move left is to start the
-               next one from it. The copy opens a fresh unsaved editor seeded
-               with this plan's content, classes and slot; nothing is written
-               until its own Simpan is pressed. */
-            <Button className="ml-auto" onClick={() => router.push(`/editor?copy=${live.id}`)}>
-              <Copy className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-              {ms.editor.copy}
-            </Button>
           ) : (
-            <Button className="ml-auto" onClick={() => void onSubmit(false)}>
-              <Send className="h-4 w-4" strokeWidth={1.9} aria-hidden /> {ms.editor.submit}
+            <Button
+              className="ml-auto"
+              variant="secondary"
+              onClick={() => router.push("/arkib")}
+            >
+              Hantar melalui Arkib
             </Button>
           )
         ) : (
@@ -1485,77 +1463,6 @@ export function RphEditor({ docId }: { docId?: string }) {
           </Button>
         )}
       </div>
-
-      {/* ══ Submit gate dialog ══════════════════════════════════════════ */}
-      <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-        {/* <DialogContent> is not optional decoration: Dialog is Radix's Root,
-            which renders its children inline. Without the Portal/Overlay wrapper
-            these three blocks were landing in the page grid as a phantom
-            "Hantar RPH untuk semakan?" section. */}
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Hantar RPH untuk semakan?</DialogTitle>
-            <DialogDescription>
-              {live.classNames.join(", ")} · {live.subjectName} · {longDate(live.planDate)}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <dl className="text-[13.5px]">
-              <Row k="Bahagian lengkap" v={`${doneCount} / 4`} />
-              {/* The role, not a person. Who specifically reviews is not on
-                  this record - it depends on the supervision assignment, and
-                  naming an individual here would promise the teacher a reader
-                  they may not get. */}
-              <Row k="Dihantar kepada" v="GPK sekolah" />
-              <Row k="Kesediaan" v={`${score}%`} tone={ready ? "ok" : "warn"} />
-            </dl>
-            {/* The warning is always shown: this dialog only opens when the
-              server refused a normal submission, so pressing the force button
-              sends a plan the server considers incomplete even if the local
-              meter disagrees. */}
-            <div className="mt-3.5 flex gap-2.5 rounded-[10px] border border-warning-line bg-warning-soft p-3 text-[12.5px] leading-[1.55] text-warning-ink">
-              <AlertTriangle
-                className="mt-0.5 h-4 w-4 shrink-0"
-                strokeWidth={1.9}
-                aria-hidden
-              />
-              <div>
-                {blocking.length > 0 && (
-                  <>
-                    <p className="font-semibold">
-                      {ms.editor.incompleteHeading(blocking.length)}
-                    </p>
-                    <ul className="mt-1 list-disc pl-4">
-                      {blocking.map((n) => (
-                        <li key={n.text}>{n.text}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                <p className={blocking.length > 0 ? "mt-1.5" : undefined}>
-                  {ms.editor.draftWarning}
-                </p>
-              </div>
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setSubmitOpen(false)}>
-              Batal
-            </Button>
-            <Button variant="danger" onClick={() => void onSubmit(true)}>
-              {ms.editor.submitIncomplete}
-            </Button>
-            <Button
-              onClick={() => {
-                setSubmitOpen(false);
-                goTo(3);
-              }}
-            >
-              Lengkapkan sekarang
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* The artefact. `hidden` on screen - it is not a preview, it is the
           thing the printer takes - and `@media print` in globals.css makes it
@@ -1588,6 +1495,7 @@ function SectionCard({
   open,
   onToggle,
   scrollMarginTop,
+  disabled = false,
   children,
 }: {
   index: number;
@@ -1597,6 +1505,8 @@ function SectionCard({
   open: boolean;
   onToggle: () => void;
   scrollMarginTop: number;
+  /** A submitted or approved plan is read-only. */
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -1655,31 +1565,15 @@ function SectionCard({
           />
         </button>
       </h3>
-      {open && <div className="border-t border-border px-4 py-4">{children}</div>}
+      {open && (
+        <fieldset
+          disabled={disabled}
+          className="m-0 min-w-0 border-t border-border px-4 py-4 disabled:opacity-70"
+        >
+          {children}
+        </fieldset>
+      )}
     </section>
-  );
-}
-
-function Row({ k, v, tone }: { k: string; v: string; tone?: "ok" | "bad" | "warn" }) {
-  return (
-    <div className="flex justify-between gap-3 border-b border-dashed border-border py-2 last:border-b-0">
-      <dt className="text-ink-3">{k}</dt>
-      <dd
-        className="font-bold"
-        style={{
-          color:
-            tone === "ok"
-              ? "var(--color-success-ink)"
-              : tone === "bad"
-                ? "var(--color-danger-ink)"
-                : tone === "warn"
-                  ? "var(--color-warning-ink)"
-                  : undefined,
-        }}
-      >
-        {v}
-      </dd>
-    </div>
   );
 }
 

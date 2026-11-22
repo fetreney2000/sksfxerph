@@ -22,6 +22,12 @@ const SCHOOL_ID = "99999999-9999-4999-8999-999999999999";
 const state = vi.hoisted(() => ({
   role: "guru_biasa" as string,
   rpcCalls: [] as string[],
+  submitData: {
+    ok: true,
+    status: "submitted",
+    completeness: 100,
+    version: 2,
+  } as Record<string, unknown>,
 }));
 
 vi.mock("@/lib/config", async (importOriginal) => {
@@ -69,10 +75,7 @@ vi.mock("@/lib/server/db", () => ({
     rpc: (name: string) => {
       state.rpcCalls.push(name);
       if (name === "submit_rph") {
-        return Promise.resolve({
-          data: { ok: true, status: "submitted", completeness: 100, version: 2 },
-          error: null,
-        });
+        return Promise.resolve({ data: state.submitData, error: null });
       }
       return Promise.resolve({ data: null, error: null });
     },
@@ -97,6 +100,7 @@ function post(path: string, body: unknown): NextRequest {
 beforeEach(() => {
   state.role = "guru_biasa";
   state.rpcCalls.length = 0;
+  state.submitData = { ok: true, status: "submitted", completeness: 100, version: 2 };
 });
 
 describe("POST /api/rpc/submit - identifier shape", () => {
@@ -112,6 +116,21 @@ describe("POST /api/rpc/submit - identifier shape", () => {
 
     expect(res.status).toBe(400);
     expect(state.rpcCalls).toEqual([]);
+  });
+
+  it("answers an incomplete plan with 422, not a successful 200", async () => {
+    state.submitData = {
+      ok: false,
+      completeness: 25,
+      error: "RPH belum lengkap - lengkapkan setiap seksyen wajib",
+    };
+
+    const res = await SUBMIT(
+      post("/api/rpc/submit", { documentId: "22222222-2222-4222-8222-222222222222" }),
+    );
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { ok: boolean }).ok).toBe(false);
   });
 
   it("passes a well-formed id through to the RPC", async () => {

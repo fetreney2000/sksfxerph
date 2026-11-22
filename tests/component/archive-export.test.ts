@@ -99,6 +99,9 @@ describe("ZIP export", () => {
         expect(new TextDecoder().decode(files[name]?.slice(0, 5))).toBe("%PDF-");
       }
     },
+    // Embedding the PDF font is CPU work; under the full suite's parallel load
+    // it can take longer than the default five seconds.
+    20_000,
   );
 
   it("does not download an incomplete ZIP when DOCX export fails", async () => {

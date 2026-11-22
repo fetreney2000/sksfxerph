@@ -2,10 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import type { DocumentRow } from "@/app/api/rph/route";
 import { can } from "@/lib/auth/permissions";
-import { rphPayloadSchema } from "@/lib/schemas/rph";
+import { weekOfIso } from "@/lib/config";
+import { hashPayload } from "@/lib/hash";
+import { completeness, normalisePayload, rphPayloadSchema } from "@/lib/schemas/rph";
 import { requireDbUser, requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { dbFailureMessage, toClientError } from "@/lib/server/http/errors";
-import { resolveSession } from "@/lib/server/session";
+import { currentSession } from "@/lib/session";
 
 /**
  * DELETE /api/rph/[id] — take a plan out of the archive.
@@ -224,9 +227,11 @@ export async function DELETE(
  * who could collide is the same teacher on another device. The version still
  * bumps on every write so a signature is always over a known version.
  *
- * A sealed plan is closed: once `sahkan_rph` has approved it, the paper that
- * went out must match the row for ever. Drafts, submitted plans awaiting
- * review and returned plans stay editable.
+ * Only a teacher's working copies - drafts and returned plans - are editable.
+ * A submitted plan belongs to the reviewer until they decide: editing it under
+ * them would change what they are reading, and moving its date or week could
+ * back-date a current filing into a past week the reviewer may approve at once.
+ * An approved plan is a sealed record and never changes.
  */
 const patchSchema = z
   .object({
@@ -253,7 +258,8 @@ const patchSchema = z
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Masa tidak sah")
       .optional(),
     payload: rphPayloadSchema.optional(),
-    contentHash: z.string().max(128).optional(),
+    /** The version the editor loaded; a mismatch means another tab saved first. */
+    expectedVersion: z.number().int().min(1).optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "Tiada perubahan dihantar" });
 
@@ -273,7 +279,6 @@ export async function PATCH(
   if (!schoolId) {
     return NextResponse.json({ error: "Akaun ini tiada sekolah" }, { status: 400 });
   }
-  const session = await resolveSession(gate.user.id);
 
   let raw: unknown;
   try {
@@ -293,7 +298,7 @@ export async function PATCH(
   const { data: row, error: readErr } = await gate.db
     .from("rph_document")
     .select(
-      "owner_id, deleted_at, status, version, class_ids, subject_code, week_no, plan_date",
+      "owner_id, deleted_at, status, version, class_ids, subject_code, session, week_no, plan_date, payload",
     )
     .eq("id", id)
     .eq("school_id", schoolId)
@@ -312,15 +317,31 @@ export async function PATCH(
     version: number;
     class_ids: string[];
     subject_code: string;
+    session: string;
     week_no: number;
     plan_date: string;
+    payload: unknown;
   };
   if (current.deleted_at) {
     return NextResponse.json({ error: "RPH tidak dijumpai" }, { status: 404 });
   }
-  if (current.status === "approved") {
+  if (current.status !== "draft" && current.status !== "returned") {
     return NextResponse.json(
-      { error: "RPH yang telah disahkan tidak boleh diubah." },
+      {
+        error:
+          current.status === "approved"
+            ? "RPH yang telah disahkan tidak boleh diubah."
+            : "RPH yang telah dihantar untuk semakan tidak boleh diubah. Tunggu keputusan penyemak.",
+      },
+      { status: 409 },
+    );
+  }
+  if (d.expectedVersion !== undefined && d.expectedVersion !== current.version) {
+    return NextResponse.json(
+      {
+        error:
+          "RPH ini telah disimpan pada peranti atau tab lain. Muat semula sebelum menyimpan semula.",
+      },
       { status: 409 },
     );
   }
@@ -341,25 +362,36 @@ export async function PATCH(
   }
 
   if (d.classIds !== undefined) {
-    const { data: classes, error: classErr } = await gate.db
-      .from("class")
-      .select("id")
-      .eq("school_id", schoolId)
-      .eq("session", session)
-      .eq("is_active", true);
-    if (classErr) {
-      console.error("[rph] class lookup failed:", classErr.message);
-      return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
-    }
-    const schoolClasses = new Set((classes ?? []).map((c: { id: string }) => c.id));
     // Canonical form, as on create: the unique index compares arrays
     // order-sensitively, so the stored order must not depend on tick order.
     d.classIds = [...new Set(d.classIds)].sort();
-    if (!d.classIds.every((id) => schoolClasses.has(id))) {
-      return NextResponse.json(
-        { error: "Kelas ini bukan milik sekolah atau sesi anda" },
-        { status: 422 },
-      );
+
+    // An unchanged class set is always acceptable. This is what lets a plan
+    // from an earlier session be edited at all: its classes belong to that
+    // session's rows, not to the school's current one.
+    const currentIds = current.class_ids ?? [];
+    const unchanged =
+      d.classIds.length === currentIds.length &&
+      d.classIds.every((id, index) => id === currentIds[index]);
+
+    if (!unchanged) {
+      const { data: classes, error: classErr } = await gate.db
+        .from("class")
+        .select("id")
+        .eq("school_id", schoolId)
+        .eq("session", current.session)
+        .eq("is_active", true);
+      if (classErr) {
+        console.error("[rph] class lookup failed:", classErr.message);
+        return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+      }
+      const schoolClasses = new Set((classes ?? []).map((c: { id: string }) => c.id));
+      if (!d.classIds.every((id) => schoolClasses.has(id))) {
+        return NextResponse.json(
+          { error: "Kelas ini bukan milik sekolah atau sesi RPH ini" },
+          { status: 422 },
+        );
+      }
     }
   }
 
@@ -371,6 +403,27 @@ export async function PATCH(
   const effSubject = d.subjectCode ?? current.subject_code;
   const effWeek = d.weekNo ?? current.week_no;
   const effDate = d.planDate ?? current.plan_date;
+  const weekDateChanged =
+    (d.weekNo !== undefined && d.weekNo !== current.week_no) ||
+    (d.planDate !== undefined && d.planDate !== current.plan_date);
+  if (weekDateChanged) {
+    // Week numbers belong to the session's calendar. Moving a historical plan
+    // would compare it against this year's anchors and could silently file it
+    // somewhere else; leave its slot alone.
+    if (current.session !== currentSession()) {
+      return NextResponse.json(
+        { error: "RPH sesi lama tidak boleh dipindahkan ke minggu lain." },
+        { status: 422 },
+      );
+    }
+    const anchors = await loadCalendarAnchors(schoolId);
+    if (weekOfIso(effDate, anchors) !== effWeek) {
+      return NextResponse.json(
+        { error: "Tarikh tidak sepadan dengan minggu yang dipilih." },
+        { status: 422 },
+      );
+    }
+  }
   if (
     d.classIds !== undefined ||
     d.subjectCode !== undefined ||
@@ -382,7 +435,7 @@ export async function PATCH(
       .select("id, class_ids")
       .eq("school_id", schoolId)
       .eq("owner_id", gate.user.id)
-      .eq("session", session)
+      .eq("session", current.session)
       .eq("week_no", effWeek)
       .eq("plan_date", effDate)
       .eq("subject_code", effSubject)
@@ -404,10 +457,11 @@ export async function PATCH(
     }
   }
 
+  const version = current.version + 1;
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
     client_updated_at: new Date().toISOString(),
-    version: current.version + 1,
+    version,
   };
   if (d.classIds !== undefined) patch.class_ids = d.classIds;
   if (d.subjectCode !== undefined) patch.subject_code = d.subjectCode;
@@ -415,8 +469,11 @@ export async function PATCH(
   if (d.planDate !== undefined) patch.plan_date = d.planDate;
   if (d.slotTime !== undefined) patch.slot_time = d.slotTime;
   if (d.slotTimeEnd !== undefined) patch.slot_time_end = d.slotTimeEnd;
-  if (d.payload !== undefined) patch.payload = d.payload;
-  if (d.contentHash !== undefined) patch.content_hash = d.contentHash;
+  if (d.payload !== undefined) {
+    patch.payload = d.payload;
+    // Derived, never trusted from the body.
+    patch.content_hash = hashPayload(d.payload);
+  }
 
   const { error } = await gate.db.from("rph_document").update(patch).eq("id", id);
   if (error) {
@@ -429,7 +486,7 @@ export async function PATCH(
         .select("id, class_ids")
         .eq("school_id", schoolId)
         .eq("owner_id", gate.user.id)
-        .eq("session", session)
+        .eq("session", current.session)
         .eq("week_no", effWeek)
         .eq("plan_date", effDate)
         .eq("subject_code", effSubject)
@@ -449,5 +506,21 @@ export async function PATCH(
     if (known) return NextResponse.json({ error: known }, { status: 422 });
     return toClientError("[rph] update failed:", error);
   }
-  return NextResponse.json({ ok: true, version: current.version + 1 });
+  // Keep the edit history the schema promises. A revision row belongs to the
+  // version just written, so the payload is the effective one - either the
+  // patched body or the row's existing content.
+  const effective = d.payload ?? normalisePayload(current.payload);
+  const { error: revisionErr } = await gate.db.from("rph_revision").insert({
+    document_id: id,
+    version,
+    payload: effective,
+    completeness: completeness(effective),
+    actor_id: gate.user.id,
+    reason: "edit",
+  });
+  if (revisionErr) {
+    console.error("[rph] revision write failed:", revisionErr.message);
+  }
+
+  return NextResponse.json({ ok: true, version });
 }

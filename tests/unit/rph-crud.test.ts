@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { hashPayload } from "@/lib/hash";
 import { mintSession, SESSION_COOKIE } from "@/lib/server/auth/token";
 
 /**
@@ -289,6 +290,14 @@ describe("POST /api/rph", () => {
     expect(state.rows).toHaveLength(1);
   });
 
+  it("refuses a week that does not contain the date", async () => {
+    const res = await call(POST, "POST", "/api/rph", { ...newPlan(), weekNo: 35 });
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: string }).error).toContain("Tarikh tidak sepadan");
+    expect(state.rows).toHaveLength(0);
+  });
+
   it("allows disjoint class sets on the same day", async () => {
     state.rows = [draft()];
 
@@ -313,6 +322,21 @@ describe("POST /api/rph", () => {
 
     expect(res.status).toBe(422);
     expect(state.rows).toHaveLength(0);
+  });
+
+  it("stores a content hash derived from the row, not the request", async () => {
+    const res = await call(POST, "POST", "/api/rph", {
+      ...newPlan(),
+      // Unknown to the schema, so it cannot become the stored value.
+      contentHash: "client-supplied",
+    });
+
+    expect(res.status).toBe(200);
+    const insert = state.calls.find((c) => c.table === "rph_document" && c.method === "insert");
+    if (!insert) throw new Error("no insert recorded");
+    expect((insert.args[0] as { content_hash: string }).content_hash).toBe(
+      hashPayload(payload),
+    );
   });
 
   it("refuses a Guru Besar - they teach nothing to file", async () => {
@@ -418,6 +442,83 @@ describe("PATCH /api/rph/[id]", () => {
 
     expect(res.status).toBe(409);
     expect(state.rows[0]?.version).toBe(1);
+  });
+
+  it("refuses to edit a plan already submitted for review", async () => {
+    state.rows = [draft({ status: "submitted" })];
+
+    const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+
+    expect(res.status).toBe(409);
+    expect(state.rows[0]?.version).toBe(1);
+  });
+
+  it("refuses a date that belongs to another week", async () => {
+    state.rows = [draft()];
+
+    const res = await call(
+      PATCH,
+      "PATCH",
+      `/api/rph/${VALID_ID}`,
+      { planDate: "2026-11-23" },
+      VALID_ID,
+    );
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: string }).error).toContain("Tarikh tidak sepadan");
+  });
+
+  it("saves an older-session plan when its class set has not changed", async () => {
+    state.rows = [draft({ session: "2025/2026" })];
+
+    const res = await call(
+      PATCH,
+      "PATCH",
+      `/api/rph/${VALID_ID}`,
+      {
+        classIds: [CLASS_1],
+        weekNo: 36,
+        planDate: "2026-11-18",
+        payload,
+      },
+      VALID_ID,
+    );
+
+    expect(res.status).toBe(200);
+    expect(state.rows[0]?.version).toBe(2);
+  });
+
+  it("records the edited version in the revision history", async () => {
+    state.rows = [draft()];
+
+    const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+
+    expect(res.status).toBe(200);
+    const revision = state.calls.find(
+      (c) => c.table === "rph_revision" && c.method === "insert",
+    );
+    expect(revision?.args[0]).toMatchObject({
+      document_id: VALID_ID,
+      version: 2,
+      reason: "edit",
+      actor_id: USER_ID,
+    });
+  });
+
+  it("refuses a save based on a version another tab already replaced", async () => {
+    state.rows = [draft({ version: 3 })];
+
+    const res = await call(
+      PATCH,
+      "PATCH",
+      `/api/rph/${VALID_ID}`,
+      { payload, expectedVersion: 2 },
+      VALID_ID,
+    );
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain("tab lain");
+    expect(state.rows[0]?.version).toBe(3);
   });
 
   it("refuses a move into another plan's slot", async () => {

@@ -362,16 +362,26 @@ test.describe("eRPH smoke", () => {
     await expect(page.getByLabel("Aktiviti PdPC")).toBeVisible();
     await expect(page.getByRole("button", { name: /Tambah aktiviti/ })).toHaveCount(0);
 
-    // An incomplete plan cannot be submitted without acknowledging that it is
-    // going to the GPK now, not saved as a draft.
-    await page.getByRole("button", { name: "Hantar untuk semakan" }).click();
-    const submit = page.getByRole("dialog", { name: "Hantar RPH untuk semakan?" });
-    await expect(submit).toBeVisible();
-    await expect(
-      submit.getByRole("button", { name: "Hantar juga (tidak lengkap)" }),
-    ).toBeVisible();
-    await expect(submit.getByText(/akan dihantar kepada GPK sekarang/)).toBeVisible();
-    await submit.getByRole("button", { name: "Batal" }).click();
+    // Submission lives in Arkib now: the editor only saves, and points the
+    // teacher there instead of offering a Hantar button of its own.
+    await expect(page.getByRole("button", { name: "Hantar untuk semakan" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Hantar melalui Arkib" }).click();
+    await expect(page).toHaveURL(/\/arkib/, { timeout: 15_000 });
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("a submitted RPH opens read-only in the editor", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto("/arkib");
+
+    const submitted = page.getByRole("listitem").filter({ hasText: "Menunggu GPK" }).first();
+    await expect(submitted).toBeVisible({ timeout: 15_000 });
+    await submitted.getByRole("button", { name: "Buka", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
+    await expect(page.getByText(/Telah dihantar - baca sahaja/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Simpan perubahan/ })).toHaveCount(0);
 
     expect(errors, errors.join("\n")).toEqual([]);
   });
@@ -591,6 +601,74 @@ test.describe("eRPH smoke", () => {
     await expect(dialog.getByText(/\d+ disalin/)).toBeVisible({ timeout: 30_000 });
     await dialog.locator("button").filter({ hasText: "Tutup" }).click();
     await expect(dialog).toBeHidden();
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("a teacher submits an RPH from the archive, and a week in bulk", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto("/arkib");
+
+    // Copy a week so the destination holds complete drafts as well as partial
+    // ones - the seed's approved plans are complete, its drafts are not.
+    await page
+      .getByRole("button", { name: /Salin semua RPH minggu/ })
+      .first()
+      .click();
+    const copyDialog = page.getByRole("dialog", { name: /Salin RPH minggu/ });
+    const destination = copyDialog.getByLabel("Minggu destinasi");
+    const week = Number(await destination.inputValue());
+    await copyDialog.getByRole("button", { name: /^Salin \d+ RPH$/ }).click();
+    await expect(copyDialog.getByText(/\d+ disalin/)).toBeVisible({ timeout: 30_000 });
+    await copyDialog.locator("button").filter({ hasText: "Tutup" }).click();
+
+    // A copy starts with Refleksi cleared, so the first plan has to be finished
+    // before it can be sent. Open it from the destination week.
+    const openWeek = async () => {
+      const button = page.getByRole("button", { name: new RegExp(`Minggu ${week},`) }).first();
+      await button.click();
+      const row = button.locator("xpath=..");
+      return { row, panel: row.locator("xpath=following-sibling::div[1]") };
+    };
+
+    const { panel } = await openWeek();
+    const firstPlan = panel.getByRole("listitem").first();
+    await firstPlan.getByRole("button", { name: "Buka", exact: true }).click();
+    await expect(page).toHaveURL(/\/editor\/[0-9a-f-]+/, { timeout: 15_000 });
+    await page
+      .getByRole("button", { name: /Refleksi/ })
+      .first()
+      .click();
+    await page.getByLabel(/Refleksi/).fill("Refleksi selepas disalin.");
+    await page.getByRole("button", { name: /Simpan perubahan/ }).click();
+    await expect(page.getByRole("button", { name: /Simpan perubahan/ })).toHaveCount(0, {
+      timeout: 15_000,
+    });
+
+    // Back in the archive, send that one plan.
+    await page.goto("/arkib");
+    const completed = await openWeek();
+    await completed.panel
+      .getByRole("listitem")
+      .first()
+      .getByRole("button", { name: /^Hantar .*untuk semakan$/ })
+      .click();
+    await expect(page.getByText(/dihantar untuk semakan/)).toBeVisible({ timeout: 15_000 });
+
+    // The rest of the copies still have no reflection. The week is therefore
+    // all-or-nothing: the dialog names what is missing and refuses to send
+    // anything, rather than quietly submitting the complete half.
+    await completed.row
+      .getByRole("button", { name: new RegExp(`Hantar semua RPH minggu ${week},`) })
+      .click();
+    const submitDialog = page.getByRole("dialog", {
+      name: new RegExp(`Hantar RPH minggu ${week} untuk semakan`),
+    });
+    await expect(submitDialog).toBeVisible();
+    await expect(submitDialog.getByText(/tidak boleh dihantar kerana/)).toBeVisible();
+    await expect(submitDialog.getByText(/Belum diisi:/).first()).toBeVisible();
+    await expect(submitDialog.getByRole("button", { name: /^Hantar \d+ RPH$/ })).toBeDisabled();
+    await submitDialog.locator("button").filter({ hasText: "Tutup" }).click();
 
     expect(errors, errors.join("\n")).toEqual([]);
   });

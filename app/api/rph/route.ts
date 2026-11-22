@@ -1,7 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { weekOfIso } from "@/lib/config";
+import { hashPayload } from "@/lib/hash";
 import { rphPayloadSchema } from "@/lib/schemas/rph";
 import { requirePermission, schoolIdFor } from "@/lib/server/auth/guard";
+import { loadCalendarAnchors } from "@/lib/server/calendar";
 import { dbFailureMessage, toClientError } from "@/lib/server/http/errors";
 import { resolveSession } from "@/lib/server/session";
 
@@ -152,7 +155,6 @@ const createSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Masa tidak sah")
     .optional(),
   payload: rphPayloadSchema,
-  contentHash: z.string().max(128).optional(),
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -185,6 +187,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // sorted before writing - an unsorted insert would slip past the index and
   // file the same slot twice under two orders.
   const classIds = [...new Set(d.classIds)].sort();
+
+  // The week is a function of the date, not a second opinion. Accepting the two
+  // independently let a plan be filed under one week while its date said
+  // another, which quietly moves it in the compliance figures.
+  const anchors = await loadCalendarAnchors(schoolId);
+  if (weekOfIso(d.planDate, anchors) !== d.weekNo) {
+    return NextResponse.json(
+      { error: "Tarikh tidak sepadan dengan minggu yang dipilih." },
+      { status: 422 },
+    );
+  }
 
   // The classes must be the school's own, for this session, and active: a
   // plan filed under another school's class would be invisible everywhere
@@ -265,7 +278,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       slot_time: d.slotTime,
       slot_time_end: d.slotTimeEnd ?? d.slotTime,
       payload: d.payload,
-      content_hash: d.contentHash ?? null,
+      // Computed here, never taken from the request: the hash describes the
+      // row the server actually stored.
+      content_hash: hashPayload(d.payload),
       status: "draft",
       version: 1,
       // Sent explicitly, not left to the column default: the old sync RPC

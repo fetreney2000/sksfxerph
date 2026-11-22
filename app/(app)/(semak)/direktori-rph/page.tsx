@@ -65,7 +65,7 @@ export default function DirektoriRphPage() {
             throw new Error("Status RPH telah berubah");
           let version = doc.version;
           if (doc.status === "draft") {
-            const submitted = await submitRph(plan.id, false);
+            const submitted = await submitRph(plan.id);
             if (!submitted?.ok || typeof submitted.version !== "number")
               throw new Error(submitted?.error ?? "Gagal menghantar draf");
             version = submitted.version;

@@ -276,7 +276,7 @@ def main() -> int:
     # 015 added `admin_set_profile` and `admin_edit_subject`; 019 added
     # `admin_set_calendar_week` and `admin_clear_calendar_week`; 020 added
     # `classes_in_school` and `teaches_classes`.
-    check("44 functions in erph", n_funcs == 44, f"found {n_funcs}")
+    check("45 functions in erph", n_funcs == 45, f"found {n_funcs}")
 
     # NOTE: group into lists - a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -740,6 +740,10 @@ def main() -> int:
         act_as("uji")
         r.q(f"select erph.submit_rph('{current_doc}', false)")
         conn.commit()
+        msg = refused(f"select erph.submit_rph('{current_doc}', false)")
+        stage.append(
+            ("a submitted plan cannot be submitted again", "sudah dihantar" in msg, msg)
+        )
         act_as("gpk.uji")
         msg = refused(f"select erph.hantar_balik_rph('{current_doc}', 'Ujian')")
         stage.append(("a reviewer cannot return a current-week plan", "minggu tersebut tamat" in msg, msg))
@@ -873,6 +877,68 @@ def main() -> int:
         stage.append(("a decided plan cannot be re-sahkan", "peringkat semakan" in msg))
         msg = refused(f"select erph.hantar_balik_rph({DOC})")
         stage.append(("…nor hantar balik", "peringkat semakan" in msg))
+
+        # ── a batch is all-or-nothing ───────────────────────────────────────
+        r.q(
+            f"""
+            insert into erph.rph_document (school_id, owner_id, class_ids,
+                                           subject_code, session, week_no, plan_date, payload)
+            select s.id, u.id, array[c.id], 'MAT', '2026/2027', 10, '2026-05-18',
+                   jsonb_build_object(
+                     'payload_version', 2,
+                     'standard_kandungan', 'SK',
+                     'standard_pembelajaran', 'SP',
+                     'objektif', 'O',
+                     'kriteria_kejayaan', 'K',
+                     'aktiviti', jsonb_build_array(jsonb_build_object('nama', 'A')),
+                     'refleksi', 'R')
+              from erph.school s, erph.user u, erph.class c
+             where s.kod_sekolah='SKTEST' and c.nama='5 Ujian' and u.username='uji';
+            insert into erph.rph_document (school_id, owner_id, class_ids,
+                                           subject_code, session, week_no, plan_date, payload)
+            select s.id, u.id, array[c.id], 'MAT', '2026/2027', 10, '2026-05-19',
+                   jsonb_build_object('payload_version', 2, 'objektif', 'only')
+              from erph.school s, erph.user u, erph.class c
+             where s.kod_sekolah='SKTEST' and c.nama='5 Ujian' and u.username='uji';
+            """
+        )
+        conn.commit()
+        batch_ids = [
+            row[0]
+            for row in r.q(
+                f"select id from erph.rph_document where school_id = {SK} and week_no = 10"
+            )
+        ]
+        act_as("uji")
+        msg = refused(
+            "select erph.submit_rph_batch(array["
+            + ",".join(f"'{i}'" for i in batch_ids)
+            + "]::uuid[])"
+        )
+        statuses = [
+            row[0]
+            for row in r.q(
+                f"select status::text from erph.rph_document where week_no = 10 "
+                f"and school_id = {SK}"
+            )
+        ]
+        stage.append(
+            (
+                "a batch with one incomplete plan submits none",
+                "belum lengkap" in msg and statuses == ["draft", "draft"],
+                f"{msg} · {statuses}",
+            )
+        )
+        complete_doc = r.one(
+            f"select id from erph.rph_document where school_id = {SK} "
+            f"and week_no = 10 and plan_date = '2026-05-18'"
+        )[0]
+        r.q(f"select erph.submit_rph_batch(array['{complete_doc}']::uuid[])")
+        conn.commit()
+        batch_ok = r.one(
+            f"select status::text from erph.rph_document where id = '{complete_doc}'"
+        )[0]
+        stage.append(("…but the complete plan can go on its own", batch_ok == "submitted"))
 
         for item in stage:
             label, ok = item[0], item[1]

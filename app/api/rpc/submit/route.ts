@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   const gate = await requireDbUser(request);
   if ("error" in gate) return gate.error;
 
-  let body: { documentId?: string; force?: boolean };
+  let body: { documentId?: string };
   try {
     body = await request.json();
   } catch {
@@ -27,13 +27,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "ID dokumen diperlukan" }, { status: 400 });
   }
 
+  // No `force`: a school that requires 100% completeness must not accept an
+  // incomplete filing just because the caller knows the old parameter name.
   const { data, error } = await gate.db.rpc("submit_rph", {
     p_document: body.documentId,
-    p_force: body.force ?? false,
+    // Fixed false: no request may bypass the school's completeness rule.
+    p_force: false,
   });
 
   if (error) {
     return toClientError("[submit] rpc failed:", error);
   }
+
+  // `submit_rph` answers `{ok:false}` for an incomplete plan. Returning that
+  // with 200 made a refusal look like a success to any caller that only checks
+  // the status code.
+  if (
+    data &&
+    typeof data === "object" &&
+    "ok" in data &&
+    (data as { ok?: unknown }).ok === false
+  ) {
+    return NextResponse.json(data, { status: 422 });
+  }
+
   return NextResponse.json(data);
 }

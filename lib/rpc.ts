@@ -88,8 +88,18 @@ export interface SubmitResult {
 }
 
 /** Server-gated submission; the server's verdict wins over the local meter. */
-export const submitRph = (documentId: string, force = false) =>
-  post<SubmitResult>("/api/rpc/submit", { documentId, force });
+export const submitRph = (documentId: string) =>
+  post<SubmitResult>("/api/rpc/submit", { documentId });
+
+export interface BatchSubmitResult {
+  ok: boolean;
+  count?: number;
+  items?: { id: string; version: number }[];
+}
+
+/** Submit a whole week in one transaction - all of it, or none of it. */
+export const submitRphBatch = (documentIds: string[]) =>
+  post<BatchSubmitResult>("/api/rpc/submit-batch", { documentIds });
 
 export type ReviewDecision = "sahkan" | "hantar_balik";
 

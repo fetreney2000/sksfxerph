@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Printer,
   Search,
+  Send,
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -35,14 +36,17 @@ import {
 import { Input } from "@/components/ui/field";
 import { removePlan } from "@/lib/actions/plans";
 import { cn } from "@/lib/cn";
-import { weekExists } from "@/lib/config";
+import { supabaseConfigured, weekExists } from "@/lib/config";
 import { longDateOf, schoolDays, weekRangeLabel } from "@/lib/date";
+import { db } from "@/lib/db";
 import { useCurrentWeek } from "@/lib/hooks/use-calendar";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { useArchive } from "@/lib/hooks/use-week";
+import { RpcError, submitRph, submitRphBatch } from "@/lib/rpc";
 import type { RphDocument } from "@/lib/types";
+import { missingRequirements } from "@/lib/week-submit";
 
 /** Plans grouped under one week, newest date first. */
 interface WeekGroup {
@@ -156,6 +160,152 @@ export default function ArkibPage() {
     week: number;
     plans: RphDocument[];
   } | null>(null);
+  const [submitWeek, setSubmitWeek] = React.useState<{
+    session: string;
+    week: number;
+    plans: RphDocument[];
+  } | null>(null);
+  const [submitStatus, setSubmitStatus] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+
+  /** Drafts and returned plans are the teacher's to send; nothing else is. */
+  const canSubmit = (doc: RphDocument) => doc.status === "draft" || doc.status === "returned";
+
+  /**
+   * Submit one plan.
+   *
+   * This is the only submit path now: the editor saves, and Arkib sends.
+   * Completeness is checked here for both modes, so individual and bulk
+   * submission cannot disagree about what may be filed.
+   */
+  async function submitOne(doc: RphDocument): Promise<void> {
+    // One rule for individual and bulk submission. The server applies the same
+    // completeness rule, but checking here keeps the two archive actions
+    // identical even when a school has turned its own gate off.
+    const missing = missingRequirements(doc.payload);
+    if (missing.length > 0) {
+      throw new Error(`RPH belum lengkap: ${missing.join(", ")}.`);
+    }
+
+    if (!supabaseConfigured) {
+      await db.documents.put({
+        ...doc,
+        status: "submitted",
+        submittedAt: Date.now(),
+        grade: undefined,
+        clientUpdatedAt: Date.now(),
+      });
+      return;
+    }
+
+    const verdict = await submitRph(doc.id);
+    // `null` means the endpoint could not reach a database. Treating that as
+    // success said "dihantar" for a filing the server never saw.
+    if (!verdict) {
+      throw new Error("Pelayan tidak tersedia - RPH tidak dihantar. Cuba lagi.");
+    }
+    if (!verdict.ok) {
+      throw new Error(verdict.error ?? "RPH tidak dapat dihantar.");
+    }
+  }
+
+  async function submitPlan(doc: RphDocument) {
+    if (submitting || !canSubmit(doc)) return;
+    setSubmitting(true);
+    setSubmitStatus(`Menghantar ${doc.subjectName} · ${doc.planDate}…`);
+    try {
+      await submitOne(doc);
+      setSubmitStatus(`${doc.subjectName} · ${doc.planDate} dihantar untuk semakan.`);
+      toast.success("Dihantar untuk semakan.");
+      await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
+    } catch (error) {
+      if (error instanceof RpcError && error.isAuthFailure) {
+        toast.error("Sesi anda telah tamat. Sila log masuk semula.");
+        window.setTimeout(() => window.location.assign("/login"), 1200);
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Gagal menghantar.";
+      setSubmitStatus(`Gagal menghantar ${doc.subjectName} · ${doc.planDate}: ${message}`);
+      toast.error(`Gagal menghantar: ${message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitWholeWeek() {
+    if (submitting || !submitWeek) return;
+    const plans = submitWeek.plans.filter(canSubmit);
+    const week = submitWeek.week;
+    setSubmitWeek(null);
+    if (plans.length === 0) return;
+
+    // All-or-nothing on completeness. Submitting the clean half of a week and
+    // leaving the rest behind is how a teacher comes to believe the whole week
+    // was handed in. Nothing is written until every plan can go.
+    const incomplete = plans
+      .map((doc) => ({ doc, missing: missingRequirements(doc.payload) }))
+      .filter((entry) => entry.missing.length > 0);
+    if (incomplete.length > 0) {
+      const detail = incomplete
+        .map(
+          ({ doc, missing }) => `${doc.planDate} · ${doc.subjectName}: ${missing.join(", ")}`,
+        )
+        .join("; ");
+      setSubmitStatus(
+        `Minggu ${week} tidak dihantar - ${incomplete.length} daripada ${plans.length} RPH belum lengkap. ${detail}`,
+      );
+      toast.error(`Tiada RPH dihantar. ${incomplete.length} RPH perlu dilengkapkan dahulu.`);
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitStatus(`Menghantar ${plans.length} RPH minggu ${week}…`);
+    try {
+      if (supabaseConfigured) {
+        // One transaction on the server: either the whole week is filed or
+        // nothing is. The response names the plans it accepted.
+        const result = await submitRphBatch(plans.map((doc) => doc.id));
+        if (!result?.ok) throw new Error("Pelayan tidak mengesahkan penghantaran.");
+        const sent = result.count ?? plans.length;
+        setSubmitStatus(`${sent} RPH minggu ${week} dihantar untuk semakan.`);
+        toast.success(`${sent} RPH dihantar untuk semakan.`);
+        await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
+      } else {
+        // Dexie has no server transaction; this one is local and atomic.
+        await db.transaction("rw", db.documents, async () => {
+          const now = Date.now();
+          for (const doc of plans) {
+            await db.documents.put({
+              ...doc,
+              status: "submitted",
+              submittedAt: now,
+              grade: undefined,
+              clientUpdatedAt: now,
+            });
+          }
+        });
+        setSubmitStatus(`${plans.length} RPH minggu ${week} dihantar untuk semakan.`);
+        toast.success(`${plans.length} RPH dihantar untuk semakan.`);
+      }
+    } catch (error) {
+      if (error instanceof RpcError && error.isAuthFailure) {
+        toast.error("Sesi anda telah tamat. Sila log masuk semula.");
+        window.setTimeout(() => window.location.assign("/login"), 1200);
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Gagal menghantar.";
+      setSubmitStatus(`Minggu ${week} tidak dihantar - ${message} Tiada RPH dihantar.`);
+      toast.error(`Tiada RPH dihantar. ${message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /** Plans that would block a whole-week submission, with what each one lacks. */
+  const incompleteForSubmit =
+    submitWeek?.plans
+      .map((doc) => ({ doc, missing: missingRequirements(doc.payload) }))
+      .filter((entry) => entry.missing.length > 0) ?? [];
 
   // Search across everything a teacher would remember a plan by: the class,
   // the subject, the topic, and the Standard Kandungan they wrote. A year is
@@ -278,6 +428,14 @@ export default function ArkibPage() {
             {exportStatus}
           </p>
         )}
+        {submitStatus && (
+          <p
+            role="status"
+            className="mb-3 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm text-ink-2"
+          >
+            {submitStatus}
+          </p>
+        )}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Arkib eRPH</h2>
           <span className="num rounded-full border border-border bg-surface-2 px-2.5 py-[3px] text-[11.5px] font-semibold text-ink-3">
@@ -382,11 +540,16 @@ export default function ArkibPage() {
                         const wOpen = weekOpen(key);
                         const range = schoolDays(w);
                         const isCurrent = s === session;
+                        // The whole week, not only the rows a search happens to
+                        // show: submitting is about the record, not the filter.
+                        const submittable = archive.filter(
+                          (d) => d.session === s && d.weekNo === w && canSubmit(d),
+                        );
                         return (
                           <div key={key}>
                             <div
                               className={cn(
-                                "flex items-center gap-1 rounded-[10px] transition-colors",
+                                "flex flex-wrap items-center gap-1 rounded-[10px] transition-colors",
                                 wOpen ? "bg-surface-2/70" : "hover:bg-surface-2/50",
                               )}
                             >
@@ -426,6 +589,19 @@ export default function ArkibPage() {
                                   <WeekPill group={g} />
                                 </span>
                               </button>
+                              {submittable.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={submitting}
+                                  aria-label={`Hantar semua RPH minggu ${w}, sesi ${s} untuk semakan`}
+                                  onClick={() =>
+                                    setSubmitWeek({ session: s, week: w, plans: submittable })
+                                  }
+                                >
+                                  <Send className="h-4 w-4" aria-hidden /> Hantar minggu
+                                </Button>
+                              )}
                               {g.plans.length > 0 && (
                                 <Button
                                   size="sm"
@@ -561,6 +737,18 @@ export default function ArkibPage() {
                                           >
                                             <Printer className="h-4 w-4" aria-hidden />
                                           </Button>
+                                          {canSubmit(d) && (
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              disabled={submitting}
+                                              aria-label={`Hantar ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate} untuk semakan`}
+                                              onClick={() => void submitPlan(d)}
+                                            >
+                                              <Send className="h-3.5 w-3.5" aria-hidden />
+                                              Hantar
+                                            </Button>
+                                          )}
                                           <Button
                                             size="sm"
                                             variant="ghost"
@@ -657,6 +845,71 @@ export default function ArkibPage() {
                 Muat turun ZIP DOCX
               </Button>
             </DialogBody>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={submitWeek !== null}
+          onOpenChange={(open) => !open && !submitting && setSubmitWeek(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Hantar RPH minggu {submitWeek?.week} untuk semakan?</DialogTitle>
+              <DialogDescription>
+                {incompleteForSubmit.length > 0
+                  ? `Minggu ini tidak boleh dihantar kerana ${incompleteForSubmit.length} RPH belum lengkap. Tiada RPH akan dihantar sehingga semuanya lengkap.`
+                  : `${submitWeek?.plans.length ?? 0} RPH akan dihantar kepada penyemak sekolah.`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody>
+              {incompleteForSubmit.length > 0 ? (
+                <div className="rounded-[10px] border border-danger-line bg-danger-soft p-3 text-[12.5px] leading-[1.55] text-danger-ink">
+                  <p className="font-semibold">Lengkapkan RPH berikut dahulu:</p>
+                  <ul className="mt-1.5 grid gap-1.5">
+                    {incompleteForSubmit.map(({ doc, missing }) => (
+                      <li key={doc.id}>
+                        <b>
+                          {doc.subjectName} · {doc.classNames.join(", ")} · {doc.planDate}
+                        </b>
+                        <span className="block">Belum diisi: {missing.join(", ")}.</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2">
+                    Buka setiap RPH di atas, lengkapkan bahagian yang dinyatakan, simpan,
+                    kemudian hantar semula minggu ini.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[13px] leading-[1.6] text-ink-3">
+                    Selepas dihantar, RPH tidak lagi boleh disunting sehingga penyemak
+                    mengembalikannya. Ejaan dan kandungan akan disemak oleh GPK atau Guru Besar.
+                  </p>
+                  <ul className="mt-3 grid gap-1 text-[12.5px] text-ink-3">
+                    {submitWeek?.plans.map((doc) => (
+                      <li key={doc.id} className="flex justify-between gap-3">
+                        <span className="truncate">
+                          {doc.subjectName} · {doc.classNames.join(", ")}
+                        </span>
+                        <span className="num shrink-0 text-ink-4">{doc.planDate}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="ghost" disabled={submitting} onClick={() => setSubmitWeek(null)}>
+                {incompleteForSubmit.length > 0 ? "Tutup" : "Batal"}
+              </Button>
+              <Button
+                disabled={submitting || incompleteForSubmit.length > 0}
+                onClick={() => void submitWholeWeek()}
+              >
+                {submitting ? "Menghantar…" : `Hantar ${submitWeek?.plans.length ?? 0} RPH`}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

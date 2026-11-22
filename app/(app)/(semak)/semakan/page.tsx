@@ -357,7 +357,7 @@ export default function SemakanPage() {
             // version the submit *returned*, not the one the queue row had.
             let version = item.version;
             if (item.status === "draft") {
-              const verdict = await submitRph(item.id, false);
+              const verdict = await submitRph(item.id);
               if (verdict && !verdict.ok) {
                 // e.g. the school requires 100% completeness and this draft
                 // falls short: the server's word is final, and "hantar"

@@ -98,7 +98,7 @@ tested against the pre-rename schema by `scripts/test-migration.py`.
 |---|---|
 | `db/migrations/001a_alter_types.sql` | **Six lines, one at a time** — select a line, press Run, repeat |
 | `db/migrations/001b_schema_delta.sql` | Paste the whole file |
-| `db/migrations/002…026_*.sql` | Paste each whole file, in order |
+| `db/migrations/002…028_*.sql` | Paste each whole file, in order |
 
 001a is separate for two hard Postgres reasons: `rename value` refuses to run
 inside a transaction block, and a value added inside one cannot be used until
@@ -150,8 +150,8 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 | Screen | Route | Notes |
 |---|---|---|
 | Minggu Ini | `/minggu` | Deadline countdown, weekly PdP table, stats, activity feed |
-| Editor RPH | `/editor/[id]` | 4-step wizard, DSKP picker, live A4 preview, completeness meter |
-| Senarai RPH | `/arkib` | Tree archive by session and week, weekly copy/print/ZIP, statutory record note |
+| Editor RPH | `/editor/[id]` | 4-step wizard, DSKP picker, live A4 preview, completeness meter - save only |
+| Senarai RPH | `/arkib` | Tree archive by session and week; submit one plan or a whole week; weekly copy/print/ZIP |
 | Semakan RPH | `/semakan` | Review queue, keyboard grading (`J/K`, `1`, `0`) |
 | Paparan Sekolah | `/sekolah` | School compliance, per-panel progress, teacher table |
 
@@ -175,6 +175,19 @@ that week shown before anything is written. Copies are drafts and their
 Refleksi is cleared: a previous lesson's outcome is not this lesson's. Writing
 is per plan, so a clash stops that plan and reports it while the clean copies
 are still filed.
+
+### Submitting
+
+The editor saves and never submits. In Arkib, **Hantar** sends one draft or
+returned plan, and **Hantar minggu** sends every eligible plan in that week.
+A week is all-or-nothing: if any selected plan is below 100% completeness,
+nothing is sent and the dialog names each plan and the sections it still lacks.
+The same rule is applied again before writing, and the synced deployment
+submits the whole week in one database transaction, so a stale dialog or a
+server refusal cannot leave half a week filed. A submitted RPH is read-only
+until the reviewer returns it;
+approved plans stay sealed. The API also rejects a `week_no`/`plan_date` pair
+that disagree, and refuses a second submission of the same plan.
 
 ---
 
