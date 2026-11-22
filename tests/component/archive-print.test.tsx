@@ -77,7 +77,10 @@ describe("archive printing", () => {
         <ArkibPage />
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Cetak 5 Amanah Matematik/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Tindakan lain untuk 5 Amanah Matematik/ }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: /Cetak 5 Amanah Matematik/ }));
     await waitFor(() => expect(output).toContain("plan:Matematik"));
     expect(output).not.toContain("Bahasa");
   });
@@ -107,16 +110,21 @@ describe("archive printing", () => {
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
     expect(download.mock.calls[0]?.[0]).toEqual(plans);
     expect(download.mock.calls[0]?.[4]).toBe("docx");
+    fireEvent.click(
+      screen.getByRole("button", { name: /Tindakan lain untuk 5 Amanah Matematik/ }),
+    );
     await waitFor(() =>
       expect(
         (
-          screen.getByRole("button", {
+          screen.getByRole("menuitem", {
             name: /Muat turun ZIP 5 Amanah Matematik/,
           }) as HTMLButtonElement
         ).disabled,
       ).toBe(false),
     );
-    fireEvent.click(screen.getByRole("button", { name: /Muat turun ZIP 5 Amanah Matematik/ }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: /Muat turun ZIP 5 Amanah Matematik/ }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Muat turun ZIP PDF" }));
     await waitFor(() => expect(download).toHaveBeenCalledTimes(2));
     expect(download.mock.calls[1]?.[0]).toEqual([plans[0]]);

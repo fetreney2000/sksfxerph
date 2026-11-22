@@ -56,8 +56,8 @@ import type { RphDocument } from "@/lib/types";
  * Download the plan as a KPM-formatted DOCX from /api/export.
  *
  * The route is pure JS (`docx`) so it works in local mode too - no Supabase
- * involved. On any failure we fall back to the browser print dialog, which
- * also produces a PDF, so an export is never a dead end.
+ * involved. An approved plan is never exported without a verified seal: a
+ * fallback print would produce the same unsealed paper with no warning.
  */
 /**
  * The seal for an exported plan, or null.
@@ -95,6 +95,12 @@ async function loadSeal(documentId: string, payload: unknown) {
 async function exportDocx(doc: RphDocument): Promise<void> {
   try {
     const seal = await loadSeal(doc.id, doc.payload);
+    if (doc.status === "approved" && !seal) {
+      toast.error(
+        "RPH ini telah disahkan tetapi tandatangannya tidak dapat disahkan. Eksport dibatalkan.",
+      );
+      return;
+    }
     const res = await fetch("/api/export", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -120,15 +126,16 @@ async function exportDocx(doc: RphDocument): Promise<void> {
     const a = document.createElement("a");
     a.href = url;
     // The joined class label names the file; slashes in it would eat the name.
-    a.download = `RPH-${doc.classNames.join(", ").replace(/[\\/:*?"<>|\s]+/g, "-")}-${doc.planDate}.docx`;
+    a.download = `RPH-${doc.classNames.join(", ").replace(/[\\/:*?"<>|\s]+/g, "-")}-${doc.subjectName.replace(/[\\/:*?"<>|\s]+/g, "-")}-${doc.planDate}.docx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
     toast.success("RPH dimuat turun sebagai DOCX");
-  } catch {
-    toast.info("Eksport gagal - membuka dialog cetak sebagai gantian");
-    window.print();
+  } catch (error) {
+    // Printing here would be the same unsealed document with no warning, so a
+    // failed export is reported rather than quietly routed through print.
+    toast.error(`Eksport gagal: ${error instanceof Error ? error.message : "ralat rangkaian"}`);
   }
 }
 

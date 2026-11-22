@@ -28,6 +28,13 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["lucide-react", "@tanstack/react-table"],
   },
 
+  // The server-side archive PDF route reads the bundled font with
+  // `fs.readFile`; without this Next's output tracing may leave it out of the
+  // serverless function.
+  outputFileTracingIncludes: {
+    "/api/export/archive": ["./public/noto-sans-export.woff"],
+  },
+
   // Hobby bandwidth: serve AVIF/WebP only, never upscale.
   images: {
     formats: ["image/avif", "image/webp"],

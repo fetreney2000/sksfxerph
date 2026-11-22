@@ -98,7 +98,7 @@ tested against the pre-rename schema by `scripts/test-migration.py`.
 |---|---|
 | `db/migrations/001a_alter_types.sql` | **Six lines, one at a time** — select a line, press Run, repeat |
 | `db/migrations/001b_schema_delta.sql` | Paste the whole file |
-| `db/migrations/002…028_*.sql` | Paste each whole file, in order |
+| `db/migrations/002…029_*.sql` | Paste each whole file, in order |
 
 001a is separate for two hard Postgres reasons: `rename value` refuses to run
 inside a transaction block, and a value added inside one cannot be used until
@@ -166,6 +166,12 @@ mode must have a verifiable signature or the export stops without downloading
 an incomplete ZIP. Large sessions can take several minutes: the existing DOCX
 endpoint rate limit is respected and the page reports progress. ZIP PDFs use
 a simpler text layout; use the archive's print action for the school form.
+On a synced deployment both ZIP formats are generated and recorded on the
+server in one job; local mode generates them in the browser. Each stored export copy gets its own
+object path, so a later export cannot overwrite an earlier audit record. ZIP
+exports are capped at 200 plans and can be cancelled while they run.
+Characters the PDF font cannot draw are replaced with “?” and listed in
+`AMARAN.txt` inside the ZIP rather than aborting the whole archive.
 
 ### Copying a week
 

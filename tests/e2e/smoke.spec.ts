@@ -709,7 +709,11 @@ test.describe("eRPH smoke", () => {
     const source = page.locator("li").filter({ hasText: marker });
     await expect(source.first()).toBeVisible({ timeout: 15_000 });
     await expect(source).toHaveCount(1);
-    await source.first().getByRole("button", { name: /Salin/ }).click();
+    await source
+      .first()
+      .getByRole("button", { name: /Tindakan lain/ })
+      .click();
+    await source.first().getByRole("menuitem", { name: /Salin/ }).click();
 
     await expect(page).toHaveURL(/\/editor\?copy=[0-9a-f-]+/, { timeout: 15_000 });
     await expect(page.getByText("Belum disimpan")).toBeVisible();

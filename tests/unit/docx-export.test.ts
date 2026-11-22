@@ -151,7 +151,7 @@ describe("the exported file's name", () => {
   it("keeps a plain class name readable", async () => {
     const disposition = await filenameOf({ ...BASE_BODY, className: "5 Amanah" });
 
-    expect(disposition).toContain("RPH-5-Amanah-2026-10-12.docx");
+    expect(disposition).toContain("RPH-5-Amanah-Matematik-2026-10-12.docx");
   });
 
   it("refuses a field that is longer than it has any right to be", async () => {

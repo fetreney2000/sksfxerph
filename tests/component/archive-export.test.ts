@@ -46,6 +46,16 @@ const plan = (id: string, weekNo: number): RphDocument => ({
   clientUpdatedAt: 0,
 });
 
+async function filesOf(blob: Blob): Promise<Record<string, Uint8Array>> {
+  const data = await new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(blob);
+  });
+  return unzipSync(new Uint8Array(data));
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -103,6 +113,64 @@ describe("ZIP export", () => {
     // it can take longer than the default five seconds.
     20_000,
   );
+
+  it("refuses an archive larger than the cap before generating anything", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      downloadArchiveZip(
+        Array.from({ length: 201 }, (_, i) => plan(`p-${i}`, 1)),
+        "Sesi",
+        "Guru",
+        "Sekolah",
+        "pdf",
+        () => {},
+      ),
+    ).rejects.toThrow("terhad kepada 200 RPH");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("stops when the caller cancels", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("dibatalkan pengguna"));
+    await expect(
+      downloadArchiveZip(
+        [plan("a", 1)],
+        "Sesi",
+        "Guru",
+        "Sekolah",
+        "pdf",
+        () => {},
+        controller.signal,
+      ),
+    ).rejects.toThrow("dibatalkan pengguna");
+  });
+
+  it("replaces an unsupported character and records a warning", async () => {
+    const font = readFileSync(join(process.cwd(), "public/noto-sans-export.woff"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.startsWith("/noto") ? new Response(font) : new Response("unused"),
+      ),
+    );
+    let blob: Blob | undefined;
+    URL.createObjectURL = vi.fn((value: Blob | MediaSource) => {
+      blob = value as Blob;
+      return "blob:test";
+    });
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    const problematic = plan("a", 1);
+    problematic.payload = { ...emptyPayload(), objektif: "漢字" };
+    await downloadArchiveZip([problematic], "Sesi", "Guru", "Sekolah", "pdf", () => {});
+
+    if (!blob) throw new Error("ZIP tidak disediakan");
+    const files = await filesOf(blob);
+    expect(Object.keys(files).some((name) => name.endsWith(".pdf"))).toBe(true);
+    expect(new TextDecoder().decode(files["AMARAN.txt"])).toContain("漢");
+  });
 
   it("does not download an incomplete ZIP when DOCX export fails", async () => {
     const font = readFileSync(join(process.cwd(), "public/noto-sans-export.woff"));

@@ -2655,9 +2655,13 @@ create policy sync_op_read on erph.sync_op
 create policy export_read on erph.export_file
   for select using (
     created_by = erph.actor()
-    or exists (select 1 from erph.rph_document d where d.id = erph.export_file.document_id
-                 and (d.owner_id = erph.actor()
-                      or erph.has_role(d.school_id, array['guru_besar','gpk']::erph.member_role[])))
+    or exists (
+      select 1 from erph.rph_document d
+       where d.id = erph.export_file.document_id
+         -- The same scope as the plan itself: owner, whole school for a Guru
+         -- Besar, and only assigned teachers for a GPK.
+         and erph.may_supervise(d.school_id, d.owner_id)
+    )
   );
 
 create policy audit_admin_read on erph.audit_log
@@ -2672,21 +2676,21 @@ insert into storage.buckets (id, name, public) values
   ('school-assets', 'school-assets', true)
 on conflict (id) do nothing;
 
--- path convention: rph-exports/<document_id>/<file>.pdf
+-- path convention: rph-exports/<document_id>/<export-id>-<file>.docx
+--                  rph-exports/archive/<export-id>/<name>-<format>.zip
 --                  attachments/<user_id>/<file>
 --                  school-assets/<school_id>/logo.<ext>
 --
--- KNOWN DORMANT STATE - read before using these buckets.
 -- These policies call erph.has_role() → erph.actor(), and erph.actor() only
 -- honours a caller-supplied identity for `service_role`. Storage requests do
--- not arrive through PostgREST with our X-Erph-User header, so as written
--- every check resolves to NULL and every read is DENIED. That is the correct
--- default (fail closed) and costs nothing today because no code path touches
--- Storage - exports stream straight from /api/export.
+-- not arrive through PostgREST with our X-Erph-User header, so a direct client
+-- read resolves to NULL and is DENIED. The route handlers upload and read with
+-- the service key (which bypasses these policies) and stream the file back, so
+-- no browser needs direct Storage access.
 --
--- Before enabling uploads/downloads: either proxy Storage through a route
--- handler (same pattern as every other DB access), or extend erph.actor() with
--- a Storage-specific identity source. Do not simply relax the policy to
+-- Before exposing these buckets to clients: either proxy Storage through a
+-- route handler (same pattern as every other DB access), or extend erph.actor()
+-- with a Storage-specific identity source. Do not simply relax the policy to
 -- `using (true)` - the buckets would then be readable by anyone holding the
 -- publishable key.
 create policy storage_read on storage.objects

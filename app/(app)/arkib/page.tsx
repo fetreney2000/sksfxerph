@@ -9,6 +9,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  MoreHorizontal,
   Printer,
   Search,
   Send,
@@ -120,6 +121,7 @@ export default function ArkibPage() {
   const [busy, setBusy] = React.useState(false);
   const [exportStatus, setExportStatus] = React.useState("");
   const [exporting, setExporting] = React.useState(false);
+  const exportAbort = React.useRef<AbortController | null>(null);
   const [exportChoice, setExportChoice] = React.useState<{
     documents: RphDocument[];
     name: string;
@@ -129,6 +131,8 @@ export default function ArkibPage() {
     setExportChoice(null);
     setExporting(true);
     setExportStatus("Memulakan eksport…");
+    const controller = new AbortController();
+    exportAbort.current = controller;
     try {
       const { downloadArchiveZip } = await import("@/lib/client/archive-export");
       await downloadArchiveZip(
@@ -138,16 +142,23 @@ export default function ArkibPage() {
         school.name,
         format,
         setExportStatus,
+        controller.signal,
       );
       setExportStatus(
         `${documents.length} RPH disediakan dalam ZIP (${format.toUpperCase()}).`,
       );
       toast.success("Fail ZIP telah disediakan.");
     } catch (error) {
+      if (controller.signal.aborted) {
+        setExportStatus("Eksport dibatalkan. Tiada ZIP dimuat turun.");
+        toast.info("Eksport dibatalkan.");
+        return;
+      }
       const message = error instanceof Error ? error.message : "Eksport gagal.";
       setExportStatus(`Eksport gagal: ${message} Tiada ZIP dimuat turun.`);
       toast.error(`Eksport gagal: ${message}`);
     } finally {
+      if (exportAbort.current === controller) exportAbort.current = null;
       setExporting(false);
     }
   }
@@ -421,12 +432,17 @@ export default function ArkibPage() {
           Cetak untuk format borang sekolah.
         </p>
         {exportStatus && (
-          <p
+          <div
             role="status"
-            className="mb-3 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm text-ink-2"
+            className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm text-ink-2"
           >
-            {exportStatus}
-          </p>
+            <p className="min-w-0 flex-1">{exportStatus}</p>
+            {exporting && (
+              <Button size="sm" variant="ghost" onClick={() => exportAbort.current?.abort()}>
+                Batal eksport
+              </Button>
+            )}
+          </div>
         )}
         {submitStatus && (
           <p
@@ -472,7 +488,7 @@ export default function ArkibPage() {
             const weeks = weeksOf(s);
             const sPlans = docs.filter((d) => d.session === s);
             return (
-              <Card key={s} className="overflow-hidden">
+              <Card key={s}>
                 <div>
                   <div className="flex items-center">
                     <button
@@ -712,82 +728,28 @@ export default function ArkibPage() {
                                           grade={d.grade}
                                           className="hidden shrink-0 sm:inline-flex"
                                         />
-                                        <div className="flex shrink-0 items-center">
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            disabled={exporting}
-                                            aria-label={`Muat turun ZIP ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
-                                            onClick={() =>
-                                              setExportChoice({
-                                                documents: [d],
-                                                name: `RPH-${d.planDate}-${d.subjectName}`,
-                                              })
-                                            }
-                                          >
-                                            <Download className="h-4 w-4" aria-hidden />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            aria-label={`Cetak ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
-                                            onClick={() =>
-                                              setPrintJob({ documents: [d], week: false })
-                                            }
-                                          >
-                                            <Printer className="h-4 w-4" aria-hidden />
-                                          </Button>
-                                          {canSubmit(d) && (
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              disabled={submitting}
-                                              aria-label={`Hantar ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate} untuk semakan`}
-                                              onClick={() => void submitPlan(d)}
-                                            >
-                                              <Send className="h-3.5 w-3.5" aria-hidden />
-                                              Hantar
-                                            </Button>
-                                          )}
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => router.push(`/editor/${d.id}`)}
-                                          >
-                                            Buka
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            aria-label={`Salin ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
-                                            onClick={() => router.push(`/editor?copy=${d.id}`)}
-                                          >
-                                            <Copy
-                                              className="h-3.5 w-3.5"
-                                              strokeWidth={1.9}
-                                              aria-hidden
-                                            />
-                                            Salin
-                                          </Button>
-                                          {/* Only working copies can be withdrawn: a filed
-                                            plan is under review or sealed, and the
-                                            server refuses those with a 409. */}
-                                          {(d.status === "draft" ||
-                                            d.status === "returned") && (
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              aria-label={`Padam ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
-                                              onClick={() => setConfirming(d)}
-                                            >
-                                              <Trash2
-                                                className="h-3.5 w-3.5"
-                                                strokeWidth={1.9}
-                                                aria-hidden
-                                              />
-                                            </Button>
-                                          )}
-                                        </div>
+                                        <RowActions
+                                          doc={d}
+                                          exporting={exporting}
+                                          submitting={submitting}
+                                          canSubmit={canSubmit(d)}
+                                          canDelete={
+                                            d.status === "draft" || d.status === "returned"
+                                          }
+                                          onOpen={() => router.push(`/editor/${d.id}`)}
+                                          onHantar={() => void submitPlan(d)}
+                                          onPrint={() =>
+                                            setPrintJob({ documents: [d], week: false })
+                                          }
+                                          onZip={() =>
+                                            setExportChoice({
+                                              documents: [d],
+                                              name: `RPH-${d.planDate}-${d.subjectName}`,
+                                            })
+                                          }
+                                          onCopy={() => router.push(`/editor?copy=${d.id}`)}
+                                          onDelete={() => setConfirming(d)}
+                                        />
                                       </li>
                                     ))}
                                   </ul>
@@ -976,6 +938,167 @@ export default function ArkibPage() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * The per-plan actions, collapsed to one primary button, Buka, and a menu.
+ *
+ * Six inline buttons made every row a toolbar and pushed the plan's own text
+ * out of the way. The two actions a teacher reaches for stay visible; print,
+ * export, copy and delete live under the overflow menu.
+ */
+function RowActions({
+  doc,
+  exporting,
+  submitting,
+  canSubmit,
+  canDelete,
+  onOpen,
+  onHantar,
+  onPrint,
+  onZip,
+  onCopy,
+  onDelete,
+}: {
+  doc: RphDocument;
+  exporting: boolean;
+  submitting: boolean;
+  canSubmit: boolean;
+  canDelete: boolean;
+  onOpen: () => void;
+  onHantar: () => void;
+  onPrint: () => void;
+  onZip: () => void;
+  onCopy: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const label = `${doc.classNames.join(", ")} ${doc.subjectName} ${doc.planDate}`;
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const choose = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div ref={ref} className="relative flex shrink-0 items-center gap-1">
+      {canSubmit && (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={submitting}
+          aria-label={`Hantar ${label} untuk semakan`}
+          onClick={onHantar}
+        >
+          <Send className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+          <span className="hidden sm:inline">Hantar</span>
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" onClick={onOpen}>
+        Buka
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label={`Tindakan lain untuk ${label}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden />
+      </Button>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label={`Tindakan untuk ${label}`}
+          className="absolute top-full right-0 z-30 mt-1 w-48 rounded-[10px] border border-border bg-surface p-1 shadow-lg"
+        >
+          <MenuItem
+            icon={Printer}
+            label={`Cetak ${label}`}
+            text="Cetak"
+            onSelect={() => choose(onPrint)}
+          />
+          <MenuItem
+            icon={Download}
+            label={`Muat turun ZIP ${label}`}
+            text="Muat turun ZIP"
+            disabled={exporting}
+            onSelect={() => choose(onZip)}
+          />
+          <MenuItem
+            icon={Copy}
+            label={`Salin ${label}`}
+            text="Salin"
+            onSelect={() => choose(onCopy)}
+          />
+          {/* Only working copies can be withdrawn: a filed plan is under
+              review or sealed, and the server refuses those with a 409. */}
+          {canDelete && (
+            <>
+              <div className="my-1 border-t border-border" aria-hidden />
+              <MenuItem
+                icon={Trash2}
+                label={`Padam ${label}`}
+                text="Padam"
+                danger
+                onSelect={() => choose(onDelete)}
+              />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  text,
+  onSelect,
+  disabled,
+  danger,
+}: {
+  icon: typeof Printer;
+  label: string;
+  text: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <Button
+      role="menuitem"
+      size="sm"
+      variant="ghost"
+      disabled={disabled}
+      aria-label={label}
+      onClick={onSelect}
+      className={cn("w-full justify-start", danger && "text-danger-ink hover:bg-danger-soft")}
+    >
+      <Icon className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+      {text}
+    </Button>
   );
 }
 
