@@ -16,6 +16,7 @@ import {
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
+import { CopyWeekDialog } from "@/components/rph/copy-week-dialog";
 import { RphPaper } from "@/components/rph/rph-paper";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { WeekSheets } from "@/components/rph/week-sheets";
@@ -149,6 +150,11 @@ export default function ArkibPage() {
   const [printJob, setPrintJob] = React.useState<{
     documents: RphDocument[];
     week: boolean;
+  } | null>(null);
+  const [copyWeek, setCopyWeek] = React.useState<{
+    session: string;
+    week: number;
+    plans: RphDocument[];
   } | null>(null);
 
   // Search across everything a teacher would remember a plan by: the class,
@@ -442,6 +448,24 @@ export default function ArkibPage() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
+                                  aria-label={`Salin semua RPH minggu ${w}, sesi ${s} ke minggu lain`}
+                                  onClick={() =>
+                                    setCopyWeek({
+                                      session: s,
+                                      week: w,
+                                      plans: archive.filter(
+                                        (d) => d.session === s && d.weekNo === w,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  <Copy className="h-4 w-4" aria-hidden /> Salin minggu
+                                </Button>
+                              )}
+                              {g.plans.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
                                   aria-label={`Cetak semua RPH minggu ${w}, sesi ${s}`}
                                   onClick={() =>
                                     setPrintJob({
@@ -635,6 +659,15 @@ export default function ArkibPage() {
             </DialogBody>
           </DialogContent>
         </Dialog>
+
+        <CopyWeekDialog
+          open={copyWeek !== null}
+          onOpenChange={(open) => !open && setCopyWeek(null)}
+          sourceSession={copyWeek?.session ?? session}
+          sourceWeek={copyWeek?.week ?? 0}
+          sourcePlans={copyWeek?.plans ?? []}
+          archive={archive}
+        />
 
         <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
           <DialogContent>

@@ -571,6 +571,30 @@ test.describe("eRPH smoke", () => {
     }
   });
 
+  test("a whole week of RPH can be copied into another week", async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto("/arkib");
+
+    const copyWeek = page.getByRole("button", { name: /Salin semua RPH minggu/ }).first();
+    await expect(copyWeek).toBeVisible({ timeout: 15_000 });
+    await copyWeek.click();
+
+    const dialog = page.getByRole("dialog", { name: /Salin RPH minggu/ });
+    await expect(dialog).toBeVisible();
+    // The destination defaults to the first other week; the clean plans start
+    // ticked, so the button names the count.
+    const run = dialog.getByRole("button", { name: /^Salin \d+ RPH$/ });
+    await expect(run).toBeVisible({ timeout: 15_000 });
+    expect(await run.isEnabled()).toBe(true);
+    await run.click();
+
+    await expect(dialog.getByText(/\d+ disalin/)).toBeVisible({ timeout: 30_000 });
+    await dialog.locator("button").filter({ hasText: "Tutup" }).click();
+    await expect(dialog).toBeHidden();
+
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
+
   test("an existing plan can be copied from the archive", async ({ page }) => {
     const errors = collectErrors(page);
 

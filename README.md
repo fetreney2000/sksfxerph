@@ -151,7 +151,7 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 |---|---|---|
 | Minggu Ini | `/minggu` | Deadline countdown, weekly PdP table, stats, activity feed |
 | Editor RPH | `/editor/[id]` | 4-step wizard, DSKP picker, live A4 preview, completeness meter |
-| Senarai RPH | `/arkib` | Tree archive by session and week, statutory record note |
+| Senarai RPH | `/arkib` | Tree archive by session and week, weekly copy/print/ZIP, statutory record note |
 | Semakan RPH | `/semakan` | Review queue, keyboard grading (`J/K`, `1`, `0`) |
 | Paparan Sekolah | `/sekolah` | School compliance, per-panel progress, teacher table |
 
@@ -166,6 +166,15 @@ mode must have a verifiable signature or the export stops without downloading
 an incomplete ZIP. Large sessions can take several minutes: the existing DOCX
 endpoint rate limit is respected and the page reports progress. ZIP PDFs use
 a simpler text layout; use the archive's print action for the school form.
+
+### Copying a week
+
+Each week in Arkib has **Salin minggu**. Pick a destination week to preview
+every plan remapped to the same weekday, with clashes against plans already in
+that week shown before anything is written. Copies are drafts and their
+Refleksi is cleared: a previous lesson's outcome is not this lesson's. Writing
+is per plan, so a clash stops that plan and reports it while the clean copies
+are still filed.
 
 ---
 
