@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { handleExpiredSession } from "@/lib/client/auth-session";
 import { schoolCode, supabaseConfigured, weekOfIso } from "@/lib/config";
 import { QUEUE, type QueueItem, SCHOOL_STATS } from "@/lib/demo/review";
@@ -76,47 +76,85 @@ interface WeekStatsRow {
 /**
  * Plans awaiting a grade for one reviewer's stage.
  *
- * `stage` is the rung this user owns - `submitted` for a GPK, `forwarded` for
- * a Guru Besar - so the same hook serves both without the component having to
- * know which. Passing it in rather than reading the role here keeps `lib/`
- * from reaching into `components/`.
+ * Both GPK and Guru Besar decide `submitted` plans now, so the stage no longer
+ * picks a rung; it stays in the query key because the server derives the role.
+ * The server pages the queue and returns an exact `total`, so the badge and
+ * the work list cannot pretend a truncated first page is the whole queue.
  */
 export function useReviewQueueData(stage: "submitted" | "forwarded" | null): {
   items: QueueItem[];
+  /** Every matching plan, not just the loaded page. */
+  total: number;
   loading: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadMore: () => void;
 } {
   const session = useSession();
-  const remote = useQuery<{ items: QueueItem[] }>({
+  const remote = useInfiniteQuery<{ items: QueueItem[]; total: number }>({
     // The session is in the key so rolling the school year over refetches rather
     // than serving last year's cache - the server filters on it too.
     queryKey: ["review-queue", schoolCode, session, stage],
-    queryFn: async () => {
-      const res = await fetch("/api/queue", { credentials: "same-origin" });
+    queryFn: async ({ pageParam }) => {
+      const res = await fetch(`/api/queue?offset=${Number(pageParam)}&limit=50`, {
+        credentials: "same-origin",
+      });
       // Expired session: leave rather than fall back to demo data - a reviewer
       // must never be shown fake plans as if they were the real queue.
-      if (handleExpiredSession(res.status)) return { items: [] };
+      if (handleExpiredSession(res.status)) return { items: [], total: 0 };
       // Everything else - a Guru Biasa's 403, a 500, and a 503 from a proxy
       // or a deployment mid-restart - is an empty queue, not the demo one.
       // This query only ever runs in synced mode (`enabled` below), so a 503
       // here means the school's own service did not answer, which is exactly
       // when three colleagues' demo RPH would be the worst thing to show.
-      if (!res.ok) return { items: [] };
-      return (await res.json()) as { items: QueueItem[] };
+      if (!res.ok) return { items: [], total: 0 };
+      const body = (await res.json()) as { items: QueueItem[]; total?: number };
+      return { items: body.items, total: body.total ?? body.items.length };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => {
+      // An empty page means the server has nothing more, even if a stale
+      // `total` says otherwise; returning the same offset would loop forever.
+      if (lastPage.items.length === 0) return undefined;
+      const loaded = pages.reduce((sum, page) => sum + page.items.length, 0);
+      const total = lastPage.total ?? loaded;
+      return loaded < total ? loaded : undefined;
     },
     // Local mode has no backend: don't issue a request we know returns 503,
     // it just logs a scary console error for something that is not a failure.
     enabled: supabaseConfigured,
     retry: false,
     staleTime: 30_000,
+    // A reviewer who leaves Semakan open must still see new work arrive.
+    refetchInterval: supabaseConfigured ? 60_000 : false,
   });
 
   // Bundled dataset, filtered to this reviewer's stage so the demo matches
   // what the server would have returned.
   if (!supabaseConfigured) {
-    return { items: stage ? QUEUE.filter((q) => q.status === stage) : [], loading: false };
+    const items = stage ? QUEUE.filter((q) => q.status === stage) : [];
+    return {
+      items,
+      total: items.length,
+      loading: false,
+      hasMore: false,
+      loadingMore: false,
+      loadMore: () => {},
+    };
   }
-  if (remote.isLoading) return { items: [], loading: true };
-  return { items: remote.data?.items ?? [], loading: false };
+
+  const pages = remote.data?.pages ?? [];
+  const items = pages.flatMap((page) => page.items);
+  return {
+    items,
+    total: pages[0]?.total ?? items.length,
+    loading: remote.isLoading,
+    hasMore: remote.hasNextPage,
+    loadingMore: remote.isFetchingNextPage,
+    loadMore: () => {
+      if (remote.hasNextPage && !remote.isFetchingNextPage) void remote.fetchNextPage();
+    },
+  };
 }
 
 /**

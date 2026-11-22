@@ -276,7 +276,7 @@ def main() -> int:
     # 015 added `admin_set_profile` and `admin_edit_subject`; 019 added
     # `admin_set_calendar_week` and `admin_clear_calendar_week`; 020 added
     # `classes_in_school` and `teaches_classes`.
-    check("45 functions in erph", n_funcs == 45, f"found {n_funcs}")
+    check("49 functions in erph", n_funcs == 49, f"found {n_funcs}")
 
     # NOTE: group into lists - a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -576,6 +576,17 @@ def main() -> int:
         )[0]
         stage.append(("…and may_supervise says so", scoped is True))
 
+        reviewer_name = r.one(
+            f"""
+            select u.username
+              from erph.reviewers_for({SK}, (select id from erph.user where username='uji')) r
+              join erph.user u on u.id = r.user_id
+            """
+        )[0]
+        stage.append(
+            ("the assigned GPK is the reviewer notified", reviewer_name == "gpk.uji", reviewer_name)
+        )
+
         # A Guru Besar needs no assignment at all.
         act_as("gb.uji")
         scoped = r.one(
@@ -713,8 +724,15 @@ def main() -> int:
             r.q(
                 f"""
                 insert into erph.rph_signature (document_id, document_version, signer_id,
+                                                signer_name, signer_title,
                                                 alg, public_key, signature, envelope)
-                select d.id, d.version, u.id, 'ES256', 'cHVibGlj', 'c2ln', jsonb_build_object('v', 1)
+                select d.id, d.version, u.id, u.full_name, null,
+                       'ES256', 'cHVibGlj', 'c2ln',
+                       jsonb_build_object(
+                         'v', 1, 'alg', 'ES256', 'kid', 'cHVibGlj',
+                         'doc', d.id::text, 'ver', d.version,
+                         'signer', u.id::text, 'decision', 'sahkan',
+                         'hash', 'dummy', 'at', now()::text)
                   from erph.rph_document d, erph.user u
                  where d.id = {DOC} and u.username = '{username}'
                 on conflict do nothing;
@@ -748,14 +766,28 @@ def main() -> int:
         msg = refused(f"select erph.hantar_balik_rph('{current_doc}', 'Ujian')")
         stage.append(("a reviewer cannot return a current-week plan", "minggu tersebut tamat" in msg, msg))
         r.q(f"""
-            insert into erph.rph_signature (document_id, document_version, signer_id, alg, public_key, signature, envelope)
-            select d.id, d.version, u.id, 'ES256', 'cHVibGlj', 'c2ln', '{{}}'::jsonb
+            insert into erph.rph_signature (document_id, document_version, signer_id,
+                                            signer_name, signer_title,
+                                            alg, public_key, signature, envelope)
+            select d.id, d.version, u.id, u.full_name, null,
+                   'ES256', 'cHVibGlj', 'c2ln',
+                   jsonb_build_object(
+                     'v', 1, 'alg', 'ES256', 'kid', 'cHVibGlj',
+                     'doc', d.id::text, 'ver', d.version,
+                     'signer', u.id::text, 'decision', 'sahkan',
+                     'hash', 'dummy', 'at', now()::text)
               from erph.rph_document d, erph.user u
              where d.id = '{current_doc}' and u.username = 'gpk.uji'
         """)
         conn.commit()
         msg = refused(f"select erph.sahkan_rph('{current_doc}')")
         stage.append(("a reviewer cannot approve a current-week plan", "minggu tersebut tamat" in msg, msg))
+
+        first_submitted = r.one(
+            f"select submitted_at from erph.rph_document where id = {DOC}"
+        )[0]
+        msg = refused(f"select erph.hantar_balik_rph({DOC}, null)")
+        stage.append(("hantar balik without a reason is refused", "Sebab" in msg, msg))
         r.q(f"select erph.hantar_balik_rph({DOC}, 'Objektif belum jelas')")
         conn.commit()
         status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
@@ -766,6 +798,36 @@ def main() -> int:
         act_as("uji")
         r.q(f"select erph.submit_rph({DOC}, true)")
         conn.commit()
+        later_submitted = r.one(
+            f"select submitted_at from erph.rph_document where id = {DOC}"
+        )[0]
+        stage.append(
+            (
+                "resubmission keeps the first submitted_at",
+                later_submitted == first_submitted,
+                f"{first_submitted} → {later_submitted}",
+            )
+        )
+
+        submitted_body = r.one(
+            f"""
+            select body
+              from erph.notification
+             where user_id = (select id from erph.user where username = 'gpk.uji')
+               and type = 'submitted'
+             order by created_at desc
+             limit 1
+            """
+        )[0]
+        stage.append(
+            (
+                "resubmission notifies the GPK with the plan identity",
+                submitted_body is not None
+                and "5 Ujian" in submitted_body
+                and "05/10/2026" in submitted_body,
+                str(submitted_body),
+            )
+        )
 
         act_as("gpk.uji")
         msg = refused(f"select erph.sahkan_rph({DOC})")
@@ -778,6 +840,63 @@ def main() -> int:
         conn.commit()
         status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
         stage.append(("sahkan -> approved", status == "approved"))
+
+        # The approval record and its signature belong to the version that was
+        # judged; the document itself moves to N+1. Export must anchor there,
+        # not on `rph_document.version`. This is the invariant the export
+        # regression test relies on.
+        signed_at_review = r.one(
+            f"""
+            select count(*)
+              from erph.rph_document d
+              join erph.rph_review rv
+                on rv.document_id = d.id and rv.grade = 1
+              join erph.rph_signature s
+                on s.document_id = d.id
+               and s.document_version = rv.document_version
+               and s.signer_id = rv.reviewer_id
+             where d.id = {DOC}
+               and d.status = 'approved'
+               and rv.document_version = d.version - 1
+            """
+        )[0]
+        stage.append(
+            (
+                "approval signature stays on the reviewed version",
+                signed_at_review == 1,
+                str(signed_at_review),
+            )
+        )
+
+        approved_notification = r.one(
+            f"""
+            select link_view, body
+              from erph.notification n
+             where n.user_id = (select owner_id from erph.rph_document where id = {DOC})
+               and n.type = 'approved'
+             order by n.created_at desc
+             limit 1
+            """
+        )
+        expected_link = r.one(
+            f"select 'editor/' || id::text from erph.rph_document where id = {DOC}"
+        )[0]
+        stage.append(
+            (
+                "approval notification links to the plan",
+                approved_notification[0] == expected_link,
+                f"got {approved_notification[0]}",
+            )
+        )
+        stage.append(
+            (
+                "approval notification names the plan",
+                approved_notification[1] is not None
+                and "5 Ujian" in approved_notification[1]
+                and "05/10/2026" in approved_notification[1],
+                str(approved_notification[1]),
+            )
+        )
 
         # ── the grade is a factual claim ───────────────────────────────────
         # Lampiran 7 grades a plan 1 = lengkap, 0 = tidak lengkap. Recording
@@ -807,8 +926,15 @@ def main() -> int:
         r.q(
             f"""
             insert into erph.rph_signature (document_id, document_version, signer_id,
+                                            signer_name, signer_title,
                                             alg, public_key, signature, envelope)
-            select d.id, d.version, u.id, 'ES256', 'cHVibGlj', 'c2ln', jsonb_build_object('v', 1)
+            select d.id, d.version, u.id, u.full_name, null,
+                   'ES256', 'cHVibGlj', 'c2ln',
+                   jsonb_build_object(
+                     'v', 1, 'alg', 'ES256', 'kid', 'cHVibGlj',
+                     'doc', d.id::text, 'ver', d.version,
+                     'signer', u.id::text, 'decision', 'sahkan',
+                     'hash', 'dummy', 'at', now()::text)
               from erph.rph_document d, erph.user u
              where d.id = '{incomplete}' and u.username = 'gpk.uji'
             on conflict do nothing;
@@ -830,6 +956,24 @@ def main() -> int:
         status = r.one(f"select status::text from erph.rph_document where id = '{incomplete}'")[0]
         stage.append(
             ("…unless the school has turned the requirement off", status == "approved", status)
+        )
+        checklist = r.one(
+            f"""
+            select checklist->>'standard_kandungan', checklist->>'objektif',
+                   checklist->>'standard_pembelajaran', checklist->>'kriteria_kejayaan',
+                   checklist->>'aktiviti', checklist->>'refleksi'
+              from erph.rph_review
+             where document_id = '{incomplete}' and grade = 1
+             order by created_at desc
+             limit 1
+            """
+        )
+        stage.append(
+            (
+                "checklist records which sections were missing",
+                checklist == ("false", "true", "false", "false", "false", "false"),
+                str(checklist),
+            )
         )
         r.q(f"update erph.school_setting set require_complete = true where school_id = {SK}")
         conn.commit()
@@ -1287,6 +1431,92 @@ def main() -> int:
         r.q(f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})")
         conn.commit()
 
+        # ── the supervisor must be the level above, not a peer ─────────────
+        # The accounts UI only offers the level above, but the function is the
+        # authorization boundary. A direct call must not be able to install a
+        # peer GPK (or a GPK above a Guru Besar) as a reviewer.
+        msg = refused(
+            f"select erph.admin_set_supervisor({SK}, {uid('gb.uji')}, {uid('gpk.uji')})"
+        )
+        admin.append(
+            (
+                "a GPK cannot supervise a Guru Besar",
+                "Guru Besar hanya boleh diselia" in msg,
+                msg,
+            )
+        )
+
+        r.q(f"select erph.admin_set_supervisor({SK}, {uid('gpk.uji')}, {uid('gb.uji')})")
+        conn.commit()
+        admin.append(
+            (
+                "a Guru Besar can supervise a GPK",
+                r.one(
+                    f"select u.username from erph.school_member m "
+                    f"join erph.user u on u.id = m.supervisor_id "
+                    f"where m.school_id = {SK} and m.user_id = {uid('gpk.uji')}"
+                )[0]
+                == "gb.uji",
+            )
+        )
+        r.q(f"select erph.admin_set_supervisor({SK}, {uid('gpk.uji')}, null)")
+        conn.commit()
+
+        # Promoting a teacher to GPK must not leave the GPK who supervised them
+        # in place: that would make a peer the reviewer of their own work.
+        r.q(
+            f"select erph.admin_set_member({SK}, {uid('uji')}, "
+            f"'gpk'::erph.member_role, true)"
+        )
+        conn.commit()
+        admin.append(
+            (
+                "promotion revalidates the old supervisor",
+                r.one(
+                    f"select supervisor_id from erph.school_member "
+                    f"where school_id = {SK} and user_id = {uid('uji')}"
+                )[0]
+                is None,
+            )
+        )
+        msg = refused(
+            f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})"
+        )
+        admin.append(("a GPK cannot be supervised by a peer GPK", "Guru Besar" in msg, msg))
+
+        r.q(
+            f"select erph.admin_set_member({SK}, {uid('uji')}, "
+            f"'guru_biasa'::erph.member_role, true)"
+        )
+        conn.commit()
+        r.q(f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})")
+        conn.commit()
+
+        # A GPK who is deactivated cannot keep the teachers assigned to them.
+        # Those plans would otherwise fall out of every GPK queue.
+        r.q(
+            f"select erph.admin_set_member({SK}, {uid('gpk.uji')}, "
+            f"'gpk'::erph.member_role, false)"
+        )
+        conn.commit()
+        admin.append(
+            (
+                "deactivating a GPK clears their supervisees",
+                r.one(
+                    f"select supervisor_id from erph.school_member "
+                    f"where school_id = {SK} and user_id = {uid('uji')}"
+                )[0]
+                is None,
+            )
+        )
+        r.q(
+            f"select erph.admin_set_member({SK}, {uid('gpk.uji')}, "
+            f"'gpk'::erph.member_role, true)"
+        )
+        conn.commit()
+        r.q(f"select erph.admin_set_supervisor({SK}, {uid('uji')}, {uid('gpk.uji')})")
+        conn.commit()
+
         # ── deactivating an account deactivates the membership too ────────
         # `admin_set_member` writes both rows that hold the role, and it has
         # to write both halves of the change: every SQL policy reads
@@ -1492,6 +1722,52 @@ def main() -> int:
         admin.append(
             ("…with the newer payload", merged[1] == "Dari peranti kedua", str(merged[1])),
         )
+
+        # ── reopening an approval is controlled and audited ────────────────
+        act_as("gpk.uji")
+        msg = refused(f"select erph.batal_sahkan_rph({DOC}, 'Salah tanda')")
+        admin.append(("a GPK cannot reopen an approval", "Guru Besar" in msg, msg))
+
+        msg = refused(f"select erph.batal_sahkan_rph({DOC}, '   ')")
+        admin.append(("reopening needs a reason", "Sebab" in msg, msg))
+
+        act_as("gb.uji")
+        r.q(f"select erph.batal_sahkan_rph({DOC}, 'Salah tanda')")
+        conn.commit()
+        reopened = r.one(
+            f"select status::text, grade from erph.rph_document where id = {DOC}"
+        )
+        admin.append(
+            (
+                "a Guru Besar can reopen an approval",
+                reopened == ("returned", 0),
+                str(reopened),
+            )
+        )
+        reopen_notice = r.one(
+            f"""
+            select title, body
+              from erph.notification
+             where user_id = (select owner_id from erph.rph_document where id = {DOC})
+               and title = 'Pengesahan RPH dibatalkan'
+             order by created_at desc
+             limit 1
+            """
+        )
+        admin.append(
+            (
+                "the teacher is told why the approval was reopened",
+                reopen_notice is not None and "Salah tanda" in reopen_notice[1],
+                str(reopen_notice),
+            )
+        )
+        reopened_audit = r.one(
+            f"""
+            select count(*) from erph.audit_log
+             where entity_id = {DOC} and action = 'batal_sahkan'
+            """
+        )[0]
+        admin.append(("the reopening leaves an audit row", reopened_audit == 1))
 
         # ── the Administrator is visible only to a pentadbir ──────────────
         # Two policies, both of which previously let a GPK read the

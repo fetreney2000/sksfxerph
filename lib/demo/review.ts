@@ -12,6 +12,13 @@ import type { RphStatus } from "@/lib/types";
  * The shapes below are exactly the fields `sahkan_rph()` reads, so switching
  * to the real query changes the data source, not the component.
  */
+export interface QueueReviewNote {
+  reviewerName: string | null;
+  comment: string | null;
+  createdAt: string;
+  grade: 0 | 1;
+}
+
 export interface QueueItem {
   id: string;
   /**
@@ -32,6 +39,10 @@ export interface QueueItem {
   status: RphStatus;
   ageLabel: string;
   payload: RphPayload;
+  /** Newest first; the reviewer needs the prior return reason on a resubmission. */
+  reviews?: QueueReviewNote[];
+  /** Which school year the plan belongs to; old pending rows are not hidden. */
+  session?: string;
 }
 
 const base = (over: Partial<RphPayload>): RphPayload => ({ ...emptyPayload(), ...over });

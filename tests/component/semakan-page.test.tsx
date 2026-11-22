@@ -29,7 +29,14 @@ vi.mock("@/lib/config", async (importOriginal) => {
 });
 
 vi.mock("@/lib/hooks/use-remote", () => ({
-  useReviewQueueData: () => ({ items: state.queue, loading: false }),
+  useReviewQueueData: () => ({
+    items: state.queue,
+    loading: false,
+    total: state.queue.length,
+    hasMore: false,
+    loadingMore: false,
+    loadMore: () => {},
+  }),
   useReviewPlans: () => ({
     items: state.plans,
     loading: false,

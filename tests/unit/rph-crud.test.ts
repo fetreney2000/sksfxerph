@@ -423,7 +423,7 @@ describe("PATCH /api/rph/[id]", () => {
       PATCH,
       "PATCH",
       `/api/rph/${VALID_ID}`,
-      { planDate: "2026-11-19", payload },
+      { planDate: "2026-11-19", payload, expectedVersion: 1 },
       VALID_ID,
     );
 
@@ -438,7 +438,13 @@ describe("PATCH /api/rph/[id]", () => {
   it("refuses a sealed plan", async () => {
     state.rows = [draft({ status: "approved" })];
 
-    const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+    const res = await call(
+      PATCH,
+      "PATCH",
+      `/api/rph/${VALID_ID}`,
+      { payload, expectedVersion: 1 },
+      VALID_ID,
+    );
 
     expect(res.status).toBe(409);
     expect(state.rows[0]?.version).toBe(1);
@@ -447,7 +453,13 @@ describe("PATCH /api/rph/[id]", () => {
   it("refuses to edit a plan already submitted for review", async () => {
     state.rows = [draft({ status: "submitted" })];
 
-    const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+    const res = await call(
+      PATCH,
+      "PATCH",
+      `/api/rph/${VALID_ID}`,
+      { payload, expectedVersion: 1 },
+      VALID_ID,
+    );
 
     expect(res.status).toBe(409);
     expect(state.rows[0]?.version).toBe(1);
@@ -460,7 +472,7 @@ describe("PATCH /api/rph/[id]", () => {
       PATCH,
       "PATCH",
       `/api/rph/${VALID_ID}`,
-      { planDate: "2026-11-23" },
+      { planDate: "2026-11-23", expectedVersion: 1 },
       VALID_ID,
     );
 
@@ -480,6 +492,7 @@ describe("PATCH /api/rph/[id]", () => {
         weekNo: 36,
         planDate: "2026-11-18",
         payload,
+        expectedVersion: 1,
       },
       VALID_ID,
     );
@@ -491,7 +504,13 @@ describe("PATCH /api/rph/[id]", () => {
   it("records the edited version in the revision history", async () => {
     state.rows = [draft()];
 
-    const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+    const res = await call(
+      PATCH,
+      "PATCH",
+      `/api/rph/${VALID_ID}`,
+      { payload, expectedVersion: 1 },
+      VALID_ID,
+    );
 
     expect(res.status).toBe(200);
     const revision = state.calls.find(
@@ -530,7 +549,7 @@ describe("PATCH /api/rph/[id]", () => {
       `/api/rph/${VALID_ID}`,
       // Re-stating the same slot still collides: the other row already holds
       // it, and only the row itself is exempt.
-      { planDate: "2026-11-18", payload },
+      { planDate: "2026-11-18", payload, expectedVersion: 1 },
       VALID_ID,
     );
 
@@ -543,9 +562,24 @@ describe("PATCH /api/rph/[id]", () => {
   it("answers 404 for a colleague's plan", async () => {
     state.rows = [draft({ owner_id: OTHER_ID })];
 
-    const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+    const res = await call(
+      PATCH,
+      "PATCH",
+      `/api/rph/${VALID_ID}`,
+      { payload, expectedVersion: 1 },
+      VALID_ID,
+    );
 
     expect(res.status).toBe(404);
+  });
+
+  it("requires the version the editor loaded", async () => {
+    state.rows = [draft()];
+
+    const res = await call(PATCH, "PATCH", `/api/rph/${VALID_ID}`, { payload }, VALID_ID);
+
+    expect(res.status).toBe(422);
+    expect(state.rows[0]?.version).toBe(1);
   });
 });
 

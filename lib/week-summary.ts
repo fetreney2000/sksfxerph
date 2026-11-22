@@ -55,6 +55,8 @@ export function summariseWeek(
   const returned = count("returned");
   const drafts = count("draft");
   const handed = documents.filter((d) => d.submittedAt !== undefined);
+  // `submittedAt` is the first filing; a return and resubmission preserves it,
+  // so work handed in on time is not reported as late later.
   const onTimeCount = handed.filter((d) => (d.submittedAt ?? 0) <= deadline).length;
 
   return {

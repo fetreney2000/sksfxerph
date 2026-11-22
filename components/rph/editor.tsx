@@ -1225,6 +1225,23 @@ export function RphEditor({ docId }: { docId?: string }) {
                 </span>
               </p>
             </div>
+            {/* The reason has to live beside the fields being fixed, not only
+                in a notification that can scroll out of the feed. */}
+            {persisted?.status === "returned" && persisted.reviewComment && (
+              <div
+                role="status"
+                className="mt-3.5 rounded-[11px] border border-danger-line bg-danger-soft px-3.5 py-3 text-[12.5px] leading-[1.55] text-danger-ink"
+              >
+                <p className="font-semibold">
+                  Catatan penyemak
+                  {persisted.reviewerName ? ` · ${persisted.reviewerName}` : ""}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">{persisted.reviewComment}</p>
+                <p className="mt-1 text-[11.5px] opacity-80">
+                  Sila baiki perkara di atas, kemudian hantar semula melalui Arkib.
+                </p>
+              </div>
+            )}
             <div className="mt-3.5 border-t border-dashed border-border pt-3.5">
               {/* Completeness - flat, not a box: count, meter, then the exact gaps.
                 Each gap is a link to the field that fixes it (WCAG G139). */}

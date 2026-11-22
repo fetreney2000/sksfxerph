@@ -22,6 +22,23 @@ import { ms } from "@/lib/i18n/ms";
 
 /** The routes `link_view` names. 'dashboard' predates /minggu's rename. */
 const ROUTES: Record<string, string> = { dashboard: "/minggu", review: "/semakan" };
+
+/**
+ * Where a notification's `link_view` points.
+ *
+ * Approval and return notifications carry `editor/<document-id>` so the
+ * teacher lands on the plan the decision is about, rather than on the week and
+ * having to find it. Unknown values fall back to the old dashboard route,
+ * because a malformed link must not become a dead end.
+ */
+function hrefFor(linkView: string | null | undefined): string {
+  if (!linkView) return "/minggu";
+  const known = ROUTES[linkView];
+  if (known) return known;
+  const editor =
+    /^editor\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(linkView);
+  return editor ? `/editor/${editor[1]}` : "/minggu";
+}
 export function NotificationBell() {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -33,7 +50,7 @@ export function NotificationBell() {
   const openNotification = (n: (typeof items)[number]) => {
     void markRead(n.id);
     setOpen(false);
-    const href = ROUTES[n.linkView ?? ""] ?? "/minggu";
+    const href = hrefFor(n.linkView);
     // No push when already there: navigating to the current route would
     // re-render the page a teacher is already reading.
     if (window.location.pathname !== href) router.push(href);

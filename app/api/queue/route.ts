@@ -31,6 +31,16 @@ import { resolveSession } from "@/lib/server/session";
  * given an age - guessing one would put a number in front of a reviewer that
  * nobody measured.
  */
+/** Monday of the week in progress, in MYT - the boundary the review trigger uses. */
+function currentMytMonday(): string {
+  const now = mytFields(Date.now());
+  if (!now) return new Date().toISOString().slice(0, 10);
+  const day = Date.UTC(now.year, now.month - 1, now.date);
+  const dow = new Date(day).getUTCDay();
+  const monday = day - ((dow + 6) % 7) * 86_400_000;
+  return new Date(monday).toISOString().slice(0, 10);
+}
+
 function waitingLabel(submittedAt: string | null): string {
   if (!submittedAt) return "Penghantaran tidak direkodkan";
   const since = Date.parse(submittedAt);
@@ -59,7 +69,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if ("error" in gate) return gate.error;
 
   const stage = reviewStageFor(gate.user.role);
-  if (!stage) return NextResponse.json({ items: [] as QueueItem[] }, { status: 403 });
+  if (!stage) {
+    return NextResponse.json({ items: [] as QueueItem[], total: 0 }, { status: 403 });
+  }
+
+  const params = request.nextUrl.searchParams;
+  // Pending work is paged: the work list used to stop silently at 50 while the
+  // badge claimed that was the whole queue. `total` is the exact count, and
+  // Semakan can fetch the next page.
+  const offsetRaw = params.get("offset");
+  const offset = offsetRaw === null ? 0 : Number(offsetRaw);
+  if (!Number.isInteger(offset) || offset < 0) {
+    return NextResponse.json({ error: "Ofset tidak sah" }, { status: 400 });
+  }
+  const limitRaw = params.get("limit");
+  const requestedLimit = limitRaw === null ? null : Number(limitRaw);
+  if (
+    requestedLimit !== null &&
+    (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 200)
+  ) {
+    return NextResponse.json({ error: "Had tidak sah" }, { status: 400 });
+  }
 
   // ── Week mode (`?week=N`) ────────────────────────────────────────────────
   // Without it the queue is the pending submissions, as it always was. With
@@ -75,7 +105,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // 32 becomes a declared week 34) and the stamp goes stale. The picker labels
   // each week by its dates, and dates never go stale — so the filter reads
   // the same range the label names.
-  const weekParam = request.nextUrl.searchParams.get("week");
+  const weekParam = params.get("week");
   let week: number | null = null;
   if (weekParam !== null) {
     const parsed = Number(weekParam);
@@ -87,7 +117,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const schoolId = await schoolIdFor(gate.db, gate.user.id);
   if (!schoolId) {
-    return NextResponse.json({ items: [] as QueueItem[] });
+    return NextResponse.json({ items: [] as QueueItem[], total: 0 });
   }
 
   const session = await resolveSession(gate.user.id);
@@ -109,20 +139,32 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let query = gate.db
     .from("rph_document")
     .select(
-      "id, version, status, plan_date, slot_time, payload, owner_id, submitted_at, " +
-        "class_ids, subject:subject_code(nama), owner:owner_id(full_name)",
+      "id, version, status, session, plan_date, slot_time, payload, owner_id, " +
+        "submitted_at, class_ids, subject:subject_code(nama), " +
+        "owner:owner_id(full_name)",
+      // The count is over every matching row, not just this page - that is
+      // what the badge and "lebih banyak" control need.
+      { count: "exact" },
     )
     .eq("school_id", schoolId)
-    .eq("session", session)
     // A plan removed through the app is a soft-deleted record, not a queue
     // entry. The pending queue never filtered it because a deleted plan could
     // not be `submitted` - its status moves with the delete - but week mode
     // lists drafts too, and a deleted draft would have walked straight back in.
     .is("deleted_at", null);
   if (week === null) {
-    query = query.eq("status", stage.status);
+    // Only work the reviewer can actually decide. The trigger refuses a
+    // current-week plan until the week ends, so leaving those rows in the
+    // pending list inflated the badge with work that could not be cleared.
+    // They remain visible in the tree and in week mode.
+    query = query.eq("status", stage.status).lt("plan_date", currentMytMonday());
+    // Prior-session pending plans are real work. They are not filtered out by
+    // the current school year; their `session` is carried to the row.
   } else if (range !== null) {
-    query = query.gte("plan_date", range.monday).lte("plan_date", range.sunday);
+    query = query
+      .eq("session", session)
+      .gte("plan_date", range.monday)
+      .lte("plan_date", range.sunday);
   }
 
   // Scope. RLS on rph_document enforces this too, but this handler holds the
@@ -151,18 +193,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // reviewer reads "no plans this week" when the truth is "no teachers to
     // review" - a supervision assignment the pentadbir has not made yet.
     if (ids.length === 0)
-      return NextResponse.json({ items: [] as QueueItem[], assigned: false });
+      return NextResponse.json({ items: [] as QueueItem[], assigned: false, total: 0 });
     query = query.in("owner_id", ids);
   }
 
-  const { data, error } = await query
+  const limit = requestedLimit ?? (week === null ? 50 : 200);
+  const { data, error, count } = await query
     // Pending queue: oldest submission first, the order a reviewer works
     // through. Week mode: by the day the lesson was taught, so the week reads
     // as a timetable rather than a backlog.
     .order(week === null ? "submitted_at" : "plan_date", { ascending: true })
-    // A week of a whole school can be a hundred plans - teachers ×
-    // rph_per_week - so the browse cap is higher than the queue's.
-    .limit(week === null ? 50 : 200);
+    .range(offset, offset + limit - 1);
 
   if (error) {
     console.error("[queue] query failed:", error.message);
@@ -180,6 +221,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
      *  signature over any other version. */
     version: number;
     status: QueueItem["status"];
+    session: string;
     plan_date: string;
     slot_time: string | null;
     payload: QueueItem["payload"];
@@ -190,6 +232,41 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const rows = (data ?? []) as unknown as QueueRow[];
+
+  // The review history is a separate read rather than a nested select on every
+  // row: the sidebar and the Minggu band only need the count, and the page
+  // needs comments only for the first page it is showing.
+  const reviewsByDoc = new Map<string, NonNullable<QueueItem["reviews"]>>();
+  if (rows.length > 0) {
+    const { data: reviewRows, error: reviewErr } = await gate.db
+      .from("rph_review")
+      .select("document_id, comment, created_at, grade, reviewer:reviewer_id(full_name)")
+      .in(
+        "document_id",
+        rows.map((row) => row.id),
+      )
+      .order("created_at", { ascending: false });
+    if (reviewErr) {
+      console.error("[queue] review history failed:", reviewErr.message);
+    } else {
+      for (const review of (reviewRows ?? []) as unknown as {
+        document_id: string;
+        comment: string | null;
+        created_at: string;
+        grade: 0 | 1;
+        reviewer: { full_name: string } | null;
+      }[]) {
+        const list = reviewsByDoc.get(review.document_id) ?? [];
+        list.push({
+          reviewerName: review.reviewer?.full_name ?? null,
+          comment: review.comment,
+          createdAt: review.created_at,
+          grade: review.grade,
+        });
+        reviewsByDoc.set(review.document_id, list);
+      }
+    }
+  }
 
   // `class_ids` is an array with no FK to embed through, so the names are
   // resolved here: one read of the school's class list, then a map. Archived
@@ -228,8 +305,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       status: row.status,
       ageLabel: waitingLabel(row.submitted_at),
       payload: row.payload,
+      session: row.session,
+      reviews: reviewsByDoc.get(row.id) ?? [],
     };
   });
 
-  return NextResponse.json({ items, assigned: true });
+  return NextResponse.json({
+    items,
+    assigned: true,
+    total: typeof count === "number" ? count : items.length,
+  });
 }

@@ -79,8 +79,10 @@ create type erph.jawatan as enum (
   'guru_besar'       -- Guru Besar
 );
 
--- Two-stage approval: Guru Biasa submits -> GPK semak (forwarded) -> Guru Besar
--- lulus. `forwarded` is the plan sitting with the Guru Besar.
+-- One-stage review: Guru Biasa submits -> GPK or Guru Besar decides. The
+-- `forwarded` value remains only for rows written by the retired two-stage
+-- flow; migration 032 converts them to `submitted` so they are decidable
+-- again. Nothing in the current app produces it.
 create type erph.rph_status as enum
   ('draft','submitted','forwarded','approved','returned');
 
@@ -89,7 +91,7 @@ create type erph.curriculum as enum ('KSSR','KSSM','PRASEKOLAH');
 create type erph.template_visibility as enum ('private','school','system');
 
 create type erph.notification_type as enum
-  ('deadline','forwarded','returned','approved','reminder','system');
+  ('deadline','forwarded','submitted','returned','approved','reminder','system');
 
 -- ── 3 · HELPERS (SQL functions used by triggers & policies) ──────────────────
 create or replace function erph.set_updated_at()
@@ -167,6 +169,34 @@ begin
 
   return v::smallint;
 end $$;
+
+-- The six rows the reviewer's AutoCheck shows, stored with the decision.
+-- Completeness alone says 25/50/75/100; when a school turns the 100% gate off,
+-- that number does not say *which* sections were missing from an approved
+-- plan. This does, and it is the record Lampiran 7 is read against.
+create or replace function erph.review_checklist(p_payload jsonb, p_stage text,
+                                                  p_completeness smallint)
+returns jsonb language sql immutable as $$
+  select jsonb_build_object(
+    'stage', p_stage,
+    'completeness', p_completeness,
+    'standard_kandungan',
+      nullif(trim(coalesce(p_payload->>'standard_kandungan','')), '') is not null,
+    'standard_pembelajaran',
+      nullif(trim(coalesce(p_payload->>'standard_pembelajaran','')), '') is not null,
+    'objektif',
+      nullif(trim(coalesce(p_payload->>'objektif','')), '') is not null,
+    'kriteria_kejayaan',
+      nullif(trim(coalesce(p_payload->>'kriteria_kejayaan','')), '') is not null,
+    'aktiviti',
+      (jsonb_typeof(coalesce(p_payload->'aktiviti', '[]'::jsonb)) = 'array'
+       and exists (
+         select 1 from jsonb_array_elements(coalesce(p_payload->'aktiviti', '[]'::jsonb)) e
+          where nullif(trim(coalesce(e->>'nama','')), '') is not null)),
+    'refleksi',
+      nullif(trim(coalesce(p_payload->>'refleksi','')), '') is not null
+  );
+$$;
 
 -- ── 3b · WHO IS ACTING ──────────────────────────────────────────────────────
 -- Single source of identity. Replaces `auth.uid()` because Supabase Auth
@@ -568,6 +598,11 @@ create table erph.rph_signature (
   document_id      uuid not null references erph.rph_document(id) on delete cascade,
   document_version int not null,                          -- the version covered
   signer_id        uuid not null references erph.user(id),
+  -- The name and office as they stood when the signature was made. Export
+  -- falls back to the current user row only for legacy rows, so a later
+  -- promotion or name change cannot rewrite an old signed record.
+  signer_name      text,
+  signer_title     text,
   alg              text not null check (alg in ('ES256')),
   public_key       text not null,                        -- base64url SPKI/P-256
   signature        text not null,                        -- base64url, raw r||s
@@ -624,7 +659,7 @@ create table erph.notification (
   type       erph.notification_type not null,
   title      text not null,
   body       text,
-  link_view  text,                                       -- deep-link target ('dashboard','review')
+  link_view  text,                                       -- 'dashboard', 'review', or 'editor/<id>'
   read_at    timestamptz,
   created_at timestamptz not null default now()
 );
@@ -733,13 +768,59 @@ returns boolean language sql stable security definer set search_path = erph, pub
       or erph.supervises(p_school, p_owner);
 $$;
 
--- A supervisor is an active gpk/guru_besar member of the same school, and
--- nobody supervises themselves. Checked here rather than in a column CHECK
--- because it spans rows: `supervisor_id` alone cannot see the supervisor's
--- own membership or role.
+-- Who should hear about a newly submitted plan?
+--
+-- The GPK assigned to the teacher when there is one; otherwise every active
+-- Guru Besar, because the plan would otherwise sit in a queue nobody watches.
+-- The function is SECURITY DEFINER for the same reason as `supervises`: the
+-- submitter is a teacher whose RLS can see only their own membership row.
+create or replace function erph.reviewers_for(p_school uuid, p_owner uuid)
+returns table (user_id uuid)
+language sql stable security definer set search_path = erph, public as $$
+  with assigned as (
+    select s.supervisor_id
+      from erph.school_member s
+      join erph.school_member sup
+        on sup.school_id = s.school_id
+       and sup.user_id = s.supervisor_id
+       and sup.is_active
+       and sup.role in ('gpk','guru_besar')
+     where s.school_id = p_school
+       and s.user_id = p_owner
+       and s.is_active
+       and s.supervisor_id is not null
+  )
+  select assigned.supervisor_id
+    from assigned
+  union
+  select g.user_id
+    from erph.school_member g
+   where g.school_id = p_school
+     and g.role = 'guru_besar'
+     and g.is_active
+     and not exists (select 1 from assigned);
+$$;
+
+-- A supervisor is an active gpk/guru_besar member of the same school, and the
+-- assignment must point *up* the hierarchy:
+--
+--   guru_biasa  → gpk or guru_besar
+--   gpk         → guru_besar only
+--   guru_besar  → another guru_besar
+--
+-- The accounts screen already offers only the level above, but this function is
+-- the authorization boundary: a direct API call must not be able to assign a
+-- peer GPK, or a GPK above a Guru Besar, and quietly hand out review scope
+-- that the UI would never offer.
+--
+-- Checked here rather than in a column CHECK because it spans rows:
+-- `supervisor_id` alone cannot see the supervisor's own membership or role.
 create or replace function erph.admin_set_supervisor(p_school uuid, p_member uuid,
                                                      p_supervisor uuid)
 returns void language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_member_role erph.member_role;
+  v_supervisor_role erph.member_role;
 begin
   if not erph.has_role(p_school, array['pentadbir']::erph.member_role[]) then
     raise exception 'Peranan pentadbir diperlukan';
@@ -747,15 +828,31 @@ begin
   if p_member = p_supervisor then
     raise exception 'Anda tidak boleh menyelia diri sendiri';
   end if;
-  if not exists (select 1 from erph.school_member
-                  where school_id = p_school and user_id = p_member) then
+
+  select role into v_member_role
+    from erph.school_member
+   where school_id = p_school and user_id = p_member;
+  if not found then
     raise exception 'Guru ini bukan ahli sekolah ini';
   end if;
-  if p_supervisor is not null then
-    if not exists (select 1 from erph.school_member
-                    where school_id = p_school and user_id = p_supervisor
-                      and role in ('gpk','guru_besar') and is_active) then
+
+  if v_member_role not in ('guru_biasa','gpk','guru_besar') then
+    if p_supervisor is not null then
+      raise exception 'Peranan ini tidak mempunyai penyelia';
+    end if;
+  elsif p_supervisor is not null then
+    select role into v_supervisor_role
+      from erph.school_member
+     where school_id = p_school and user_id = p_supervisor
+       and is_active;
+    if not found or v_supervisor_role not in ('gpk','guru_besar') then
       raise exception 'Penyelia mesti GPK atau Guru Besar yang aktif';
+    end if;
+    if v_member_role = 'gpk' and v_supervisor_role <> 'guru_besar' then
+      raise exception 'GPK hanya boleh diselia oleh Guru Besar';
+    end if;
+    if v_member_role = 'guru_besar' and v_supervisor_role <> 'guru_besar' then
+      raise exception 'Guru Besar hanya boleh diselia oleh Guru Besar lain';
     end if;
   end if;
 
@@ -1079,6 +1176,24 @@ returns boolean language sql stable security definer set search_path = erph, pub
      where not erph.teaches_class(u.id));
 $$;
 
+-- The plan identity a notification body needs. A teacher with ten plans must
+-- be able to tell which class, subject and date a decision is about; the same
+-- label is used by submissions to the reviewer.
+create or replace function erph.plan_label(p_class_ids uuid[], p_subject_code text,
+                                            p_plan_date date)
+returns text language sql stable security definer set search_path = erph, public as $$
+  select coalesce(
+           (select string_agg(c.nama, ', ' order by c.nama)
+              from erph.class c where c.id = any(p_class_ids)),
+           'Kelas')
+         || ' · ' ||
+         coalesce(
+           (select s.nama from erph.subject s where s.code = p_subject_code),
+           p_subject_code)
+         || ' · ' ||
+         to_char(p_plan_date, 'DD/MM/YYYY');
+$$;
+
 -- Review decisions and staff submissions are allowed only after the plan's
 -- calendar week ends in Malaysia. Enforced on the row, including direct RPC
 -- callers, rather than only by the browser.
@@ -1086,7 +1201,9 @@ create or replace function erph.guard_past_week_review()
 returns trigger language plpgsql security definer set search_path = erph, public as $$
 begin
   if (old.status = 'submitted' and new.status in ('approved', 'returned'))
-     or (new.status = 'submitted' and old.status is distinct from 'submitted'
+     -- forwarded -> submitted is the legacy normalization in migration 032,
+     -- not a reviewer filing a current-week plan on someone's behalf.
+     or (new.status = 'submitted' and old.status not in ('submitted', 'forwarded')
          and old.owner_id is distinct from erph.actor()) then
     if old.plan_date >= date_trunc('week', (now() at time zone 'UTC') + interval '8 hours')::date then
       raise exception 'RPH hanya boleh disemak selepas minggu tersebut tamat';
@@ -1109,12 +1226,14 @@ declare
   v_doc erph.rph_document%rowtype;
   v_pct smallint;
   v_require boolean;
+  v_label text;
 begin
   perform set_config('app.rpc', '1', true);              -- unlocks guard_review_fields
 
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH tidak dijumpai'; end if;
+  v_label := erph.plan_label(v_doc.class_ids, v_doc.subject_code, v_doc.plan_date);
 
   -- NULL-actor guard, matching sync_rph's.
   --
@@ -1176,7 +1295,10 @@ begin
   end if;
 
   update erph.rph_document
-     set status = 'submitted', submitted_at = now(),
+     -- `submitted_at` is the *first* filing. A return and resubmission must not
+     -- erase the original hand-in time, or an on-time plan turns late through
+     -- no fault of the teacher. `sync_rph` has always preserved it this way.
+     set status = 'submitted', submitted_at = coalesce(submitted_at, now()),
          grade = null, reviewed_by = null, reviewed_at = null,
          version = version + 1, client_updated_at = now()
    where id = p_document
@@ -1189,6 +1311,14 @@ begin
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
   values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'submit',
           jsonb_build_object('completeness', v_pct, 'status', 'submitted'));
+
+  -- The reviewer gets the plan's identity, not just "something was submitted".
+  -- A GPK submitting on the teacher's behalf does not need to notify themself.
+  insert into erph.notification (school_id, user_id, type, title, body, link_view)
+  select v_doc.school_id, r.user_id, 'submitted'::erph.notification_type,
+         'RPH dihantar untuk semakan', v_label, 'review'
+    from erph.reviewers_for(v_doc.school_id, v_doc.owner_id) r
+   where r.user_id <> erph.actor();
 
   return jsonb_build_object('ok', true, 'status', 'submitted', 'completeness', v_pct,
                             'version', v_doc.version);
@@ -1209,6 +1339,7 @@ declare
   v_doc erph.rph_document%rowtype;
   v_pct smallint;
   v_require boolean;
+  v_label text;
   v_items jsonb := '[]'::jsonb;
 begin
   perform set_config('app.rpc', '1', true);
@@ -1270,7 +1401,9 @@ begin
   end loop;
 
   update erph.rph_document
-     set status = 'submitted', submitted_at = now(),
+     -- First filing, same as `submit_rph`: a whole-week resubmission must not
+     -- rewrite every plan's on-time timestamp.
+     set status = 'submitted', submitted_at = coalesce(submitted_at, now()),
          grade = null, reviewed_by = null, reviewed_at = null,
          version = version + 1, client_updated_at = now()
    where id = any(v_ids);
@@ -1281,6 +1414,7 @@ begin
      order by plan_date, id
   loop
     v_pct := erph.rph_completeness(v_doc.payload);
+    v_label := erph.plan_label(v_doc.class_ids, v_doc.subject_code, v_doc.plan_date);
     insert into erph.rph_revision (document_id, version, payload, completeness,
                                    actor_id, reason)
     values (v_doc.id, v_doc.version, v_doc.payload, v_pct, v_actor, 'resubmit')
@@ -1290,6 +1424,12 @@ begin
     values (v_doc.school_id, v_actor, 'rph_document', v_doc.id, 'submit',
             jsonb_build_object('completeness', v_pct, 'status', 'submitted',
                                'batch', true));
+
+    insert into erph.notification (school_id, user_id, type, title, body, link_view)
+    select v_doc.school_id, r.user_id, 'submitted'::erph.notification_type,
+           'RPH dihantar untuk semakan', v_label, 'review'
+      from erph.reviewers_for(v_doc.school_id, v_doc.owner_id) r
+     where r.user_id <> v_actor;
 
     v_items := v_items || jsonb_build_array(
       jsonb_build_object('id', v_doc.id, 'version', v_doc.version));
@@ -1326,12 +1466,16 @@ declare
   v_doc erph.rph_document%rowtype;
   v_pct smallint;
   v_require boolean;
+  v_label text;
+  v_body text;
 begin
   perform set_config('app.rpc', '1', true);
 
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH tidak dijumpai'; end if;
+  v_label := erph.plan_label(v_doc.class_ids, v_doc.subject_code, v_doc.plan_date);
+  v_body := v_label || coalesce(E'\n' || nullif(trim(p_comment), ''), '');
 
   if not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[]) then
     raise exception 'Peranan Guru Penolong Kanan atau Guru Besar diperlukan';
@@ -1345,10 +1489,25 @@ begin
   if v_doc.status <> 'submitted' then
     raise exception 'RPH tidak dalam peringkat semakan';
   end if;
-  if not exists (select 1 from erph.rph_signature
-                  where document_id = v_doc.id
-                    and document_version = v_doc.version
-                    and signer_id = erph.actor()) then
+  -- The server verified the ECDSA signature before inserting the row; this
+  -- second pass checks that the row *describes this decision*. It catches a
+  -- row written for another document/version/signer/decision, or with a key
+  -- that does not match the envelope, even if it somehow reached the table.
+  if not exists (
+    select 1 from erph.rph_signature s
+     where s.document_id = v_doc.id
+       and s.document_version = v_doc.version
+       and s.signer_id = erph.actor()
+       and s.alg = 'ES256'
+       and length(s.signature) > 0
+       and s.envelope->>'v' = '1'
+       and s.envelope->>'alg' = 'ES256'
+       and s.envelope->>'kid' = s.public_key
+       and s.envelope->>'doc' = v_doc.id::text
+       and s.envelope->>'ver' = v_doc.version::text
+       and s.envelope->>'signer' = erph.actor()::text
+       and s.envelope->>'decision' = 'sahkan'
+  ) then
     raise exception 'Tandatangan diperlukan';
   end if;
 
@@ -1375,9 +1534,8 @@ begin
   end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
-  values (v_doc.id, v_doc.version, erph.actor(), 1, p_comment,
-          jsonb_build_object('stage', 'sahkan',
-                             'completeness', erph.rph_completeness(v_doc.payload)));
+  values (v_doc.id, v_doc.version, erph.actor(), 1, trim(p_comment),
+          erph.review_checklist(v_doc.payload, 'sahkan', v_pct));
 
   update erph.rph_document
      set status = 'approved'::erph.rph_status,
@@ -1387,7 +1545,8 @@ begin
 
   insert into erph.notification (school_id, user_id, type, title, body, link_view)
   values (v_doc.school_id, v_doc.owner_id, 'approved'::erph.notification_type,
-          'RPH disahkan', coalesce(p_comment, ''), 'dashboard');
+          'RPH disahkan', v_body,
+          'editor/' || v_doc.id::text);
 
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
   values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'sahkan',
@@ -1403,12 +1562,18 @@ create or replace function erph.hantar_balik_rph(p_document uuid,
 returns jsonb language plpgsql security definer set search_path = erph, public as $$
 declare
   v_doc erph.rph_document%rowtype;
+  v_pct smallint;
+  v_label text;
+  v_body text;
 begin
   perform set_config('app.rpc', '1', true);
 
   select * into v_doc from erph.rph_document
    where id = p_document and deleted_at is null for update;
   if not found then raise exception 'RPH tidak dijumpai'; end if;
+  v_pct := erph.rph_completeness(v_doc.payload);
+  v_label := erph.plan_label(v_doc.class_ids, v_doc.subject_code, v_doc.plan_date);
+  v_body := v_label || E'\n' || trim(p_comment);
 
   if not erph.has_role(v_doc.school_id, array['gpk','guru_besar']::erph.member_role[]) then
     raise exception 'Peranan Guru Penolong Kanan atau Guru Besar diperlukan';
@@ -1423,10 +1588,15 @@ begin
     raise exception 'RPH tidak dalam peringkat semakan';
   end if;
 
+  -- A return without a reason is not actionable. The API enforces this too;
+  -- the SQL is the last line for any other caller.
+  if nullif(trim(p_comment), '') is null then
+    raise exception 'Sebab pengembalian diperlukan';
+  end if;
+
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
-  values (v_doc.id, v_doc.version, erph.actor(), 0, p_comment,
-          jsonb_build_object('stage', 'hantar_balik',
-                             'completeness', erph.rph_completeness(v_doc.payload)));
+  values (v_doc.id, v_doc.version, erph.actor(), 0, trim(p_comment),
+          erph.review_checklist(v_doc.payload, 'hantar_balik', v_pct));
 
   update erph.rph_document
      set status = 'returned'::erph.rph_status,
@@ -1436,13 +1606,75 @@ begin
 
   insert into erph.notification (school_id, user_id, type, title, body, link_view)
   values (v_doc.school_id, v_doc.owner_id, 'returned'::erph.notification_type,
-          'RPH perlu dibaiki', coalesce(p_comment, ''), 'dashboard');
+          'RPH perlu dibaiki', v_body,
+          'editor/' || v_doc.id::text);
 
   insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
   values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'hantar_balik',
-          jsonb_build_object('status', 'returned', 'comment', p_comment));
+          jsonb_build_object('status', 'returned', 'comment', trim(p_comment)));
 
   return jsonb_build_object('ok', true, 'grade', 0, 'status', 'returned');
+end $$;
+
+-- Reopen an approval. A sealed plan is otherwise immutable, so a mistaken
+-- approval had no accountable way back. Only a Guru Besar (for any plan in the
+-- school) or the pentadbir (recovery) may call this, and the reason is
+-- mandatory because the teacher receives it.
+--
+-- The old approval row stays in the append-only history; this adds the
+-- reopening as a grade-0 decision and returns the plan to the teacher, who can
+-- edit and resubmit it. The next submission moves the version on, so neither
+-- the old signature nor the old review can be replayed against the new text.
+create or replace function erph.batal_sahkan_rph(p_document uuid, p_reason text)
+returns jsonb language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_doc erph.rph_document%rowtype;
+  v_pct smallint;
+  v_label text;
+  v_reason text := nullif(trim(p_reason), '');
+begin
+  perform set_config('app.rpc', '1', true);
+
+  if v_reason is null then
+    raise exception 'Sebab pembatalan diperlukan';
+  end if;
+
+  select * into v_doc from erph.rph_document
+   where id = p_document and deleted_at is null for update;
+  if not found then raise exception 'RPH tidak dijumpai'; end if;
+
+  if not erph.has_role(v_doc.school_id,
+                       array['guru_besar','pentadbir']::erph.member_role[]) then
+    raise exception 'Hanya Guru Besar atau pentadbir boleh membatalkan pengesahan';
+  end if;
+  if v_doc.status <> 'approved' then
+    raise exception 'Hanya RPH yang telah disahkan boleh dibuka semula';
+  end if;
+
+  v_pct := erph.rph_completeness(v_doc.payload);
+  v_label := erph.plan_label(v_doc.class_ids, v_doc.subject_code, v_doc.plan_date);
+
+  insert into erph.rph_review (document_id, document_version, reviewer_id, grade,
+                               comment, checklist)
+  values (v_doc.id, v_doc.version, erph.actor(), 0, v_reason,
+          erph.review_checklist(v_doc.payload, 'batal_sahkan', v_pct));
+
+  update erph.rph_document
+     set status = 'returned'::erph.rph_status,
+         grade = 0, reviewed_by = erph.actor(), reviewed_at = now(),
+         version = version + 1
+   where id = p_document;
+
+  insert into erph.notification (school_id, user_id, type, title, body, link_view)
+  values (v_doc.school_id, v_doc.owner_id, 'returned'::erph.notification_type,
+          'Pengesahan RPH dibatalkan', v_label || E'\n' || v_reason,
+          'editor/' || v_doc.id::text);
+
+  insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'batal_sahkan',
+          jsonb_build_object('status', 'returned', 'reason', v_reason));
+
+  return jsonb_build_object('ok', true, 'status', 'returned');
 end $$;
 
 -- SYNC ─ batch, idempotent, offline-friendly; returns authoritative versions.
@@ -1976,6 +2208,11 @@ end $$;
 -- in step, so writing one alone would let a demoted account keep its
 -- privileges through whichever layer it reached next - and would make the
 -- "peranan dikemas kini" toast a description of half a change.
+--
+-- A role change also revalidates supervision: the member's own supervisor must
+-- still be above the new role, and a demoted/deactivated reviewer must not keep
+-- teachers pointing at them. Otherwise a promotion could leave a peer GPK
+-- reviewing their work, and a deactivation could strand a whole queue.
 create or replace function erph.admin_set_member(p_school uuid, p_user uuid,
                                                  p_role erph.member_role,
                                                  p_active boolean)
@@ -2010,6 +2247,54 @@ begin
          role = p_role,
          jawatan = erph.jawatan_for(p_role, erph.user.jawatan)
    where id = p_user;
+
+  -- Revalidate the member's own supervisor against the *new* role. A teacher
+  -- promoted to GPK must not keep the GPK who used to supervise them - that
+  -- would make a peer the reviewer of their own work - and a role with no
+  -- supervisor level at all (pentadbir/system) must not keep one either.
+  update erph.school_member m
+     set supervisor_id = null
+   where m.school_id = p_school
+     and m.user_id = p_user
+     and m.supervisor_id is not null
+     and not exists (
+       select 1
+         from erph.school_member s
+        where s.school_id = p_school
+          and s.user_id = m.supervisor_id
+          and s.user_id <> m.user_id
+          and s.is_active
+          and (
+            (p_role = 'guru_biasa' and s.role in ('gpk','guru_besar'))
+            or (p_role in ('gpk','guru_besar') and s.role = 'guru_besar')
+          )
+     );
+
+  -- A member who stops being a GPK/Guru Besar, or is deactivated, can no
+  -- longer supervise anyone. Clear the assignments that pointed at them rather
+  -- than leaving plans in a scope whose owner cannot open them; the
+  -- administrator can then assign those teachers to someone active.
+  if not p_active or p_role not in ('gpk','guru_besar') then
+    update erph.school_member
+       set supervisor_id = null
+     where school_id = p_school
+       and supervisor_id = p_user;
+  elsif p_role = 'gpk' then
+    -- A GPK may supervise Guru Biasa only. Any peer GPK, Guru Besar, or
+    -- non-teaching role still pointing at them is an assignment this role
+    -- cannot honour.
+    update erph.school_member m
+       set supervisor_id = null
+     where m.school_id = p_school
+       and m.supervisor_id = p_user
+       and exists (
+         select 1
+           from erph.school_member s
+          where s.school_id = p_school
+            and s.user_id = m.user_id
+            and s.role <> 'guru_biasa'
+       );
+  end if;
 end $$;
 
 -- Sets the office printed on the cover sheet, or clears it. Separate from

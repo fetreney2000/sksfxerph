@@ -35,7 +35,7 @@ import { reviewStageFor } from "@/lib/auth/permissions";
 import { handleExpiredSession } from "@/lib/client/auth-session";
 import { cn } from "@/lib/cn";
 import { supabaseConfigured } from "@/lib/config";
-import { longDate, schoolDays, weekRangeLabel } from "@/lib/date";
+import { longDate, longDateOf, schoolDays, weekRangeLabel } from "@/lib/date";
 import type { QueueItem } from "@/lib/demo/review";
 import type { ReviewPlanLight } from "@/lib/hooks/use-remote";
 import { useReviewPlans, useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
@@ -90,7 +90,13 @@ export default function SemakanPage() {
   const session = useSession();
   const school = useSchool();
   const stage = reviewStageFor(role);
-  const { items: QUEUE } = useReviewQueueData(stage?.status ?? null);
+  const {
+    items: QUEUE,
+    total: queueTotal,
+    hasMore,
+    loadingMore,
+    loadMore,
+  } = useReviewQueueData(stage?.status ?? null);
   const {
     items: plans,
     loading: plansLoading,
@@ -210,10 +216,17 @@ export default function SemakanPage() {
           class_names?: string[];
           subject?: { nama: string } | null;
           subject_code: string;
+          session: string;
           plan_date: string;
           slot_time: string | null;
           status: RphStatus;
           payload: unknown;
+          rph_review?: {
+            reviewer?: { full_name: string } | null;
+            comment: string | null;
+            created_at: string;
+            grade: 0 | 1;
+          }[];
         };
         teacherName?: string;
       };
@@ -233,6 +246,15 @@ export default function SemakanPage() {
         status: row.status,
         ageLabel: "",
         payload: row.payload as QueueItem["payload"],
+        session: row.session,
+        reviews: [...(row.rph_review ?? [])]
+          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+          .map((review) => ({
+            reviewerName: review.reviewer?.full_name ?? null,
+            comment: review.comment,
+            createdAt: review.created_at,
+            grade: review.grade,
+          })),
       };
     },
     enabled: supabaseConfigured && needFetch,
@@ -345,6 +367,9 @@ export default function SemakanPage() {
           void refetchPlans();
           void queryClient.invalidateQueries({ queryKey: ["review-plan", item.id] });
         }
+        // The badge and the "Muat lagi" count come from the server's exact
+        // total, not from the rows this page happened to load.
+        void queryClient.invalidateQueries({ queryKey: ["review-queue"] });
       };
 
       if (supabaseConfigured) {
@@ -453,7 +478,8 @@ export default function SemakanPage() {
         : "hover:bg-surface-2",
     );
 
-  const pendingCount = QUEUE.filter((q) => !(q.id in graded)).length;
+  const pendingCount =
+    QUEUE.filter((q) => !(q.id in graded)).length + Math.max(0, queueTotal - QUEUE.length);
 
   return (
     <>
@@ -525,7 +551,7 @@ export default function SemakanPage() {
                     type="button"
                     onClick={() => toggle("pending")}
                     aria-expanded={isOpen("pending")}
-                    aria-label={`Menunggu semakan, ${pendingVisible.length} RPH`}
+                    aria-label={`Menunggu semakan, ${pendingCount} RPH`}
                     className="flex w-full items-center gap-2 border-b border-border bg-surface-2/50 px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
                   >
                     <ChevronRight
@@ -542,7 +568,7 @@ export default function SemakanPage() {
                     />
                     <span className="text-[13px] font-bold">Menunggu semakan</span>
                     <span className="num ml-auto rounded-full border border-warning-line bg-warning-soft px-2 py-px text-[11.5px] font-bold text-warning-ink">
-                      {pendingVisible.length}
+                      {pendingCount}
                     </span>
                   </button>
                   {isOpen("pending") && (
@@ -557,11 +583,15 @@ export default function SemakanPage() {
                               {ms.review.pending} ({pendingCount})
                             </TabsTrigger>
                             <TabsTrigger value="semua">
-                              {ms.review.all} ({QUEUE.length})
+                              {ms.review.all} ({queueTotal})
                             </TabsTrigger>
                           </TabsList>
                         </Tabs>
                       </div>
+                      <p className="border-b border-border px-4 py-2 text-[11px] leading-[1.4] text-ink-4">
+                        Minggu semasa masuk senarai selepas minggu tamat; RPH sesi terdahulu
+                        kekal di sini.
+                      </p>
                       {pendingVisible.map((q) => {
                         const g = graded[q.id];
                         return (
@@ -581,6 +611,9 @@ export default function SemakanPage() {
                               </span>
                               <span className="block text-[11.5px] text-ink-4">
                                 {q.ageLabel}
+                                {q.session && q.session !== session
+                                  ? ` · Sesi ${q.session}`
+                                  : ""}
                               </span>
                             </span>
                             <span className="flex flex-col items-end gap-1.5">
@@ -595,7 +628,22 @@ export default function SemakanPage() {
                           </button>
                         );
                       })}
-                      {pendingVisible.length === 0 && (
+                      {hasMore && (
+                        <div className="border-t border-border p-3">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="w-full"
+                            disabled={loadingMore}
+                            onClick={loadMore}
+                          >
+                            {loadingMore
+                              ? "Memuatkan…"
+                              : `Muat lagi (${Math.max(0, queueTotal - QUEUE.length)} RPH)`}
+                          </Button>
+                        </div>
+                      )}
+                      {pendingVisible.length === 0 && !hasMore && (
                         <p className="px-4 py-10 text-center text-[13px] text-ink-4">
                           Semua RPH sudah disemak. 👍
                         </p>
@@ -938,6 +986,7 @@ function ReviewWorkspace({
       />
 
       <div>
+        <ReviewHistory item={item} />
         <AutoCheck item={item} />
         {readOnly ? (
           // A decided plan: no comment box (there is nothing to comment into),
@@ -961,6 +1010,52 @@ function ReviewWorkspace({
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What happened to this plan before the current submission.
+ *
+ * A returned plan can come back weeks later with changes; the reviewer needs
+ * the reason they sent it back, not only the plan's present content. The queue
+ * embeds `rph_review`, so this costs no extra request for a pending row.
+ */
+function ReviewHistory({ item }: { item: QueueItem }) {
+  const notes = item.reviews ?? [];
+  if (notes.length === 0) return null;
+
+  return (
+    <div className="mb-3 rounded-[11px] border border-border bg-surface-2 p-3.5">
+      <p className="mb-2.5 text-[11px] font-bold tracking-[0.7px] text-ink-4 uppercase">
+        Sejarah semakan
+      </p>
+      <div className="max-h-56 space-y-2.5 overflow-y-auto pr-1">
+        {notes.map((note) => (
+          <div
+            key={`${note.createdAt}-${note.reviewerName ?? "penyemak"}-${note.grade}`}
+            className="border-b border-dashed border-border pb-2.5 last:border-b-0 last:pb-0"
+          >
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-[12.5px] font-semibold text-ink">
+                {note.reviewerName ?? "Penyemak"}
+              </span>
+              <span className="text-[11px] text-ink-4">{longDateOf(note.createdAt)}</span>
+              <Badge
+                variant={note.grade === 1 ? "success" : "danger"}
+                className="ml-auto shrink-0"
+              >
+                {note.grade === 1 ? "Lengkap" : "Dikembalikan"}
+              </Badge>
+            </div>
+            {note.comment?.trim() && (
+              <p className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.5] text-ink-3">
+                {note.comment}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

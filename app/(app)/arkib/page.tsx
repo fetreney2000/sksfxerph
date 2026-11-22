@@ -722,6 +722,17 @@ export default function ArkibPage() {
                                               ? ` · ${d.payload.standard_kandungan}`
                                               : ""}
                                           </p>
+                                          {d.status === "returned" && d.reviewComment && (
+                                            <p
+                                              className="mt-1 line-clamp-2 text-[11.5px] leading-[1.45] text-danger-ink"
+                                              title={d.reviewComment}
+                                            >
+                                              <span className="font-semibold">
+                                                Catatan penyemak:{" "}
+                                              </span>
+                                              {d.reviewComment}
+                                            </p>
+                                          )}
                                         </div>
                                         <StatusBadge
                                           status={d.status}

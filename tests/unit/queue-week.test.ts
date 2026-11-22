@@ -14,7 +14,7 @@ import { invalidateCalendarCache } from "@/lib/server/calendar";
  * scope rules (whole school for the Guru Besar, supervised teachers for a GPK)
  * and the same soft-delete exclusion. What must never change silently is the
  * default mode: the ordinary queue keeps its `status` filter, its ordering and
- * its 50-row cap.
+ * its first page of 50, while `total` reports the real queue size.
  *
  * Week mode matches by WHEN TAUGHT (the week's Monday..Sunday under the
  * school's current declarations), never by the stamped `week_no`: a plan filed
@@ -41,6 +41,8 @@ const state = vi.hoisted(() => ({
   calls: [] as { table: string; method: string; args: unknown[] }[],
   /** Rows the awaited `rph_document` read answers with. */
   rows: [] as Record<string, unknown>[],
+  /** Exact count `rph_document` reports, when a test overrides it. */
+  total: null as number | null,
   /** Declared calendar weeks the route's date arithmetic reads through. */
   anchors: [] as {
     week_no: number;
@@ -80,6 +82,8 @@ vi.mock("@/lib/server/db", () => ({
         "is",
         "order",
         "limit",
+        "range",
+        "lt",
         "gte",
         "lte",
       ]) {
@@ -112,7 +116,7 @@ vi.mock("@/lib/server/db", () => ({
         state.calls.push({ table, method: "then", args: [] });
         const answer =
           table === "rph_document"
-            ? { data: state.rows, error: null }
+            ? { data: state.rows, error: null, count: state.total ?? state.rows.length }
             : table === "class"
               ? {
                   data: [
@@ -123,8 +127,10 @@ vi.mock("@/lib/server/db", () => ({
                 }
               : table === "academic_calendar"
                 ? { data: state.anchors, error: null }
-                : // The GPK scope lookup selects `user_id` from school_member.
-                  { data: state.supervised.map((user_id) => ({ user_id })), error: null };
+                : table === "rph_review"
+                  ? { data: [], error: null }
+                  : // The GPK scope lookup selects `user_id` from school_member.
+                    { data: state.supervised.map((user_id) => ({ user_id })), error: null };
         return Promise.resolve(answer).then(
           onOk as (v: unknown) => unknown,
           onErr as (e: unknown) => unknown,
@@ -161,6 +167,7 @@ beforeEach(() => {
   state.calls.length = 0;
   state.anchors = [];
   state.supervised = [TEACHER_ID];
+  state.total = null;
   // `loadCalendarAnchors` caches per school: without this, one test's
   // declarations leak into the next test's date arithmetic.
   invalidateCalendarCache();
@@ -193,18 +200,38 @@ beforeEach(() => {
 });
 
 describe("GET /api/queue - default mode", () => {
-  it("keeps the pending queue exactly as it was: status filter, submission order, cap of 50", async () => {
+  it("keeps the pending queue's filters, order and first page of 50", async () => {
     const res = await GET(get());
 
     expect(res.status).toBe(200);
     const filters = docCalls().filter((c) => !c.startsWith("select("));
     expect(filters).toContain('eq(["school_id","99999999-9999-4999-8999-999999999999"])');
-    expect(filters).toContain('eq(["session","2026/2027"])');
     expect(filters).toContain('eq(["status","submitted"])');
     expect(filters).toContain('is(["deleted_at",null])');
     expect(filters).toContain('order(["submitted_at",{"ascending":true}])');
-    expect(filters).toContain("limit([50])");
+    expect(filters).toContain("range([0,49])");
+    // Current-week plans are not decidable yet; they must not inflate the
+    // badge or the work list.
+    expect(filters.some((c) => c.startsWith('lt(["plan_date"'))).toBe(true);
+    // Nor is the queue limited to the current school year: prior-session
+    // pending work is still work.
+    expect(filters.some((c) => c.startsWith('eq(["session"'))).toBe(false);
     expect(filters.some((c) => c.includes("week_no"))).toBe(false);
+  });
+
+  it("pages the queue and reports the exact total", async () => {
+    state.total = 120;
+    const res = await GET(get("?offset=50&limit=50"));
+
+    expect(res.status).toBe(200);
+    expect(docCalls().some((c) => c === "range([50,99])")).toBe(true);
+    const body = (await res.json()) as { total: number };
+    expect(body.total).toBe(120);
+  });
+
+  it("refuses a negative offset or an oversized page", async () => {
+    expect((await GET(get("?offset=-1"))).status).toBe(400);
+    expect((await GET(get("?limit=500"))).status).toBe(400);
   });
 
   it("excludes soft-deleted plans from the pending queue too", async () => {
@@ -236,7 +263,7 @@ describe("GET /api/queue - week mode", () => {
     // No status filter - a draft and an approved plan both belong to the week.
     expect(filters.some((c) => c.startsWith('eq(["status"'))).toBe(false);
     expect(filters).toContain('order(["plan_date",{"ascending":true}])');
-    expect(filters).toContain("limit([200])");
+    expect(filters).toContain("range([0,199])");
 
     const body = (await res.json()) as { items: { id: string }[] };
     expect(body.items.map((i) => i.id)).toEqual(["doc-draft", "doc-approved"]);

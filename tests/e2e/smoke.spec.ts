@@ -375,7 +375,10 @@ test.describe("eRPH smoke", () => {
     const errors = collectErrors(page);
     await page.goto("/arkib");
 
-    const submitted = page.getByRole("listitem").filter({ hasText: "Menunggu GPK" }).first();
+    const submitted = page
+      .getByRole("listitem")
+      .filter({ hasText: "Menunggu semakan" })
+      .first();
     await expect(submitted).toBeVisible({ timeout: 15_000 });
     await submitted.getByRole("button", { name: "Buka", exact: true }).click();
 

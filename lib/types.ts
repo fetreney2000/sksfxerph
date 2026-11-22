@@ -56,6 +56,7 @@ export type TemplateVisibility = "private" | "school" | "system";
 export type NotificationType =
   | "deadline"
   | "forwarded"
+  | "submitted"
   | "returned"
   | "approved"
   | "reminder"

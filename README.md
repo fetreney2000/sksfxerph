@@ -65,8 +65,8 @@ Run `db/seed.sql` after `db/schema.sql` (Supabase SQL editor) and log in as:
 | Role | Username | Password | Can |
 |---|---|---|---|
 | `guru_biasa` | `nurul.aisyah` | `guru2026` | write, submit and export own RPH |
-| `gpk` | `ramlan.yusof` | `penyelaras2026` | review → forward to Guru Besar, or return; school dashboard, reports |
-| `guru_besar` | `zulkifli.rahman` | `admin2026` | approve what the GPK forwards, or return; school dashboard, reports, audit log |
+| `gpk` | `ramlan.yusof` | `penyelaras2026` | review assigned teachers, approve or return; school dashboard, reports |
+| `guru_besar` | `zulkifli.rahman` | `admin2026` | review every plan in the school, approve or return; school dashboard, reports, audit log |
 | `pentadbir` | `pentadbir.sk` | `pentadbir2026` | set up and manage the app |
 | `system` | `sistem.erph` | — *cannot log in* | service actor for automated rows |
 

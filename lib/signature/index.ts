@@ -10,6 +10,18 @@
  * tightly - and it keeps the envelope small enough to be read and argued about
  * in a dispute.
  *
+ * ## What the envelope deliberately does not cover
+ *
+ * The class, subject, date and session columns are not in the envelope. They
+ * are part of the `rph_document` row, and the server refuses to change any of
+ * them once a plan is submitted (`PATCH` only accepts a draft or returned
+ * plan) or approved (immutable). The seal therefore attests to the reviewed
+ * payload at a known document version, while those columns are protected by
+ * the same versioned row. A caller who edits the database directly is outside
+ * the server's authorization boundary; if that threat is in scope for a future
+ * deployment, bind the metadata into a new envelope version rather than
+ * silently adding fields to this one.
+ *
  * ## Where the keys live
  *
  * The signer's key pair is generated in their browser and the private half

@@ -55,7 +55,7 @@ export default function MingguPage() {
   // them on Semakan, the queue is the first thing above it.
   const stage = reviewStageFor(me.role);
   const reviewQueue = useReviewQueueData(stage?.status ?? null);
-  const pendingReviews = stage ? reviewQueue.items.length : 0;
+  const pendingReviews = stage ? reviewQueue.total : 0;
   // Nothing to count yet - the figures have not loaded, or the school owes
   // nothing this week. Both read as "-" rather than as a school that has
   // handed in zero plans: a number nobody has measured is not zero.
@@ -441,68 +441,83 @@ function PlanRow({ doc }: { doc: RphDocument }) {
   const action = planAction(doc);
 
   return (
-    <TR className={doc.status === "draft" ? "bg-primary-soft" : undefined}>
-      <TD>
-        <div className="flex items-center gap-2.5">
-          <Avatar initials={doc.classNames.join(", ").slice(0, 2)} tone="blue" small />
-          <div className="min-w-0">
-            <div className="truncate font-semibold">
-              {doc.classNames.join(", ")} · {doc.subjectName}
+    <>
+      <TR className={doc.status === "draft" ? "bg-primary-soft" : undefined}>
+        <TD>
+          <div className="flex items-center gap-2.5">
+            <Avatar initials={doc.classNames.join(", ").slice(0, 2)} tone="blue" small />
+            <div className="min-w-0">
+              <div className="truncate font-semibold">
+                {doc.classNames.join(", ")} · {doc.subjectName}
+              </div>
+              <div className="text-[11.5px] text-ink-3">{doc.subjectCode}</div>
             </div>
-            <div className="text-[11.5px] text-ink-3">{doc.subjectCode}</div>
           </div>
-        </div>
-      </TD>
-      <TD className="num whitespace-nowrap">{daySlot(doc.planDate, doc.slotTime)}</TD>
-      <TD>
-        <span className="ellip block max-w-[250px]">
-          {doc.payload.standard_kandungan || "-"}
-        </span>
-      </TD>
-      <TD>
-        <StatusBadge status={doc.status} grade={doc.grade} />
-        {/* The penyunting's four-section meter, on the list. Without it a
+        </TD>
+        <TD className="num whitespace-nowrap">{daySlot(doc.planDate, doc.slotTime)}</TD>
+        <TD>
+          <span className="ellip block max-w-[250px]">
+            {doc.payload.standard_kandungan || "-"}
+          </span>
+        </TD>
+        <TD>
+          <StatusBadge status={doc.status} grade={doc.grade} />
+          {/* The penyunting's four-section meter, on the list. Without it a
             teacher with six plans opens each one to find which are unfinished
             - the number was already computed, it was just only ever shown
             inside the editor. Shown for drafts and returns, because a
             submitted plan has already passed the gate that requires all four. */}
-        {actionable && (
-          <span className="num mt-1 block text-[11px] text-ink-4">
-            {completeness(doc.payload) / 25}/4 bahagian
-          </span>
-        )}
-      </TD>
-      <TD>
-        {/* The name when the record carries one, the date when only that is
+          {actionable && (
+            <span className="num mt-1 block text-[11px] text-ink-4">
+              {completeness(doc.payload) / 25}/4 bahagian
+            </span>
+          )}
+        </TD>
+        <TD>
+          {/* The name when the record carries one, the date when only that is
             known, and nothing when neither is. The reviewer is whoever wrote
             the newest `rph_review` row - so for a plan returned and then
             approved, it is the person who approved it, which is the decision
             the Status column beside it reflects. */}
-        {doc.reviewerName || doc.reviewedAt ? (
-          <div className="min-w-0">
-            {doc.reviewerName && (
-              <span className="block truncate text-[12.5px] font-semibold text-ink">
-                {doc.reviewerName}
-              </span>
-            )}
-            {doc.reviewedAt && (
-              <span className="block text-[11px] text-ink-4">{longDateOf(doc.reviewedAt)}</span>
-            )}
-          </div>
-        ) : (
-          <span className="text-[12.5px] text-ink-4">-</span>
-        )}
-      </TD>
-      <TD className="text-right">
-        <Button
-          size="sm"
-          variant={action.variant}
-          onClick={() => router.push(`/editor/${doc.id}`)}
-        >
-          {action.label}
-        </Button>
-      </TD>
-    </TR>
+          {doc.reviewerName || doc.reviewedAt ? (
+            <div className="min-w-0">
+              {doc.reviewerName && (
+                <span className="block truncate text-[12.5px] font-semibold text-ink">
+                  {doc.reviewerName}
+                </span>
+              )}
+              {doc.reviewedAt && (
+                <span className="block text-[11px] text-ink-4">
+                  {longDateOf(doc.reviewedAt)}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-[12.5px] text-ink-4">-</span>
+          )}
+        </TD>
+        <TD className="text-right">
+          <Button
+            size="sm"
+            variant={action.variant}
+            onClick={() => router.push(`/editor/${doc.id}`)}
+          >
+            {action.label}
+          </Button>
+        </TD>
+      </TR>
+      {doc.status === "returned" && doc.reviewComment && (
+        <TR className="bg-danger-soft/45">
+          <TD
+            colSpan={6}
+            className="border-t-0 px-3 py-2 text-[12px] leading-[1.5] text-danger-ink"
+          >
+            <span className="font-semibold">Catatan penyemak: </span>
+            <span className="whitespace-pre-wrap">{doc.reviewComment}</span>
+          </TD>
+        </TR>
+      )}
+    </>
   );
 }
 
@@ -546,6 +561,13 @@ function PlanCard({ doc }: { doc: RphDocument }) {
           <p className="mt-1 line-clamp-2 text-[12.5px] leading-[1.45] text-ink-3">
             {doc.payload.standard_kandungan || "Standard Kandungan belum diisi."}
           </p>
+
+          {doc.status === "returned" && doc.reviewComment && (
+            <div className="mt-2 rounded-[10px] border border-danger-line bg-danger-soft px-3 py-2 text-[12px] leading-[1.5] text-danger-ink">
+              <p className="font-semibold">Catatan penyemak</p>
+              <p className="mt-0.5 whitespace-pre-wrap">{doc.reviewComment}</p>
+            </div>
+          )}
 
           {actionable && (
             <p className="num mt-1 text-[11px] text-ink-4">

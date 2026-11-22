@@ -64,7 +64,7 @@ export function Sidebar({
    */
   const stage = reviewStageFor(user.role);
   const queue = useReviewQueueData(stage?.status ?? null);
-  const pending = stage ? (queue.loading ? null : queue.items.length) : null;
+  const pending = stage ? (queue.loading ? null : queue.total) : null;
 
   return (
     <aside

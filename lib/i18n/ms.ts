@@ -74,7 +74,7 @@ export const ms = {
 
   status: {
     draft: "Draf",
-    submitted: "Menunggu GPK",
+    submitted: "Menunggu semakan",
     forwarded: "Menunggu Guru Besar",
     approved: "Disahkan",
     /**

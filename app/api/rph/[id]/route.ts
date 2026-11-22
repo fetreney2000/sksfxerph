@@ -38,7 +38,7 @@ const COLUMNS =
   // The reader is not always the writer: a reviewer opening "Buka penuh"
   // needs the name on the paper, and the queue already proves this embed.
   "owner:owner_id(full_name), " +
-  "rph_review(reviewer:reviewer_id(full_name), comment, created_at)";
+  "rph_review(reviewer:reviewer_id(full_name), comment, created_at, grade)";
 
 /**
  * GET /api/rph/[id] - one plan, read by its owner or its reviewer.
@@ -258,10 +258,16 @@ const patchSchema = z
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Masa tidak sah")
       .optional(),
     payload: rphPayloadSchema.optional(),
-    /** The version the editor loaded; a mismatch means another tab saved first. */
-    expectedVersion: z.number().int().min(1).optional(),
+    /**
+     * The version the editor loaded; a mismatch means another tab saved first.
+     * Required: an omitted value would disable the optimistic-concurrency
+     * check and let a stale tab overwrite a newer one.
+     */
+    expectedVersion: z.number().int().min(1),
   })
-  .refine((d) => Object.keys(d).length > 0, { message: "Tiada perubahan dihantar" });
+  .refine((d) => Object.keys(d).some((key) => key !== "expectedVersion"), {
+    message: "Tiada perubahan dihantar",
+  });
 
 export async function PATCH(
   request: NextRequest,
@@ -336,7 +342,7 @@ export async function PATCH(
       { status: 409 },
     );
   }
-  if (d.expectedVersion !== undefined && d.expectedVersion !== current.version) {
+  if (d.expectedVersion !== current.version) {
     return NextResponse.json(
       {
         error:

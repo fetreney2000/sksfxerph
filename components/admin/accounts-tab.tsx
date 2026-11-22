@@ -250,6 +250,17 @@ export function AccountsTab() {
             // The level above this member, so a GPK's own RPH is not
             // left reviewable by a peer. See `supervisorsFor`.
             const supervisors = supervisorsFor(m, items);
+            const assignedSupervisor = m.supervisor_id
+              ? items.find((s) => s.user_id === m.supervisor_id)
+              : undefined;
+            // An assignment can become invalid after a role change or a
+            // deactivation. The SQL clears the ones it can, but data created
+            // before those guards still needs to be visible to the person who
+            // can fix it.
+            const supervisorInvalid =
+              Boolean(m.supervisor_id) &&
+              (!assignedSupervisor?.is_active ||
+                !supervisors.some((s) => s.user_id === m.supervisor_id));
 
             const changeSupervisor = (supervisorId: string | null) =>
               save(
@@ -388,6 +399,16 @@ export function AccountsTab() {
                         </option>
                       ))}
                     </Select>
+                  )}
+                  {supervisorInvalid && (
+                    <p
+                      role="alert"
+                      className="mt-1.5 text-[11.5px] leading-[1.4] text-warning-ink"
+                    >
+                      Penyelia semasa
+                      {assignedSupervisor ? ` (${assignedSupervisor.full_name})` : ""} tidak
+                      aktif atau bukan pada peringkat yang betul. Tetapkan penyelia baharu.
+                    </p>
                   )}
                 </CardField>
                 <p className="flex flex-wrap items-baseline gap-x-3 text-[11.5px] text-ink-4">

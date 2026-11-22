@@ -68,7 +68,7 @@ export async function GET(
 
   const { data: doc, error: docErr } = await gate.db
     .from("rph_document")
-    .select("id, school_id, owner_id")
+    .select("id, school_id, owner_id, status, version, reviewed_by")
     .eq("id", id)
     .eq("school_id", schoolId)
     // `.is(…, null)`, not `.eq(…, false)`. `deleted_at` is a timestamptz —
@@ -82,8 +82,18 @@ export async function GET(
     console.error("[signature] document read failed:", docErr.message);
     return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
   }
-  const row = doc as { id: string; school_id: string; owner_id: string } | null;
+  const row = doc as {
+    id: string;
+    school_id: string;
+    owner_id: string;
+    status: string;
+    version: number;
+    reviewed_by: string | null;
+  } | null;
   if (!row) return NextResponse.json({ signature: null });
+  // Only an approved plan has a seal to show. A submitted or returned plan may
+  // have an orphan row from a refused attempt; it must not render as approval.
+  if (row.status !== "approved") return NextResponse.json({ signature: null });
 
   // `may_supervise` takes the *actor* as the identity, which for the service
   // key is nobody — so this runs with the caller's own id attached.
@@ -98,13 +108,38 @@ export async function GET(
   // 404, not 403: a stranger should not learn this plan exists.
   if (!allowed) return NextResponse.json({ signature: null });
 
+  // Approval signs version N and then bumps the document to N+1. The review
+  // row is the anchor, the same one export uses; without it a latest-row query
+  // can return an orphan or another reviewer's failed attempt.
+  const { data: reviewData, error: reviewErr } = await gate.db
+    .from("rph_review")
+    .select("document_version, reviewer_id")
+    .eq("document_id", id)
+    .eq("grade", 1)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (reviewErr) {
+    console.error("[signature] approval read failed:", reviewErr.message);
+    return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+  }
+  const review = reviewData as unknown as {
+    document_version: number;
+    reviewer_id: string;
+  } | null;
+  const signedVersion = review?.document_version ?? row.version - 1;
+  const signerId = review?.reviewer_id ?? row.reviewed_by;
+  if (!signerId) return NextResponse.json({ signature: null });
+
   const { data, error } = await gate.db
     .from("rph_signature")
     .select(
       "envelope, signature, public_key, alg, signed_at, signer_id, " +
-        "signer:signer_id(full_name, jawatan)",
+        "signer_name, signer_title, signer:signer_id(full_name, jawatan)",
     )
     .eq("document_id", id)
+    .eq("document_version", signedVersion)
+    .eq("signer_id", signerId)
     .order("signed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -121,24 +156,23 @@ export async function GET(
     alg: string;
     signed_at: string;
     signer_id: string;
+    signer_name: string | null;
+    signer_title: string | null;
     signer: { full_name: string; jawatan: string | null } | null;
   } | null;
 
   if (!sig) return NextResponse.json({ signature: null });
 
-  // The office rides along on the same embedded read as the name. It used to
-  // come from `school_member.title`, a free-text column nothing ever wrote —
-  // which is why every cover sheet printed "—" beneath a signature the school
-  // had actually made. `erph.user.jawatan` is the one the administrator sets,
-  // and the join to `erph.user` is the same row the name is already read from.
+  // The snapshot is what was printed when the signature was made; the current
+  // user row is only a fallback for signatures written before migration 033.
   const payload: SignaturePayload = {
     envelope: sig.envelope,
     signature: sig.signature,
     publicKey: sig.public_key,
     alg: sig.alg,
     signedAt: sig.signed_at,
-    signerName: sig.signer?.full_name ?? null,
-    signerTitle: jawatanLabel(sig.signer?.jawatan),
+    signerName: sig.signer_name ?? sig.signer?.full_name ?? null,
+    signerTitle: sig.signer_title ?? jawatanLabel(sig.signer?.jawatan),
   };
 
   return NextResponse.json({ signature: payload });

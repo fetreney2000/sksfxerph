@@ -1,8 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { reviewStageFor } from "@/lib/auth/permissions";
+import { ms } from "@/lib/i18n/ms";
 import { requireReviewer } from "@/lib/server/auth/guard";
 import { toClientError } from "@/lib/server/http/errors";
 import { payloadHash, verifySignature } from "@/lib/signature";
+import type { Jawatan } from "@/lib/types";
+
+/** The office as printed on the sheet, snapshotted with the signature. */
+function jawatanLabel(value: string | null | undefined): string | null {
+  if (!value || !(value in ms.jawatan)) return null;
+  return ms.jawatan[value as Jawatan];
+}
 
 /**
  * POST /api/rpc/review - decide a plan: *sahkan* (approve, signed) or
@@ -54,6 +62,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Peranan penyemak diperlukan" }, { status: 403 });
   }
 
+  const declaredLength = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declaredLength) && declaredLength > 1_000_000) {
+    return NextResponse.json({ error: "Permintaan semakan terlalu besar." }, { status: 413 });
+  }
+
   let body: ReviewBody;
   try {
     body = await request.json();
@@ -66,12 +79,35 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
+  if (body.comment !== undefined && typeof body.comment !== "string") {
+    return NextResponse.json({ error: "Komen tidak sah." }, { status: 400 });
+  }
+  if (body.comment !== undefined && body.comment.length > 2_000) {
+    return NextResponse.json({ error: "Komen terlalu panjang." }, { status: 422 });
+  }
 
   // A returned plan without a reason leaves the teacher with only the generic
   // "RPH perlu dibaiki" notification. The UI disables the button until a
   // comment exists; enforce the same contract here for any other caller.
   if (body.decision === "hantar_balik" && !body.comment?.trim()) {
     return NextResponse.json({ error: "Sebab pengembalian diperlukan" }, { status: 400 });
+  }
+
+  // A response can be lost after the RPC committed. A retry by the reviewer who
+  // made the decision is a success, not a 422 from the state machine.
+  const already = body.decision === "sahkan" ? "approved" : "returned";
+  const { data: current, error: currentErr } = await gate.db
+    .from("rph_document")
+    .select("status, reviewed_by")
+    .eq("id", body.documentId)
+    .maybeSingle();
+  if (currentErr) {
+    console.error("[review] state read failed:", currentErr.message);
+    return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
+  }
+  const row = current as { status?: string; reviewed_by?: string | null } | null;
+  if (row?.status === already && row.reviewed_by === gate.user.id) {
+    return NextResponse.json({ ok: true, status: already, idempotent: true });
   }
 
   const rpc = body.decision === "sahkan" ? stage.approveRpc : stage.returnRpc;
@@ -213,10 +249,22 @@ async function verifyAndStore(
 
   if (existing) return { refusal: null, inserted: false };
 
+  // Snapshot the printed identity. A later promotion, office change or name
+  // change must not rewrite what an old signed sheet says.
+  const { data: signer, error: signerErr } = await gate.db
+    .from("user")
+    .select("full_name, jawatan")
+    .eq("id", gate.user.id)
+    .maybeSingle();
+  if (signerErr) console.error("[review] signer profile read failed:", signerErr.message);
+  const signerRow = signer as { full_name: string; jawatan: string | null } | null;
+
   const { error: insertErr } = await gate.db.from("rph_signature").insert({
     document_id: documentId,
     document_version: doc.version,
     signer_id: gate.user.id,
+    signer_name: signerRow?.full_name ?? gate.user.fullName,
+    signer_title: jawatanLabel(signerRow?.jawatan),
     alg: "ES256",
     public_key: wanted.kid,
     signature,
