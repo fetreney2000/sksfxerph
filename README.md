@@ -158,6 +158,16 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 
 Plus: dark mode, PWA install.
 
+### ZIP downloads from Arkib
+
+Use the ZIP button beside an RPH, a week, or a session, then choose PDF or
+DOCX. Each ZIP contains one file in the selected format per plan, grouped into
+week folders, including drafts. An active connection is needed for DOCX generation. Approved plans in synced
+mode must have a verifiable signature or the export stops without downloading
+an incomplete ZIP. Large sessions can take several minutes: the existing DOCX
+endpoint rate limit is respected and the page reports progress. ZIP PDFs use
+a simpler text layout; use the archive's print action for the school form.
+
 ---
 
 ## Architecture

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyPayload } from "@/lib/schemas/rph";
 import type { RphDocument } from "@/lib/types";
 
+const download = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => {}));
+vi.mock("@/lib/client/archive-export", () => ({ downloadArchiveZip: download }));
 const plans = [
   { id: "a", subjectName: "Matematik", status: "draft", planDate: "2026-10-05" },
   { id: "b", subjectName: "Bahasa", status: "submitted", planDate: "2026-10-06" },
@@ -46,6 +48,7 @@ const { default: ArkibPage } = await import("@/app/(app)/arkib/page");
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  download.mockClear();
 });
 
 describe("archive printing", () => {
@@ -77,5 +80,45 @@ describe("archive printing", () => {
     fireEvent.click(screen.getByRole("button", { name: /Cetak 5 Amanah Matematik/ }));
     await waitFor(() => expect(output).toContain("plan:Matematik"));
     expect(output).not.toContain("Bahasa");
+  });
+
+  it("exports the whole session even when searching", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ArkibPage />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Matematik" } });
+    fireEvent.click(screen.getByRole("button", { name: /Muat turun ZIP sesi 2026\/2027/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Muat turun ZIP PDF" }));
+    await waitFor(() => expect(download).toHaveBeenCalled());
+    expect(download.mock.calls[0]?.[0]).toEqual(plans);
+    expect(download.mock.calls[0]?.[4]).toBe("pdf");
+  });
+
+  it("offers week and individual ZIP downloads", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ArkibPage />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Muat turun ZIP minggu 2/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Muat turun ZIP DOCX" }));
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    expect(download.mock.calls[0]?.[0]).toEqual(plans);
+    expect(download.mock.calls[0]?.[4]).toBe("docx");
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: /Muat turun ZIP 5 Amanah Matematik/,
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Muat turun ZIP 5 Amanah Matematik/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Muat turun ZIP PDF" }));
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(2));
+    expect(download.mock.calls[1]?.[0]).toEqual([plans[0]]);
   });
 });

@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronRight,
   Copy,
+  Download,
   FileText,
   Folder,
   FolderOpen,
@@ -108,8 +109,43 @@ export default function ArkibPage() {
   const queryClient = useQueryClient();
   const archive = useArchive() ?? [];
   const session = useSession();
+  const me = useUser();
+  const school = useSchool();
   const [confirming, setConfirming] = React.useState<RphDocument | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [exportStatus, setExportStatus] = React.useState("");
+  const [exporting, setExporting] = React.useState(false);
+  const [exportChoice, setExportChoice] = React.useState<{
+    documents: RphDocument[];
+    name: string;
+  } | null>(null);
+  async function exportZip(documents: RphDocument[], name: string, format: "pdf" | "docx") {
+    if (exporting || documents.length === 0) return;
+    setExportChoice(null);
+    setExporting(true);
+    setExportStatus("Memulakan eksport…");
+    try {
+      const { downloadArchiveZip } = await import("@/lib/client/archive-export");
+      await downloadArchiveZip(
+        documents,
+        name,
+        me.fullName,
+        school.name,
+        format,
+        setExportStatus,
+      );
+      setExportStatus(
+        `${documents.length} RPH disediakan dalam ZIP (${format.toUpperCase()}).`,
+      );
+      toast.success("Fail ZIP telah disediakan.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Eksport gagal.";
+      setExportStatus(`Eksport gagal: ${message} Tiada ZIP dimuat turun.`);
+      toast.error(`Eksport gagal: ${message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
   const [printJob, setPrintJob] = React.useState<{
     documents: RphDocument[];
     week: boolean;
@@ -223,6 +259,19 @@ export default function ArkibPage() {
   return (
     <>
       <div data-print="screen">
+        <p className="mb-3 text-xs leading-relaxed text-ink-3">
+          Muat turun ZIP PDF atau ZIP DOCX untuk satu RPH, seminggu atau satu sesi. Eksport sesi
+          yang besar mungkin mengambil masa. PDF ZIP menggunakan susun atur ringkas; gunakan
+          Cetak untuk format borang sekolah.
+        </p>
+        {exportStatus && (
+          <p
+            role="status"
+            className="mb-3 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm text-ink-2"
+          >
+            {exportStatus}
+          </p>
+        )}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Arkib eRPH</h2>
           <span className="num rounded-full border border-border bg-surface-2 px-2.5 py-[3px] text-[11.5px] font-semibold text-ink-3">
@@ -261,38 +310,56 @@ export default function ArkibPage() {
             return (
               <Card key={s} className="overflow-hidden">
                 <div>
-                  <button
-                    type="button"
-                    onClick={() => toggleSession(s)}
-                    aria-expanded={sOpen}
-                    aria-label={`Sesi ${s}, ${sPlans.length} RPH`}
-                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-surface-2"
-                  >
-                    <ChevronRight
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-ink-4 transition-transform duration-200",
-                        sOpen && "rotate-90",
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleSession(s)}
+                      aria-expanded={sOpen}
+                      aria-label={`Sesi ${s}, ${sPlans.length} RPH`}
+                      className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-surface-2"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "h-4 w-4 shrink-0 text-ink-4 transition-transform duration-200",
+                          sOpen && "rotate-90",
+                        )}
+                        aria-hidden
+                      />
+                      {sOpen ? (
+                        <FolderOpen
+                          className="h-[18px] w-[18px] shrink-0 text-warning-ink"
+                          strokeWidth={1.9}
+                          aria-hidden
+                        />
+                      ) : (
+                        <Folder
+                          className="h-[18px] w-[18px] shrink-0 text-warning-ink"
+                          strokeWidth={1.9}
+                          aria-hidden
+                        />
                       )}
-                      aria-hidden
-                    />
-                    {sOpen ? (
-                      <FolderOpen
-                        className="h-[18px] w-[18px] shrink-0 text-warning-ink"
-                        strokeWidth={1.9}
-                        aria-hidden
-                      />
-                    ) : (
-                      <Folder
-                        className="h-[18px] w-[18px] shrink-0 text-warning-ink"
-                        strokeWidth={1.9}
-                        aria-hidden
-                      />
+                      <span className="text-[14px] font-bold tracking-[-0.2px]">Sesi {s}</span>
+                      <span className="num rounded-full border border-border bg-surface-2 px-2 py-px text-[11.5px] font-semibold text-ink-3">
+                        {sPlans.length} RPH
+                      </span>
+                    </button>
+                    {sPlans.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={exporting}
+                        aria-label={`Muat turun ZIP sesi ${s}`}
+                        onClick={() =>
+                          setExportChoice({
+                            documents: archive.filter((d) => d.session === s),
+                            name: `RPH-Sesi-${s}`,
+                          })
+                        }
+                      >
+                        <Download className="h-4 w-4" aria-hidden /> ZIP
+                      </Button>
                     )}
-                    <span className="text-[14px] font-bold tracking-[-0.2px]">Sesi {s}</span>
-                    <span className="num rounded-full border border-border bg-surface-2 px-2 py-px text-[11.5px] font-semibold text-ink-3">
-                      {sPlans.length} RPH
-                    </span>
-                  </button>
+                  </div>
 
                   {sOpen && (
                     <div className="border-t border-border px-2 py-2 sm:px-3">
@@ -353,6 +420,24 @@ export default function ArkibPage() {
                                   <WeekPill group={g} />
                                 </span>
                               </button>
+                              {g.plans.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={exporting}
+                                  aria-label={`Muat turun ZIP minggu ${w}, sesi ${s}`}
+                                  onClick={() =>
+                                    setExportChoice({
+                                      documents: archive.filter(
+                                        (d) => d.session === s && d.weekNo === w,
+                                      ),
+                                      name: `RPH-${s}-Minggu-${w}`,
+                                    })
+                                  }
+                                >
+                                  <Download className="h-4 w-4" aria-hidden /> ZIP
+                                </Button>
+                              )}
                               {g.plans.length > 0 && (
                                 <Button
                                   size="sm"
@@ -431,6 +516,20 @@ export default function ArkibPage() {
                                           <Button
                                             size="sm"
                                             variant="ghost"
+                                            disabled={exporting}
+                                            aria-label={`Muat turun ZIP ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
+                                            onClick={() =>
+                                              setExportChoice({
+                                                documents: [d],
+                                                name: `RPH-${d.planDate}-${d.subjectName}`,
+                                              })
+                                            }
+                                          >
+                                            <Download className="h-4 w-4" aria-hidden />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
                                             aria-label={`Cetak ${d.classNames.join(", ")} ${d.subjectName} ${d.planDate}`}
                                             onClick={() =>
                                               setPrintJob({ documents: [d], week: false })
@@ -500,6 +599,42 @@ export default function ArkibPage() {
             );
           })}
         </div>
+
+        <Dialog
+          open={exportChoice !== null}
+          onOpenChange={(open) => !open && setExportChoice(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Pilih format muat turun</DialogTitle>
+              <DialogDescription>
+                {exportChoice?.documents.length ?? 0} RPH akan dimuat turun dalam satu fail ZIP.
+                Pilih satu format untuk setiap muat turun.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="grid gap-3 sm:grid-cols-2">
+              <Button
+                disabled={exporting}
+                onClick={() =>
+                  exportChoice &&
+                  void exportZip(exportChoice.documents, exportChoice.name, "pdf")
+                }
+              >
+                Muat turun ZIP PDF
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={exporting}
+                onClick={() =>
+                  exportChoice &&
+                  void exportZip(exportChoice.documents, exportChoice.name, "docx")
+                }
+              >
+                Muat turun ZIP DOCX
+              </Button>
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
           <DialogContent>

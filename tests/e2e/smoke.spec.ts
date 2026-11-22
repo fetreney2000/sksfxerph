@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
+import { unzipSync } from "fflate";
 
 /**
  * E2E smoke tests - the critical paths unit tests can't reach.
@@ -540,6 +542,27 @@ test.describe("eRPH smoke", () => {
     await expect(section.getByRole("button", { name: "Buka", exact: true })).toBeVisible();
 
     expect(errors, errors.join("\n")).toEqual([]);
+  });
+
+  test("downloads separate session ZIPs for PDF and DOCX", async ({ page }) => {
+    await page.goto("/arkib");
+    const button = page.getByRole("button", { name: /Muat turun ZIP sesi/ }).first();
+    await expect(button).toBeVisible({ timeout: 15_000 });
+    for (const format of ["pdf", "docx"] as const) {
+      await button.click();
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.getByRole("button", { name: `Muat turun ZIP ${format.toUpperCase()}` }).click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(
+        new RegExp(`-${format.toUpperCase()}\\.zip$`),
+      );
+      const path = await download.path();
+      if (!path) throw new Error("ZIP tidak dimuat turun");
+      const names = Object.keys(unzipSync(await readFile(path)));
+      expect(names.length).toBeGreaterThan(0);
+      expect(names.every((name) => name.endsWith(`.${format}`))).toBe(true);
+    }
   });
 
   test("an existing plan can be copied from the archive", async ({ page }) => {
