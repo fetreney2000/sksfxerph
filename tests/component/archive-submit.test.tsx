@@ -7,15 +7,6 @@ import type { RphDocument } from "@/lib/types";
 
 const state = vi.hoisted(() => ({ plans: [] as RphDocument[] }));
 
-const submit = vi.hoisted(() =>
-  vi.fn(async (id: string) => ({
-    ok: true,
-    status: "submitted",
-    completeness: 100,
-    version: 2,
-    id,
-  })),
-);
 const submitBatch = vi.hoisted(() =>
   vi.fn(async (ids: string[]) => ({
     ok: true,
@@ -25,7 +16,6 @@ const submitBatch = vi.hoisted(() =>
 );
 vi.mock("@/lib/rpc", async (original) => ({
   ...(await original<typeof import("@/lib/rpc")>()),
-  submitRph: submit,
   submitRphBatch: submitBatch,
 }));
 vi.mock("@/lib/config", async (original) => ({
@@ -86,7 +76,6 @@ const { default: ArkibPage } = await import("@/app/(app)/arkib/page");
 
 afterEach(() => {
   cleanup();
-  submit.mockClear();
   submitBatch.mockClear();
 });
 
@@ -99,24 +88,12 @@ function mount() {
 }
 
 describe("submitting from the archive", () => {
-  it("submits one plan", async () => {
+  it("offers only the whole-week submit action", () => {
     state.plans = [plan("p-1", "draft", complete())];
     mount();
-    fireEvent.click(screen.getByRole("button", { name: /Hantar 5 Amanah Matematik/ }));
-    await waitFor(() => expect(submit).toHaveBeenCalledWith("p-1"));
-    await waitFor(() =>
-      expect(screen.getByText(/Matematik · 2026-10-05 dihantar/)).toBeTruthy(),
-    );
-  });
 
-  it("refuses an incomplete plan submitted on its own", async () => {
-    state.plans = [plan("p-1", "draft", emptyPayload())];
-    mount();
-    fireEvent.click(screen.getByRole("button", { name: /Hantar 5 Amanah Matematik/ }));
-    await waitFor(() =>
-      expect(screen.getByText(/Gagal menghantar .* belum lengkap/)).toBeTruthy(),
-    );
-    expect(submit).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Hantar 5 Amanah Matematik/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Hantar semua RPH minggu 2/ })).toBeTruthy();
   });
 
   it("does not submit a week when any plan is incomplete", async () => {
@@ -135,7 +112,7 @@ describe("submitting from the archive", () => {
     expect(
       (screen.getByRole("button", { name: "Hantar 2 RPH" }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    expect(submit).not.toHaveBeenCalled();
+    expect(submitBatch).not.toHaveBeenCalled();
   });
 
   it("submits every plan when the whole week is complete", async () => {

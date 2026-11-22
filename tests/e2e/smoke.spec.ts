@@ -608,7 +608,7 @@ test.describe("eRPH smoke", () => {
     expect(errors, errors.join("\n")).toEqual([]);
   });
 
-  test("a teacher submits an RPH from the archive, and a week in bulk", async ({ page }) => {
+  test("a whole week must be complete before Arkib submits it", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/arkib");
 
@@ -648,19 +648,14 @@ test.describe("eRPH smoke", () => {
       timeout: 15_000,
     });
 
-    // Back in the archive, send that one plan.
+    // Back in the archive, the only submit action is the week's. The rest of
+    // the copies still have no reflection, so the dialog names what is missing
+    // and refuses to send anything rather than quietly submitting half a week.
     await page.goto("/arkib");
     const completed = await openWeek();
-    await completed.panel
-      .getByRole("listitem")
-      .first()
-      .getByRole("button", { name: /^Hantar .*untuk semakan$/ })
-      .click();
-    await expect(page.getByText(/dihantar untuk semakan/)).toBeVisible({ timeout: 15_000 });
-
-    // The rest of the copies still have no reflection. The week is therefore
-    // all-or-nothing: the dialog names what is missing and refuses to send
-    // anything, rather than quietly submitting the complete half.
+    await expect(
+      completed.panel.getByRole("button", { name: /^Hantar .*untuk semakan$/ }),
+    ).toHaveCount(0);
     await completed.row
       .getByRole("button", { name: new RegExp(`Hantar semua RPH minggu ${week},`) })
       .click();

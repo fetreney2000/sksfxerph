@@ -45,7 +45,7 @@ import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { useArchive } from "@/lib/hooks/use-week";
-import { RpcError, submitRph, submitRphBatch } from "@/lib/rpc";
+import { RpcError, submitRphBatch } from "@/lib/rpc";
 import type { RphDocument } from "@/lib/types";
 import { missingRequirements } from "@/lib/week-submit";
 
@@ -183,66 +183,12 @@ export default function ArkibPage() {
   const canSubmit = (doc: RphDocument) => doc.status === "draft" || doc.status === "returned";
 
   /**
-   * Submit one plan.
+   * Submit the whole week.
    *
-   * This is the only submit path now: the editor saves, and Arkib sends.
-   * Completeness is checked here for both modes, so individual and bulk
-   * submission cannot disagree about what may be filed.
+   * Individual submission was removed from this page: Arkib now presents one
+   * filing action per week, so a teacher cannot file half a week by accident.
+   * The editor still only saves.
    */
-  async function submitOne(doc: RphDocument): Promise<void> {
-    // One rule for individual and bulk submission. The server applies the same
-    // completeness rule, but checking here keeps the two archive actions
-    // identical even when a school has turned its own gate off.
-    const missing = missingRequirements(doc.payload);
-    if (missing.length > 0) {
-      throw new Error(`RPH belum lengkap: ${missing.join(", ")}.`);
-    }
-
-    if (!supabaseConfigured) {
-      await db.documents.put({
-        ...doc,
-        status: "submitted",
-        submittedAt: Date.now(),
-        grade: undefined,
-        clientUpdatedAt: Date.now(),
-      });
-      return;
-    }
-
-    const verdict = await submitRph(doc.id);
-    // `null` means the endpoint could not reach a database. Treating that as
-    // success said "dihantar" for a filing the server never saw.
-    if (!verdict) {
-      throw new Error("Pelayan tidak tersedia - RPH tidak dihantar. Cuba lagi.");
-    }
-    if (!verdict.ok) {
-      throw new Error(verdict.error ?? "RPH tidak dapat dihantar.");
-    }
-  }
-
-  async function submitPlan(doc: RphDocument) {
-    if (submitting || !canSubmit(doc)) return;
-    setSubmitting(true);
-    setSubmitStatus(`Menghantar ${doc.subjectName} · ${doc.planDate}…`);
-    try {
-      await submitOne(doc);
-      setSubmitStatus(`${doc.subjectName} · ${doc.planDate} dihantar untuk semakan.`);
-      toast.success("Dihantar untuk semakan.");
-      await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
-    } catch (error) {
-      if (error instanceof RpcError && error.isAuthFailure) {
-        toast.error("Sesi anda telah tamat. Sila log masuk semula.");
-        window.setTimeout(() => window.location.assign("/login"), 1200);
-        return;
-      }
-      const message = error instanceof Error ? error.message : "Gagal menghantar.";
-      setSubmitStatus(`Gagal menghantar ${doc.subjectName} · ${doc.planDate}: ${message}`);
-      toast.error(`Gagal menghantar: ${message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   async function submitWholeWeek() {
     if (submitting || !submitWeek) return;
     const plans = submitWeek.plans.filter(canSubmit);
@@ -742,13 +688,10 @@ export default function ArkibPage() {
                                         <RowActions
                                           doc={d}
                                           exporting={exporting}
-                                          submitting={submitting}
-                                          canSubmit={canSubmit(d)}
                                           canDelete={
                                             d.status === "draft" || d.status === "returned"
                                           }
                                           onOpen={() => router.push(`/editor/${d.id}`)}
-                                          onHantar={() => void submitPlan(d)}
                                           onPrint={() =>
                                             setPrintJob({ documents: [d], week: false })
                                           }
@@ -953,20 +896,17 @@ export default function ArkibPage() {
 }
 
 /**
- * The per-plan actions, collapsed to one primary button, Buka, and a menu.
+ * The per-plan actions: Buka and an overflow menu.
  *
- * Six inline buttons made every row a toolbar and pushed the plan's own text
- * out of the way. The two actions a teacher reaches for stay visible; print,
- * export, copy and delete live under the overflow menu.
+ * Submission is a whole-week action in the week header, so a row has no
+ * individual Hantar button. Print, export, copy and delete live under the
+ * menu, keeping the plan's own text readable.
  */
 function RowActions({
   doc,
   exporting,
-  submitting,
-  canSubmit,
   canDelete,
   onOpen,
-  onHantar,
   onPrint,
   onZip,
   onCopy,
@@ -974,11 +914,8 @@ function RowActions({
 }: {
   doc: RphDocument;
   exporting: boolean;
-  submitting: boolean;
-  canSubmit: boolean;
   canDelete: boolean;
   onOpen: () => void;
-  onHantar: () => void;
   onPrint: () => void;
   onZip: () => void;
   onCopy: () => void;
@@ -1011,18 +948,6 @@ function RowActions({
 
   return (
     <div ref={ref} className="relative flex shrink-0 items-center gap-1">
-      {canSubmit && (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={submitting}
-          aria-label={`Hantar ${label} untuk semakan`}
-          onClick={onHantar}
-        >
-          <Send className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-          <span className="hidden sm:inline">Hantar</span>
-        </Button>
-      )}
       <Button size="sm" variant="ghost" onClick={onOpen}>
         Buka
       </Button>
