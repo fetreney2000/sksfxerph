@@ -154,7 +154,6 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 | Senarai RPH | `/arkib` | Tree archive by session and week, statutory record note |
 | Semakan RPH | `/semakan` | Review queue, keyboard grading (`J/K`, `1`, `0`) |
 | Paparan Sekolah | `/sekolah` | School compliance, per-panel progress, teacher table |
-| Laporan & Eksport | `/laporan` | PDF/CSV/DOCX export with audit trail |
 
 Plus: dark mode, PWA install.
 

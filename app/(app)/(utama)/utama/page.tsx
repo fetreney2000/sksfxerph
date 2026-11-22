@@ -51,12 +51,11 @@ const PERMISSION_LABEL: Record<Permission, string> = {
   rph: "RPH sendiri",
   semak: "Semakan RPH",
   pantau: "Pantauan sekolah",
-  laporan: "Laporan dan eksport",
   audit: "Log audit",
   pentadbir: "Tetapan aplikasi",
 };
 
-const ORDER: Permission[] = ["rph", "semak", "pantau", "laporan", "audit", "pentadbir"];
+const ORDER: Permission[] = ["rph", "semak", "pantau", "audit", "pentadbir"];
 
 interface Stat {
   label: string;

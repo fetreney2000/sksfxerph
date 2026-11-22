@@ -12,6 +12,10 @@ describe("navigation - the editor is an action, not a destination", () => {
     }
   });
 
+  it("does not offer the removed reports page to any role", () => {
+    for (const role of MEMBER_ROLES) expect(hrefsFor(role)).not.toContain("/laporan");
+  });
+
   it("puts the draft badge on Minggu Ini, where the drafts are rows", () => {
     const week = navFor("guru_biasa")
       .flatMap((group) => group.items)
@@ -38,7 +42,6 @@ describe("navigation - the home matches the role", () => {
       "/direktori-rph",
       "/direktori-rpt",
       "/sekolah",
-      "/laporan",
     ]);
     expect(groups.some((g) => g.label === "Pentadbiran")).toBe(false);
   });
@@ -66,7 +69,6 @@ describe("navigation - the home matches the role", () => {
       "/direktori-rph",
       "/direktori-rpt",
       "/sekolah",
-      "/laporan",
     ]);
   });
 });
@@ -79,10 +81,9 @@ describe("mobile navigation - four tabs, then Lagi", () => {
       "/minggu",
       "/semakan",
       "/sekolah",
-      "/laporan",
+      "/arkib",
     ]);
     expect(secondary.flatMap((group) => group.items.map((item) => item.href))).toEqual([
-      "/arkib",
       "/rpt",
       "/direktori-rph",
       "/direktori-rpt",
@@ -96,18 +97,16 @@ describe("mobile navigation - four tabs, then Lagi", () => {
     expect(secondary).toEqual([]);
   });
 
-  it("gives the Guru Besar their three supervision screens directly", () => {
+  it("gives the Guru Besar their four supervision screens directly", () => {
     const { primary, secondary } = mobileNavFor("guru_besar");
 
     expect(primary.map((item) => item.href)).toEqual([
       "/semakan",
       "/sekolah",
-      "/laporan",
       "/direktori-rph",
-    ]);
-    expect(secondary.flatMap((group) => group.items.map((item) => item.href))).toEqual([
       "/direktori-rpt",
     ]);
+    expect(secondary).toEqual([]);
   });
 
   it("gives the Administrator the console and nothing else", () => {

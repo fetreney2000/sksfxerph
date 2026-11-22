@@ -648,7 +648,7 @@ export default function ArkibPage() {
             </DialogHeader>
             <DialogBody>
               <p className="text-[13px] leading-[1.6] text-ink-3">
-                Rancangan ini tidak akan dipaparkan dalam arkib, papan pemuka mahupun laporan.
+                Rancangan ini tidak akan dipaparkan dalam arkib atau papan pemuka.
                 <b className="text-ink-2"> Rekod kekal disimpan</b> mengikut Peraturan 8, Akta
                 Pendidikan 1996 dan tidak dipadam daripada pangkalan data.
               </p>

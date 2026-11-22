@@ -102,7 +102,7 @@ test.describe("authentication", () => {
 
     // 2. Typing the URL must redirect, not render a screen full of data the
     //    role is not entitled to. The route group keeps the address the same.
-    for (const url of ["/semakan", "/sekolah", "/laporan"]) {
+    for (const url of ["/semakan", "/sekolah"]) {
       await page.goto(url);
       await expect(page).toHaveURL(/\/minggu/, { timeout: 15_000 });
     }
@@ -291,6 +291,12 @@ test.describe("authentication", () => {
 test.describe("eRPH smoke", () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
+  });
+
+  test("the reports page has been removed", async ({ page }) => {
+    await expect(page.getByRole("link", { name: /Laporan dan Eksport/ })).toHaveCount(0);
+    await page.goto("/laporan");
+    await expect(page.getByRole("heading", { name: "Halaman tidak dijumpai" })).toBeVisible();
   });
 
   test("dashboard seeds from IndexedDB and renders the week", async ({ page }) => {
@@ -654,17 +660,13 @@ test.describe("mobile layout", () => {
     await expect(nav.getByRole("link", { name: "Minggu" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Semak" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Sekolah" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "Laporan" })).toBeVisible();
-    // Arkib eRPH is still reachable; it is just not a fifth tab squeezed
-    // into 390px.
-    await expect(nav.getByRole("link", { name: "Arkib" })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Arkib" })).toBeVisible();
 
     await nav.getByRole("button", { name: "Lagi" }).click();
     const sheet = page.getByRole("dialog", { name: "Lagi" });
-    await expect(sheet.getByRole("link", { name: /Arkib eRPH/ })).toBeVisible();
-
-    await sheet.getByRole("link", { name: /Arkib eRPH/ }).click();
-    await expect(page).toHaveURL(/\/arkib/, { timeout: 15_000 });
+    await expect(sheet.getByRole("link", { name: /Direktori RPH/ })).toBeVisible();
+    await sheet.getByRole("link", { name: /Direktori RPH/ }).click();
+    await expect(page).toHaveURL(/\/direktori-rph/, { timeout: 15_000 });
     await expect(page.getByRole("dialog", { name: "Lagi" })).toBeHidden();
 
     expect(errors, errors.join("\n")).toEqual([]);

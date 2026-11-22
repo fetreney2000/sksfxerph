@@ -23,11 +23,11 @@ describe("permissions", () => {
   });
 
   it("Guru Penolong Kanan supervises", () => {
-    expect(permissionsFor("gpk")).toEqual(["rph", "semak", "pantau", "laporan", "audit"]);
+    expect(permissionsFor("gpk")).toEqual(["rph", "semak", "pantau", "audit"]);
   });
 
   it("Guru Besar supervises without writing plans", () => {
-    expect(permissionsFor("guru_besar")).toEqual(["semak", "pantau", "laporan", "audit"]);
+    expect(permissionsFor("guru_besar")).toEqual(["semak", "pantau", "audit"]);
     expect(can("guru_besar", "rph")).toBe(false);
   });
 
@@ -35,7 +35,6 @@ describe("permissions", () => {
     expect(permissionsFor("pentadbir")).toEqual(["pentadbir"]);
     expect(can("pentadbir", "semak")).toBe(false);
     expect(can("pentadbir", "pantau")).toBe(false);
-    expect(can("pentadbir", "laporan")).toBe(false);
     expect(can("pentadbir", "audit")).toBe(false);
   });
 

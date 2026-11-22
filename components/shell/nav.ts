@@ -1,6 +1,5 @@
 import {
   BookMarked,
-  FileText,
   History,
   LayoutGrid,
   type LucideIcon,
@@ -25,10 +24,7 @@ export interface NavItem {
   /**
    * Abbreviation for the bottom bar.
    *
-   * Five destinations across 375px is ~75px each, and "Laporan dan Eksport"
-   * measures over 130px - so without this the label either truncates to something
-   * unreadable or pushes the bar past the viewport. The sidebar keeps the full
-   * label; only the mobile bar uses this.
+   * Short labels keep the mobile bar readable on narrow screens.
    */
   short?: string;
 }
@@ -93,13 +89,6 @@ export const NAV: NavGroup[] = [
         icon: School,
         perm: "pantau",
       },
-      {
-        href: "/laporan",
-        label: "Laporan dan Eksport",
-        short: "Laporan",
-        icon: FileText,
-        perm: "laporan",
-      },
     ],
   },
   {
@@ -131,16 +120,13 @@ export function navFor(role: string | null | undefined): NavGroup[] {
  * Order of the bottom bar. The first four permitted destinations get a tab;
  * everything else is reachable from **Lagi**.
  *
- * The old bar named a hardcoded subset of six routes. It happened to include
- * Arkib but not Laporan, so a reviewer on a phone could not reach the export
- * screen at all. Keeping the order here means the bar and the sheet cannot
- * disagree about which destinations exist for a role.
+ * Keeping the order here means the bar and the sheet cannot disagree about
+ * which destinations exist for a role.
  */
 export const MOBILE_PRIMARY_ORDER: readonly string[] = [
   "/minggu",
   "/semakan",
   "/sekolah",
-  "/laporan",
   "/utama",
   "/arkib",
   "/rpt",
@@ -159,11 +145,7 @@ export interface MobileNav {
  * Split a role's navigation into bottom-bar tabs and the "Lagi" sheet.
  *
  * A role with four or fewer destinations has no sheet - a "Lagi" tab that opens
- * an empty drawer is worse than no tab at all. A GPK gets their four main
- * screens (Minggu, Semakan, Sekolah, Laporan) and finds Arkib and RPT under
- * Lagi; a Guru Besar - who teaches no class and has no Minggu or Arkib -
- * sees Semakan, Sekolah and Laporan directly; a Guru Biasa sees all
- * three of their destinations directly.
+ * an empty drawer is worse than no tab at all.
  */
 export function mobileNavFor(role: string | null | undefined): MobileNav {
   const rank = (href: string) => {
@@ -197,7 +179,6 @@ export const ROUTE_META: Record<string, { title: string; crumb: string }> = {
   "/direktori-rph": { title: "Direktori RPH", crumb: "Penyeliaan" },
   "/direktori-rpt": { title: "Direktori RPT", crumb: "Penyeliaan" },
   "/sekolah": { title: ms.nav.sekolah, crumb: "Pemantauan sekolah" },
-  "/laporan": { title: "Laporan dan Eksport", crumb: "Eksport rasmi" },
   "/pentadbiran": { title: ms.nav.urus, crumb: "Pentadbiran" },
 };
 

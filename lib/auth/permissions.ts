@@ -31,8 +31,6 @@ export type Permission =
    * endpoint can no longer disagree about who may look.
    */
   | "pantau"
-  /** School-wide reports and exports. */
-  | "laporan"
   /** Read the audit log. */
   | "audit"
   /** App set-up: accounts, classes, subjects, session, deadlines. */
@@ -44,12 +42,12 @@ const MATRIX: Record<MemberRole, readonly Permission[]> = {
   // GPK Pentadbiran (KPM HR02) - "menyelia dan menilai pengajaran" - so it
   // supervises: grade, monitor, report, and see who reviewed what. A GPK still
   // teaches, so they keep `rph` for their own classes.
-  gpk: ["rph", "semak", "pantau", "laporan", "audit"],
+  gpk: ["rph", "semak", "pantau", "audit"],
   // PGB (KPM HR01) supervises the whole school but teaches no class: no `rph`,
   // so no /minggu, /arkib or /editor - only the supervision screens above.
   // They stay a reviewer (`semak`) with school-wide scope, which is what
   // `erph.may_supervise` checks independently of this table.
-  guru_besar: ["semak", "pantau", "laporan", "audit"],
+  guru_besar: ["semak", "pantau", "audit"],
   // Administrator sets the app up. Deliberately outside `is_staff` in SQL, so
   // it can never grade a plan, read whole-school compliance or open the log -
   // and deliberately *without* `rph`: they do not teach, so they have no plans
