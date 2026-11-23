@@ -45,7 +45,7 @@ import { useSchool } from "@/lib/hooks/use-school";
 import { useSession } from "@/lib/hooks/use-session";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { useArchive } from "@/lib/hooks/use-week";
-import { RpcError, submitRphBatch } from "@/lib/rpc";
+import { RpcError, submitRph, submitRphBatch } from "@/lib/rpc";
 import type { RphDocument } from "@/lib/types";
 import { missingRequirements } from "@/lib/week-submit";
 
@@ -183,11 +183,68 @@ export default function ArkibPage() {
   const canSubmit = (doc: RphDocument) => doc.status === "draft" || doc.status === "returned";
 
   /**
+   * Send a returned RPH back for review.
+   *
+   * Drafts are still filed only as a whole week, but a returned plan has
+   * already been reviewed. Holding its correction hostage to an unrelated
+   * incomplete draft would block the feedback loop.
+   */
+  async function resubmitReturned(doc: RphDocument) {
+    if (submitting || doc.status !== "returned") return;
+    const missing = missingRequirements(doc.payload);
+    if (missing.length > 0) {
+      setSubmitStatus(
+        `${doc.subjectName} · ${doc.planDate} belum lengkap: ${missing.join(", ")}.`,
+      );
+      toast.error(`RPH belum lengkap: ${missing.join(", ")}.`);
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitStatus(`Menghantar semula ${doc.subjectName} · ${doc.planDate}…`);
+    try {
+      if (!supabaseConfigured) {
+        await db.documents.put({
+          ...doc,
+          status: "submitted",
+          submittedAt: doc.submittedAt ?? Date.now(),
+          grade: undefined,
+          reviewedAt: undefined,
+          clientUpdatedAt: Date.now(),
+        });
+      } else {
+        const verdict = await submitRph(doc.id);
+        if (!verdict) {
+          throw new Error("Pelayan tidak tersedia - RPH tidak dihantar. Cuba lagi.");
+        }
+        if (!verdict.ok) {
+          throw new Error(verdict.error ?? "RPH tidak dapat dihantar.");
+        }
+      }
+      setSubmitStatus(`${doc.subjectName} · ${doc.planDate} dihantar semula untuk semakan.`);
+      toast.success("RPH dihantar semula untuk semakan.");
+      await queryClient.invalidateQueries({ queryKey: ["own-plans"] });
+    } catch (error) {
+      if (error instanceof RpcError && error.isAuthFailure) {
+        toast.error("Sesi anda telah tamat. Sila log masuk semula.");
+        window.setTimeout(() => window.location.assign("/login"), 1200);
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Gagal menghantar.";
+      setSubmitStatus(
+        `Gagal menghantar semula ${doc.subjectName} · ${doc.planDate}: ${message}`,
+      );
+      toast.error(`Gagal menghantar semula: ${message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /**
    * Submit the whole week.
    *
-   * Individual submission was removed from this page: Arkib now presents one
-   * filing action per week, so a teacher cannot file half a week by accident.
-   * The editor still only saves.
+   * Drafts are filed as a whole week, so a teacher cannot file half a week by
+   * accident. Returned plans also have their own resubmit action above.
    */
   async function submitWholeWeek() {
     if (submitting || !submitWeek) return;
@@ -688,10 +745,13 @@ export default function ArkibPage() {
                                         <RowActions
                                           doc={d}
                                           exporting={exporting}
+                                          submitting={submitting}
+                                          canResubmit={d.status === "returned"}
                                           canDelete={
                                             d.status === "draft" || d.status === "returned"
                                           }
                                           onOpen={() => router.push(`/editor/${d.id}`)}
+                                          onResubmit={() => void resubmitReturned(d)}
                                           onPrint={() =>
                                             setPrintJob({ documents: [d], week: false })
                                           }
@@ -896,17 +956,20 @@ export default function ArkibPage() {
 }
 
 /**
- * The per-plan actions: Buka and an overflow menu.
+ * The per-plan actions: Buka, a returned-only resubmit, and an overflow menu.
  *
- * Submission is a whole-week action in the week header, so a row has no
- * individual Hantar button. Print, export, copy and delete live under the
- * menu, keeping the plan's own text readable.
+ * Drafts are still filed as a whole week from the week header. A returned plan
+ * gets its own resubmit action because that is the correction loop, not a
+ * second way to file unfinished work.
  */
 function RowActions({
   doc,
   exporting,
+  submitting,
+  canResubmit,
   canDelete,
   onOpen,
+  onResubmit,
   onPrint,
   onZip,
   onCopy,
@@ -914,8 +977,11 @@ function RowActions({
 }: {
   doc: RphDocument;
   exporting: boolean;
+  submitting: boolean;
+  canResubmit: boolean;
   canDelete: boolean;
   onOpen: () => void;
+  onResubmit: () => void;
   onPrint: () => void;
   onZip: () => void;
   onCopy: () => void;
@@ -948,6 +1014,18 @@ function RowActions({
 
   return (
     <div ref={ref} className="relative flex shrink-0 items-center gap-1">
+      {canResubmit && (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={submitting}
+          aria-label={`Hantar semula ${label} untuk semakan`}
+          onClick={onResubmit}
+        >
+          <Send className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+          <span className="hidden sm:inline">Hantar semula</span>
+        </Button>
+      )}
       <Button size="sm" variant="ghost" onClick={onOpen}>
         Buka
       </Button>

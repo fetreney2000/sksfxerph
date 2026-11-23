@@ -7,6 +7,16 @@ import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label, Textarea } from "@/components/ui/field";
 import { supabaseConfigured } from "@/lib/config";
 import { type ReviewPlanLight, useReviewPlans } from "@/lib/hooks/use-remote";
 import { isPastReviewWeek } from "@/lib/review-week";
@@ -19,6 +29,12 @@ export default function DirektoriRphPage() {
   const queryClient = useQueryClient();
   const [busy, setBusy] = React.useState(false);
   const [result, setResult] = React.useState<string[]>([]);
+  const [returnTarget, setReturnTarget] = React.useState<{
+    plans: ReviewPlanLight[];
+    teacher: string;
+    week: number;
+  } | null>(null);
+  const [returnFeedback, setReturnFeedback] = React.useState("");
   const sessions = [...new Set(items.map((item) => item.session))].sort().reverse();
   async function approveWeek(plans: ReviewPlanLight[], teacher: string, week: number) {
     const eligible = plans.filter(
@@ -93,6 +109,75 @@ export default function DirektoriRphPage() {
       await queryClient.invalidateQueries({ queryKey: ["review-queue"] });
     }
   }
+  /**
+   * Return several submitted plans with one shared feedback message.
+   *
+   * Returns are allowed during the current week, so unlike bulk approval this
+   * is not limited to past weeks. Each plan is re-read first: the version the
+   * reviewer saw is what the server checks, so a plan changed meanwhile fails
+   * on its own rather than receiving the wrong feedback.
+   */
+  async function returnWeek() {
+    if (!returnTarget || busy || !returnFeedback.trim()) return;
+    const eligible = returnTarget.plans.filter((plan) => plan.status === "submitted");
+    if (eligible.length === 0) return;
+
+    setBusy(true);
+    const messages: string[] = [];
+    let returned = 0;
+    try {
+      for (const plan of eligible) {
+        try {
+          const response = await fetch(`/api/rph/${encodeURIComponent(plan.id)}`);
+          if (!response.ok) throw new Error("RPH tidak dapat dibaca");
+          const body = (await response.json()) as {
+            item?: {
+              owner_id: string;
+              session: string;
+              week_no: number;
+              status: string;
+              version: number;
+              payload: unknown;
+            };
+          };
+          const doc = body.item;
+          if (
+            !doc ||
+            doc.owner_id !== plan.teacherId ||
+            doc.session !== plan.session ||
+            doc.week_no !== returnTarget.week ||
+            doc.status !== "submitted"
+          ) {
+            throw new Error("RPH telah berubah atau bukan dalam semakan");
+          }
+          const decision = await decide({
+            userId,
+            documentId: plan.id,
+            version: doc.version,
+            payload: doc.payload,
+            decision: "hantar_balik",
+            comment: returnFeedback.trim(),
+          });
+          if (!decision?.ok) throw new Error("Pengembalian tidak selesai");
+          returned++;
+        } catch (err) {
+          messages.push(
+            `${plan.planDate} · ${plan.subjectName}: ${
+              err instanceof Error ? err.message : "Gagal mengembalikan"
+            }`,
+          );
+        }
+      }
+      setResult([`${returned} daripada ${eligible.length} RPH dikembalikan.`, ...messages]);
+    } finally {
+      setBusy(false);
+      setReturnTarget(null);
+      setReturnFeedback("");
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ["review-queue"] });
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -142,8 +227,11 @@ export default function DirektoriRphPage() {
                                 (p.status === "draft" || p.status === "submitted") &&
                                 isPastReviewWeek(p.planDate),
                             );
+                            const returnable = weekPlans.filter(
+                              (p) => p.status === "submitted",
+                            );
                             return (
-                              <div className="py-2">
+                              <div className="flex flex-wrap items-start gap-2 py-2">
                                 <Button
                                   size="sm"
                                   disabled={
@@ -155,9 +243,23 @@ export default function DirektoriRphPage() {
                                     ? "Memproses…"
                                     : `Semak dan sahkan (${eligible.length})`}
                                 </Button>
-                                <p className="mt-1 text-xs text-ink-3">
-                                  Draf dan RPH dihantar bagi minggu lepas sahaja. Semak setiap
-                                  RPH sebelum mengesahkan.
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  disabled={
+                                    busy || !supabaseConfigured || returnable.length === 0
+                                  }
+                                  onClick={() => {
+                                    setReturnFeedback("");
+                                    setReturnTarget({ plans: weekPlans, teacher: name, week });
+                                  }}
+                                >
+                                  Kembalikan ({returnable.length})
+                                </Button>
+                                <p className="basis-full text-xs text-ink-3">
+                                  Draf dan RPH dihantar bagi minggu lepas boleh disahkan. RPH
+                                  yang sudah dihantar boleh dikembalikan dengan maklum balas,
+                                  termasuk minggu semasa.
                                 </p>
                               </div>
                             );
@@ -189,6 +291,56 @@ export default function DirektoriRphPage() {
           ))}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={returnTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReturnTarget(null);
+            setReturnFeedback("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kembalikan RPH minggu {returnTarget?.week}?</DialogTitle>
+            <DialogDescription>
+              {returnTarget
+                ? `${returnTarget.plans.filter((plan) => plan.status === "submitted").length} RPH bagi ${returnTarget.teacher} akan dikembalikan dengan maklum balas yang sama.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <Label htmlFor="bulk-return-feedback">Maklum balas untuk guru</Label>
+            <Textarea
+              id="bulk-return-feedback"
+              value={returnFeedback}
+              onChange={(event) => setReturnFeedback(event.target.value)}
+              rows={5}
+              maxLength={2000}
+              placeholder="Contoh: Sila lengkapkan refleksi dan tambah soalan KBAT dalam aktiviti penutup."
+            />
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setReturnTarget(null);
+                setReturnFeedback("");
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy || !returnFeedback.trim()}
+              onClick={() => void returnWeek()}
+            >
+              {busy ? "Memproses…" : "Kembalikan RPH"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

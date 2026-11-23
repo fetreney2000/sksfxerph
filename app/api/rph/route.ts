@@ -56,6 +56,14 @@ export interface DocumentRow {
         reviewer?: { full_name: string } | null;
         comment: string | null;
         created_at: string;
+        grade: 0 | 1;
+      }[]
+    | null;
+  rph_feedback?:
+    | {
+        author?: { full_name: string } | null;
+        comment: string;
+        created_at: string;
       }[]
     | null;
 }
@@ -78,7 +86,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         // - a plan can be returned and re-reviewed - so the whole set comes
         // across and the caller takes the newest, rather than the server
         // guessing which one a reader wants.
-        "rph_review(reviewer:reviewer_id(full_name), comment, created_at)",
+        "rph_review(reviewer:reviewer_id(full_name), comment, created_at, grade), " +
+        "rph_feedback(author:author_id(full_name), comment, created_at)",
     )
     .eq("school_id", schoolId)
     .eq("owner_id", gate.user.id)

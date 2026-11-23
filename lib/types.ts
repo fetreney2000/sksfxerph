@@ -59,6 +59,7 @@ export type NotificationType =
   | "submitted"
   | "returned"
   | "approved"
+  | "comment"
   | "reminder"
   | "system";
 
@@ -71,6 +72,20 @@ export type NotificationType =
  * `id` is minted on the client (crypto.randomUUID) so an offline-created plan
  * keeps its identity when it finally reaches the server.
  */
+/** One reviewer decision, as both the teacher and a later reviewer need it. */
+export interface ReviewNote {
+  reviewerName: string | null;
+  comment: string | null;
+  createdAt: string;
+  grade: 0 | 1;
+}
+
+export interface FeedbackNote {
+  authorName: string | null;
+  comment: string;
+  createdAt: string;
+}
+
 export interface RphDocument {
   id: string;
   schoolCode: string;
@@ -120,6 +135,14 @@ export interface RphDocument {
    * wrote. Absent when nothing has been reviewed yet.
    */
   reviewerName?: string | null;
+  /**
+   * Every review, newest first. The newest one is the banner; the rest are the
+   * feedback history a teacher needs when a plan has been returned more than
+   * once.
+   */
+  reviewHistory?: ReviewNote[];
+  /** Comment-only notes from reviewers; these never changed the plan's status. */
+  feedbackNotes?: FeedbackNote[];
   createdAt: number;
 }
 

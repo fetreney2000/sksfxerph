@@ -48,6 +48,8 @@ type Decision = "sahkan" | "hantar_balik";
 interface ReviewBody {
   documentId?: string;
   decision?: Decision;
+  /** The version the reviewer saw; a stale screen must not decide a newer one. */
+  expectedVersion?: number;
   comment?: string;
   envelope?: Record<string, unknown>;
   signature?: string;
@@ -79,6 +81,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
+  if (!Number.isInteger(body.expectedVersion) || (body.expectedVersion ?? 0) < 1) {
+    return NextResponse.json({ error: "Versi RPH diperlukan" }, { status: 400 });
+  }
   if (body.comment !== undefined && typeof body.comment !== "string") {
     return NextResponse.json({ error: "Komen tidak sah." }, { status: 400 });
   }
@@ -98,16 +103,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const already = body.decision === "sahkan" ? "approved" : "returned";
   const { data: current, error: currentErr } = await gate.db
     .from("rph_document")
-    .select("status, reviewed_by")
+    .select("status, reviewed_by, version")
     .eq("id", body.documentId)
     .maybeSingle();
   if (currentErr) {
     console.error("[review] state read failed:", currentErr.message);
     return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
   }
-  const row = current as { status?: string; reviewed_by?: string | null } | null;
+  const row = current as {
+    status?: string;
+    reviewed_by?: string | null;
+    version?: number;
+  } | null;
   if (row?.status === already && row.reviewed_by === gate.user.id) {
     return NextResponse.json({ ok: true, status: already, idempotent: true });
+  }
+  if (row && row.version !== body.expectedVersion) {
+    return NextResponse.json(
+      {
+        error:
+          "Versi RPH telah berubah sejak anda membukanya. Muat semula sebelum membuat keputusan.",
+      },
+      { status: 409 },
+    );
   }
 
   const rpc = body.decision === "sahkan" ? stage.approveRpc : stage.returnRpc;

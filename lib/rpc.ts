@@ -115,6 +115,8 @@ export type ReviewDecision = "sahkan" | "hantar_balik";
 export const reviewRph = (body: {
   documentId: string;
   decision: ReviewDecision;
+  /** The version the reviewer actually saw; the server rejects a stale one. */
+  expectedVersion: number;
   comment?: string;
   envelope?: unknown;
   signature?: string;

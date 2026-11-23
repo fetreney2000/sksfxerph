@@ -1,11 +1,14 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Download, MessageSquareText, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
 import type { DocumentRow } from "@/app/api/rph/route";
+import { FeedbackNotes } from "@/components/rph/feedback-notes";
+import { ReviewHistory } from "@/components/rph/review-history";
 import { RphPaper } from "@/components/rph/rph-paper";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
@@ -24,30 +27,65 @@ import { Label, Textarea } from "@/components/ui/field";
 import { handleExpiredSession } from "@/lib/client/auth-session";
 import { supabaseConfigured } from "@/lib/config";
 import { longDate } from "@/lib/date";
+import { db } from "@/lib/db";
 import { useSchool } from "@/lib/hooks/use-school";
 import { useSignature } from "@/lib/hooks/use-signature";
 import { normalisePayload } from "@/lib/schemas/rph";
-import type { RphStatus } from "@/lib/types";
+import type { FeedbackNote, ReviewNote, RphDocument, RphStatus } from "@/lib/types";
 
 interface PlanRow extends DocumentRow {
   class_names: string[];
 }
 
+/** The local harness has no route handler; Dexie is the same document source. */
+function fromLocal(doc: RphDocument): PlanRow {
+  return {
+    id: doc.id,
+    owner_id: doc.ownerId,
+    class_ids: doc.classIds,
+    subject_code: doc.subjectCode,
+    session: doc.session,
+    week_no: doc.weekNo,
+    plan_date: doc.planDate,
+    slot_time: doc.slotTime,
+    slot_time_end: doc.slotTimeEnd,
+    status: doc.status,
+    payload: doc.payload,
+    version: doc.version,
+    content_hash: null,
+    created_at: new Date(doc.createdAt).toISOString(),
+    updated_at: new Date(doc.clientUpdatedAt).toISOString(),
+    submitted_at: doc.submittedAt ? new Date(doc.submittedAt).toISOString() : null,
+    deleted_at: null,
+    grade: doc.grade ?? null,
+    reviewed_at: doc.reviewedAt ? new Date(doc.reviewedAt).toISOString() : null,
+    class_names: doc.classNames,
+    subject: { nama: doc.subjectName },
+    rph_review: (doc.reviewHistory ?? []).map((note) => ({
+      reviewer: note.reviewerName ? { full_name: note.reviewerName } : null,
+      comment: note.comment,
+      created_at: note.createdAt,
+      grade: note.grade,
+    })),
+  };
+}
+
 /**
  * A plan opened from Semakan - the reviewer's "Buka penuh".
  *
- * Read-only on purpose: the editor is the teacher's surface and stays
- * owner-only, so a reviewer opening someone else's plan lands here instead
- * of on its "RPH tidak dijumpai". The paper is the same `RphPaper` the queue
- * renders, shown whole rather than beside the decision controls, with a
- * print button for the file.
+ * The paper itself is read-only: the editor is the teacher's surface and stays
+ * owner-only, so a reviewer opening someone else's plan lands here instead of
+ * on its "RPH tidak dijumpai". The page carries the reviewer's own actions -
+ * return a submitted plan with a feedback message, reopen an approval for a
+ * Guru Besar, and export/print the sealed copy.
  */
 export default function SemakanDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const router = useRouter();
   const school = useSchool();
-  const { role } = useUser();
+  const { fullName, role } = useUser();
+  const queryClient = useQueryClient();
 
   const [plan, setPlan] = React.useState<PlanRow | null>(null);
   const [teacherName, setTeacherName] = React.useState("");
@@ -56,6 +94,12 @@ export default function SemakanDetailPage() {
   const [reopenOpen, setReopenOpen] = React.useState(false);
   const [reason, setReason] = React.useState("");
   const [reopening, setReopening] = React.useState(false);
+  const [feedbackOpen, setFeedbackOpen] = React.useState(false);
+  const [feedback, setFeedback] = React.useState("");
+  const [returning, setReturning] = React.useState(false);
+  const [commentOpen, setCommentOpen] = React.useState(false);
+  const [comment, setComment] = React.useState("");
+  const [commenting, setCommenting] = React.useState(false);
   // Verified in the browser: the print path must not put an unchecked seal on
   // paper, and the server independently verifies the same material on export.
   const signature = useSignature(plan?.id, plan?.payload);
@@ -64,6 +108,21 @@ export default function SemakanDetailPage() {
     let live = true;
     (async () => {
       try {
+        if (!supabaseConfigured) {
+          const found = await db.documents.get(id);
+          if (!live) return;
+          if (!found) {
+            setState("missing");
+            return;
+          }
+          setPlan(fromLocal(found));
+          // Dexie has no user directory on the client; the demo account is
+          // the reviewer, not necessarily the plan owner.
+          setTeacherName("Guru");
+          setState("ok");
+          return;
+        }
+
         const res = await fetch(`/api/rph/${encodeURIComponent(id)}`, {
           credentials: "same-origin",
         });
@@ -118,6 +177,23 @@ export default function SemakanDetailPage() {
   }
 
   const className = (plan.class_names ?? []).filter(Boolean).join(", ") || "-";
+  const reviewHistory: ReviewNote[] = [...(plan.rph_review ?? [])]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .map((review) => ({
+      reviewerName: review.reviewer?.full_name ?? null,
+      comment: review.comment,
+      createdAt: review.created_at,
+      grade: review.grade,
+    }));
+  const feedbackNotes: FeedbackNote[] = [...(plan.rph_feedback ?? [])]
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+    .map((note) => ({
+      authorName: note.author?.full_name ?? null,
+      comment: note.comment,
+      createdAt: note.created_at,
+    }));
+  const canReturn = plan.status === "submitted" && (role === "gpk" || role === "guru_besar");
+  const canComment = role === "gpk" || role === "guru_besar";
 
   async function exportDocx() {
     if (!plan || exporting) return;
@@ -162,6 +238,135 @@ export default function SemakanDetailPage() {
     }
   }
 
+  async function returnToTeacher() {
+    if (!plan || returning || !feedback.trim()) return;
+    setReturning(true);
+    try {
+      if (!supabaseConfigured) {
+        const stored = await db.documents.get(plan.id);
+        if (!stored) throw new Error("RPH tidak dijumpai.");
+        if (stored.status !== "submitted") {
+          throw new Error("RPH tidak dalam peringkat semakan.");
+        }
+        const now = Date.now();
+        const note: ReviewNote = {
+          reviewerName: fullName || "Penyemak",
+          comment: feedback.trim(),
+          createdAt: new Date(now).toISOString(),
+          grade: 0,
+        };
+        const history = [note, ...(stored.reviewHistory ?? [])];
+        await db.documents.put({
+          ...stored,
+          status: "returned",
+          grade: 0,
+          reviewedAt: now,
+          reviewComment: note.comment,
+          reviewerName: note.reviewerName,
+          reviewHistory: history,
+          clientUpdatedAt: now,
+          version: stored.version + 1,
+        });
+        setPlan({
+          ...plan,
+          status: "returned",
+          grade: 0,
+          rph_review: history.map((entry) => ({
+            reviewer: entry.reviewerName ? { full_name: entry.reviewerName } : null,
+            comment: entry.comment,
+            created_at: entry.createdAt,
+            grade: entry.grade,
+          })),
+        });
+      } else {
+        const res = await fetch("/api/rpc/review", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            documentId: plan.id,
+            decision: "hantar_balik",
+            expectedVersion: plan.version,
+            comment: feedback.trim(),
+          }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error ?? `Pengembalian gagal (HTTP ${res.status}).`);
+        }
+        setPlan({ ...plan, status: "returned", grade: 0 });
+      }
+      setFeedbackOpen(false);
+      setFeedback("");
+      void queryClient.invalidateQueries({ queryKey: ["review-queue"] });
+      void queryClient.invalidateQueries({ queryKey: ["review-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["review-plan", plan.id] });
+      toast.success("RPH dikembalikan kepada guru dengan maklum balas.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Pengembalian gagal.");
+    } finally {
+      setReturning(false);
+    }
+  }
+
+  async function addComment() {
+    if (!plan || commenting || !comment.trim()) return;
+    setCommenting(true);
+    try {
+      const text = comment.trim();
+      if (!supabaseConfigured) {
+        const stored = await db.documents.get(plan.id);
+        if (!stored) throw new Error("RPH tidak dijumpai.");
+        const now = Date.now();
+        const note: FeedbackNote = {
+          authorName: fullName || "Penyemak",
+          comment: text,
+          createdAt: new Date(now).toISOString(),
+        };
+        const notes = [note, ...(stored.feedbackNotes ?? [])];
+        await db.documents.put({ ...stored, feedbackNotes: notes, clientUpdatedAt: now });
+        setPlan({
+          ...plan,
+          rph_feedback: notes.map((entry) => ({
+            author: entry.authorName ? { full_name: entry.authorName } : null,
+            comment: entry.comment,
+            created_at: entry.createdAt,
+          })),
+        });
+      } else {
+        const res = await fetch("/api/rpc/comment", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ documentId: plan.id, comment: text }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error ?? `Maklum balas gagal (HTTP ${res.status}).`);
+        }
+        setPlan({
+          ...plan,
+          rph_feedback: [
+            {
+              author: { full_name: fullName || "Penyemak" },
+              comment: text,
+              created_at: new Date().toISOString(),
+            },
+            ...(plan.rph_feedback ?? []),
+          ],
+        });
+      }
+      setCommentOpen(false);
+      setComment("");
+      void queryClient.invalidateQueries({ queryKey: ["review-plan", plan.id] });
+      toast.success("Maklum balas dihantar kepada guru.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Maklum balas gagal.");
+    } finally {
+      setCommenting(false);
+    }
+  }
+
   async function reopen() {
     if (!plan || reopening || !reason.trim()) return;
     setReopening(true);
@@ -179,6 +384,9 @@ export default function SemakanDetailPage() {
       setPlan({ ...plan, status: "returned", grade: 0 });
       setReopenOpen(false);
       setReason("");
+      void queryClient.invalidateQueries({ queryKey: ["review-queue"] });
+      void queryClient.invalidateQueries({ queryKey: ["review-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["review-plan", plan.id] });
       toast.success("Pengesahan dibatalkan - RPH dikembalikan kepada guru.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Pembatalan gagal.");
@@ -208,6 +416,23 @@ export default function SemakanDetailPage() {
           status={plan.status as RphStatus}
           grade={plan.grade === 0 || plan.grade === 1 ? plan.grade : undefined}
         />
+        {canComment && (
+          <Button size="sm" variant="secondary" onClick={() => setCommentOpen(true)}>
+            <MessageSquareText className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
+            Maklum balas
+          </Button>
+        )}
+        {canReturn && (
+          <Button
+            size="sm"
+            variant="danger"
+            title="Kembalikan RPH kepada guru dengan maklum balas"
+            onClick={() => setFeedbackOpen(true)}
+          >
+            <Undo2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            Kembalikan
+          </Button>
+        )}
         {supabaseConfigured && plan.status === "approved" && role === "guru_besar" && (
           <Button size="sm" variant="danger" onClick={() => setReopenOpen(true)}>
             Batal pengesahan
@@ -225,6 +450,11 @@ export default function SemakanDetailPage() {
         <Button size="sm" variant="secondary" onClick={() => window.print()}>
           Cetak
         </Button>
+      </div>
+
+      <div data-print="screen">
+        <ReviewHistory reviews={reviewHistory} />
+        <FeedbackNotes notes={feedbackNotes} />
       </div>
 
       <RphPaper
@@ -285,6 +515,99 @@ export default function SemakanDetailPage() {
               onClick={() => void reopen()}
             >
               {reopening ? "Membuka semula…" : "Kembalikan kepada guru"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={feedbackOpen}
+        onOpenChange={(open) => {
+          setFeedbackOpen(open);
+          if (!open) setFeedback("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Kembalikan RPH kepada guru?</DialogTitle>
+            <DialogDescription>
+              Maklum balas ini akan dihantar kepada guru sebagai sebab RPH dikembalikan. RPH
+              akan menjadi boleh disunting semula.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <Label htmlFor="return-feedback">Maklum balas untuk guru</Label>
+            <Textarea
+              id="return-feedback"
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              rows={5}
+              maxLength={2000}
+              placeholder="Contoh: Sila lengkapkan refleksi dan tambah soalan KBAT dalam aktiviti penutup."
+            />
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setFeedbackOpen(false);
+                setFeedback("");
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              disabled={returning || !feedback.trim()}
+              onClick={() => void returnToTeacher()}
+            >
+              {returning ? "Mengembalikan…" : "Kembalikan dengan maklum balas"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={commentOpen}
+        onOpenChange={(open) => {
+          setCommentOpen(open);
+          if (!open) setComment("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tinggalkan maklum balas</DialogTitle>
+            <DialogDescription>
+              Maklum balas ini akan sampai kepada guru tanpa mengubah status RPH.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <Label htmlFor="reviewer-comment">Maklum balas untuk guru</Label>
+            <Textarea
+              id="reviewer-comment"
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              rows={5}
+              maxLength={2000}
+              placeholder="Contoh: Sila semak semula objektif untuk kelas ini."
+            />
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setCommentOpen(false);
+                setComment("");
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={commenting || !comment.trim()}
+              onClick={() => void addComment()}
+            >
+              {commenting ? "Menghantar…" : "Hantar maklum balas"}
             </Button>
           </DialogFooter>
         </DialogContent>

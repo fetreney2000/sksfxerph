@@ -31,16 +31,6 @@ import { resolveSession } from "@/lib/server/session";
  * given an age - guessing one would put a number in front of a reviewer that
  * nobody measured.
  */
-/** Monday of the week in progress, in MYT - the boundary the review trigger uses. */
-function currentMytMonday(): string {
-  const now = mytFields(Date.now());
-  if (!now) return new Date().toISOString().slice(0, 10);
-  const day = Date.UTC(now.year, now.month - 1, now.date);
-  const dow = new Date(day).getUTCDay();
-  const monday = day - ((dow + 6) % 7) * 86_400_000;
-  return new Date(monday).toISOString().slice(0, 10);
-}
-
 function waitingLabel(submittedAt: string | null): string {
   if (!submittedAt) return "Penghantaran tidak direkodkan";
   const since = Date.parse(submittedAt);
@@ -153,11 +143,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // lists drafts too, and a deleted draft would have walked straight back in.
     .is("deleted_at", null);
   if (week === null) {
-    // Only work the reviewer can actually decide. The trigger refuses a
-    // current-week plan until the week ends, so leaving those rows in the
-    // pending list inflated the badge with work that could not be cleared.
-    // They remain visible in the tree and in week mode.
-    query = query.eq("status", stage.status).lt("plan_date", currentMytMonday());
+    // Every submitted plan is in the work list. Current-week plans cannot be
+    // *approved* yet, but they can be returned with feedback, so hiding them
+    // until Monday would delay the correction loop.
+    query = query.eq("status", stage.status);
     // Prior-session pending plans are real work. They are not filtered out by
     // the current school year; their `session` is carried to the row.
   } else if (range !== null) {

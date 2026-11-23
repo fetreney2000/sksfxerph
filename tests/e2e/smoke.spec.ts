@@ -430,7 +430,7 @@ test.describe("eRPH smoke", () => {
 
     // A quick checklist chip is a reason too; filling the comment is the
     // general path and must re-enable the decision.
-    await page.getByLabel(/Maklum balas sulit/).fill("Sila lengkapkan bahagian Refleksi.");
+    await page.getByLabel(/Maklum balas untuk guru/).fill("Sila lengkapkan bahagian Refleksi.");
     await expect(kembali).toBeEnabled();
 
     expect(errors, errors.join("\n")).toEqual([]);
@@ -654,7 +654,7 @@ test.describe("eRPH smoke", () => {
     await page.goto("/arkib");
     const completed = await openWeek();
     await expect(
-      completed.panel.getByRole("button", { name: /^Hantar .*untuk semakan$/ }),
+      completed.panel.getByRole("button", { name: /^Hantar (?!semula\b).*untuk semakan$/ }),
     ).toHaveCount(0);
     await completed.row
       .getByRole("button", { name: new RegExp(`Hantar semua RPH minggu ${week},`) })

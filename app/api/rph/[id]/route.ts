@@ -38,7 +38,8 @@ const COLUMNS =
   // The reader is not always the writer: a reviewer opening "Buka penuh"
   // needs the name on the paper, and the queue already proves this embed.
   "owner:owner_id(full_name), " +
-  "rph_review(reviewer:reviewer_id(full_name), comment, created_at, grade)";
+  "rph_review(reviewer:reviewer_id(full_name), comment, created_at, grade), " +
+  "rph_feedback(author:author_id(full_name), comment, created_at)";
 
 /**
  * GET /api/rph/[id] - one plan, read by its owner or its reviewer.

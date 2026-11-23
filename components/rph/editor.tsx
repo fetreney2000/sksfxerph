@@ -8,6 +8,8 @@ import * as React from "react";
 import { toast } from "sonner";
 import type { SignaturePayload } from "@/app/api/rph/[id]/signature/route";
 import type { DocumentRow } from "@/app/api/rph/route";
+import { FeedbackNotes } from "@/components/rph/feedback-notes";
+import { ReviewHistory } from "@/components/rph/review-history";
 import { RphPaper } from "@/components/rph/rph-paper";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
@@ -1240,6 +1242,30 @@ export function RphEditor({ docId }: { docId?: string }) {
                 <p className="mt-1 text-[11.5px] opacity-80">
                   Sila baiki perkara di atas, kemudian hantar semula melalui Arkib.
                 </p>
+              </div>
+            )}
+            {persisted && (persisted.reviewHistory?.length ?? 0) > 0 && (
+              <div className="mt-3.5">
+                <ReviewHistory
+                  // While the plan is still returned, the newest comment is
+                  // already in the banner above; after resubmission the banner
+                  // is gone, so the history includes that round again.
+                  reviews={
+                    persisted.status === "returned"
+                      ? persisted.reviewHistory?.slice(1)
+                      : persisted.reviewHistory
+                  }
+                  title={
+                    persisted.status === "returned"
+                      ? "Maklum balas terdahulu"
+                      : "Sejarah maklum balas"
+                  }
+                />
+              </div>
+            )}
+            {persisted && (persisted.feedbackNotes?.length ?? 0) > 0 && (
+              <div className="mt-3.5">
+                <FeedbackNotes notes={persisted.feedbackNotes} />
               </div>
             )}
             <div className="mt-3.5 border-t border-dashed border-border pt-3.5">

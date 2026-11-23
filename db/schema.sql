@@ -91,7 +91,7 @@ create type erph.curriculum as enum ('KSSR','KSSM','PRASEKOLAH');
 create type erph.template_visibility as enum ('private','school','system');
 
 create type erph.notification_type as enum
-  ('deadline','forwarded','submitted','returned','approved','reminder','system');
+  ('deadline','forwarded','submitted','returned','approved','comment','reminder','system');
 
 -- ── 3 · HELPERS (SQL functions used by triggers & policies) ──────────────────
 create or replace function erph.set_updated_at()
@@ -559,12 +559,24 @@ create table erph.rph_review (
   document_version int not null,                          -- which version was judged
   reviewer_id      uuid not null references erph.user(id),
   grade            smallint not null check (grade in (0,1)), -- KPM: 1 = lengkap, 0 = tidak
-  comment          text,                                  -- "komen sulit" (teacher-visible)
+  comment          text,                                  -- feedback; teacher- and supervisor-visible
   checklist        jsonb,                                 -- auto-check results at review time
   created_at       timestamptz not null default now()
 );
 create index rph_review_doc_idx     on erph.rph_review (document_id, created_at desc);
 create index rph_review_reviewer_idx on erph.rph_review (reviewer_id, created_at desc);
+
+-- Feedback that does not change the plan's status. The review row carries a
+-- decision; this carries a note. Kept separate so a comment can never be
+-- mistaken for a return in the history or the compliance figures.
+create table erph.rph_feedback (
+  id          bigint generated always as identity primary key,
+  document_id uuid not null references erph.rph_document(id) on delete cascade,
+  author_id   uuid not null references erph.user(id),
+  comment     text not null check (char_length(trim(comment)) between 1 and 2000),
+  created_at  timestamptz not null default now()
+);
+create index rph_feedback_doc_idx on erph.rph_feedback (document_id, created_at desc);
 
 -- ── SIGNATURE ────────────────────────────────────────────────────────────────
 -- Appended by the server, and only after the server has cryptographically
@@ -1194,19 +1206,27 @@ returns text language sql stable security definer set search_path = erph, public
          to_char(p_plan_date, 'DD/MM/YYYY');
 $$;
 
--- Review decisions and staff submissions are allowed only after the plan's
--- calendar week ends in Malaysia. Enforced on the row, including direct RPC
--- callers, rather than only by the browser.
+-- Approval is allowed only after the plan's calendar week ends in Malaysia.
+-- A *return* is different: it is corrective feedback, and a reviewer may send
+-- one during the week so the teacher can still act on it. That return still
+-- passes the role/scope/self/status checks in `hantar_balik_rph`.
+--
+-- Staff submissions and approvals are enforced on the row, including direct
+-- RPC callers, rather than only by the browser.
 create or replace function erph.guard_past_week_review()
 returns trigger language plpgsql security definer set search_path = erph, public as $$
 begin
-  if (old.status = 'submitted' and new.status in ('approved', 'returned'))
+  if (old.status = 'submitted' and new.status = 'approved')
      -- forwarded -> submitted is the legacy normalization in migration 032,
      -- not a reviewer filing a current-week plan on someone's behalf.
      or (new.status = 'submitted' and old.status not in ('submitted', 'forwarded')
          and old.owner_id is distinct from erph.actor()) then
     if old.plan_date >= date_trunc('week', (now() at time zone 'UTC') + interval '8 hours')::date then
-      raise exception 'RPH hanya boleh disemak selepas minggu tersebut tamat';
+      if new.status = 'approved' then
+        raise exception 'RPH hanya boleh disahkan selepas minggu tersebut tamat';
+      else
+        raise exception 'RPH hanya boleh dihantar selepas minggu tersebut tamat';
+      end if;
     end if;
     if old.owner_id is distinct from erph.actor()
        and not erph.may_supervise(old.school_id, old.owner_id) then
@@ -1489,6 +1509,10 @@ begin
   if v_doc.status <> 'submitted' then
     raise exception 'RPH tidak dalam peringkat semakan';
   end if;
+  if p_comment is not null and length(trim(p_comment)) > 2000 then
+    raise exception 'Komen terlalu panjang (maksimum 2000 aksara)';
+  end if;
+
   -- The server verified the ECDSA signature before inserting the row; this
   -- second pass checks that the row *describes this decision*. It catches a
   -- row written for another document/version/signer/decision, or with a key
@@ -1593,6 +1617,9 @@ begin
   if nullif(trim(p_comment), '') is null then
     raise exception 'Sebab pengembalian diperlukan';
   end if;
+  if length(trim(p_comment)) > 2000 then
+    raise exception 'Komen terlalu panjang (maksimum 2000 aksara)';
+  end if;
 
   insert into erph.rph_review (document_id, document_version, reviewer_id, grade, comment, checklist)
   values (v_doc.id, v_doc.version, erph.actor(), 0, trim(p_comment),
@@ -1616,6 +1643,57 @@ begin
   return jsonb_build_object('ok', true, 'grade', 0, 'status', 'returned');
 end $$;
 
+-- Leave feedback without changing the plan's status. A note is not a return:
+-- it must not move the plan into the teacher's correction queue or affect the
+-- compliance figures, so it lives in `rph_feedback` instead of `rph_review`.
+create or replace function erph.comment_rph(p_document uuid, p_comment text)
+returns jsonb language plpgsql security definer set search_path = erph, public as $$
+declare
+  v_doc erph.rph_document%rowtype;
+  v_text text := nullif(trim(p_comment), '');
+  v_label text;
+begin
+  perform set_config('app.rpc', '1', true);
+
+  if v_text is null then
+    raise exception 'Maklum balas diperlukan';
+  end if;
+  if length(v_text) > 2000 then
+    raise exception 'Maklum balas terlalu panjang (maksimum 2000 aksara)';
+  end if;
+
+  select * into v_doc from erph.rph_document
+   where id = p_document and deleted_at is null for update;
+  if not found then raise exception 'RPH tidak dijumpai'; end if;
+
+  if not erph.has_role(v_doc.school_id,
+                       array['gpk','guru_besar']::erph.member_role[]) then
+    raise exception 'Peranan Guru Penolong Kanan atau Guru Besar diperlukan';
+  end if;
+  if not erph.may_supervise(v_doc.school_id, v_doc.owner_id) then
+    raise exception 'RPH di luar bidang penyeliaan anda';
+  end if;
+  if v_doc.owner_id = erph.actor() then
+    raise exception 'Anda tidak boleh memberi maklum balas pada RPH sendiri';
+  end if;
+
+  v_label := erph.plan_label(v_doc.class_ids, v_doc.subject_code, v_doc.plan_date);
+
+  insert into erph.rph_feedback (document_id, author_id, comment)
+  values (v_doc.id, erph.actor(), v_text);
+
+  insert into erph.notification (school_id, user_id, type, title, body, link_view)
+  values (v_doc.school_id, v_doc.owner_id, 'comment'::erph.notification_type,
+          'Maklum balas baharu', v_label || E'\n' || v_text,
+          'editor/' || v_doc.id::text);
+
+  insert into erph.audit_log (school_id, actor_id, entity, entity_id, action, after)
+  values (v_doc.school_id, erph.actor(), 'rph_document', v_doc.id, 'comment',
+          jsonb_build_object('comment', v_text));
+
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- Reopen an approval. A sealed plan is otherwise immutable, so a mistaken
 -- approval had no accountable way back. Only a Guru Besar (for any plan in the
 -- school) or the pentadbir (recovery) may call this, and the reason is
@@ -1637,6 +1715,9 @@ begin
 
   if v_reason is null then
     raise exception 'Sebab pembatalan diperlukan';
+  end if;
+  if length(v_reason) > 2000 then
+    raise exception 'Sebab pembatalan terlalu panjang (maksimum 2000 aksara)';
   end if;
 
   select * into v_doc from erph.rph_document
@@ -2802,6 +2883,7 @@ alter table erph.teaching_assignment enable row level security;
 alter table erph.rph_document        enable row level security;
 alter table erph.rph_revision        enable row level security;
 alter table erph.rph_review          enable row level security;
+alter table erph.rph_feedback        enable row level security;
 -- Enabled, and with only a SELECT policy below: writes are service_role-only
 -- by virtue of having no policy at all.
 alter table erph.rph_signature       enable row level security;
@@ -2898,6 +2980,13 @@ create policy rph_revision_read on erph.rph_revision
 create policy rph_review_read on erph.rph_review
   for select using (exists (select 1 from erph.rph_document d
                             where d.id = erph.rph_review.document_id
+                              and erph.may_supervise(d.school_id, d.owner_id)));
+
+-- Same audience as the review history: the teacher, their supervisors and the
+-- Guru Besar. Writes happen only through erph.comment_rph().
+create policy rph_feedback_read on erph.rph_feedback
+  for select using (exists (select 1 from erph.rph_document d
+                            where d.id = erph.rph_feedback.document_id
                               and erph.may_supervise(d.school_id, d.owner_id)));
 
 -- Signatures are readable by everyone who can read the plan, so a client can

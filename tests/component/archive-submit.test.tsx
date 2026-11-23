@@ -7,6 +7,15 @@ import type { RphDocument } from "@/lib/types";
 
 const state = vi.hoisted(() => ({ plans: [] as RphDocument[] }));
 
+const submit = vi.hoisted(() =>
+  vi.fn(async (id: string) => ({
+    ok: true,
+    status: "submitted",
+    completeness: 100,
+    version: 2,
+    id,
+  })),
+);
 const submitBatch = vi.hoisted(() =>
   vi.fn(async (ids: string[]) => ({
     ok: true,
@@ -16,6 +25,7 @@ const submitBatch = vi.hoisted(() =>
 );
 vi.mock("@/lib/rpc", async (original) => ({
   ...(await original<typeof import("@/lib/rpc")>()),
+  submitRph: submit,
   submitRphBatch: submitBatch,
 }));
 vi.mock("@/lib/config", async (original) => ({
@@ -76,6 +86,7 @@ const { default: ArkibPage } = await import("@/app/(app)/arkib/page");
 
 afterEach(() => {
   cleanup();
+  submit.mockClear();
   submitBatch.mockClear();
 });
 
@@ -88,12 +99,28 @@ function mount() {
 }
 
 describe("submitting from the archive", () => {
-  it("offers only the whole-week submit action", () => {
+  it("offers only the whole-week submit action for drafts", () => {
     state.plans = [plan("p-1", "draft", complete())];
     mount();
 
     expect(screen.queryByRole("button", { name: /Hantar 5 Amanah Matematik/ })).toBeNull();
     expect(screen.getByRole("button", { name: /Hantar semua RPH minggu 2/ })).toBeTruthy();
+  });
+
+  it("lets a returned plan be resubmitted without the incomplete rest of the week", async () => {
+    state.plans = [
+      plan("p-1", "returned", complete()),
+      plan("p-2", "draft", emptyPayload(), "Bahasa Melayu"),
+    ];
+    mount();
+
+    fireEvent.click(screen.getByRole("button", { name: /Hantar semula 5 Amanah Matematik/ }));
+
+    await waitFor(() => expect(submit).toHaveBeenCalledWith("p-1"));
+    await waitFor(() =>
+      expect(screen.getByText(/Matematik · 2026-10-05 dihantar semula/)).toBeTruthy(),
+    );
+    expect(submitBatch).not.toHaveBeenCalled();
   });
 
   it("does not submit a week when any plan is incomplete", async () => {

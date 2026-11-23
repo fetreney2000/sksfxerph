@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import * as React from "react";
 import { toast } from "sonner";
+import { ReviewHistory } from "@/components/rph/review-history";
 import { RphPaper } from "@/components/rph/rph-paper";
 import { StatusBadge } from "@/components/rph/status-badge";
 import { useUser } from "@/components/shell/user-context";
@@ -35,7 +36,7 @@ import { reviewStageFor } from "@/lib/auth/permissions";
 import { handleExpiredSession } from "@/lib/client/auth-session";
 import { cn } from "@/lib/cn";
 import { supabaseConfigured } from "@/lib/config";
-import { longDate, longDateOf, schoolDays, weekRangeLabel } from "@/lib/date";
+import { longDate, schoolDays, weekRangeLabel } from "@/lib/date";
 import type { QueueItem } from "@/lib/demo/review";
 import type { ReviewPlanLight } from "@/lib/hooks/use-remote";
 import { useReviewPlans, useReviewQueueData, useSchoolStats } from "@/lib/hooks/use-remote";
@@ -297,16 +298,25 @@ export default function SemakanPage() {
    * the server RPC.
    */
   const gradedSelected = selectedPending ? graded[selectedPending.id] : undefined;
+  const pastWeek = item ? isPastReviewWeek(item.planDate) : false;
+  /**
+   * Current-week submitted plans can be returned with feedback, but not
+   * approved. A current-week *draft* still cannot be filed on the teacher's
+   * behalf, so it stays read-only.
+   */
+  const approvable = pastWeek;
   const readOnly =
     (fromTree && item !== undefined && item !== null && !isActionable(item)) ||
-    (item != null && !isPastReviewWeek(item.planDate)) ||
+    (item?.status === "draft" && !pastWeek) ||
     gradedSelected !== undefined;
   /** The explanatory note for a row the reviewer cannot (yet) decide. */
   const itemNote = item
-    ? !isPastReviewWeek(item.planDate)
-      ? "RPH hanya boleh disemak selepas minggu tersebut tamat."
-      : readOnly
-        ? ms.review.decidedNote
+    ? readOnly
+      ? item.status === "draft" && !pastWeek
+        ? "Draf minggu semasa hanya boleh dihantar selepas minggu tamat."
+        : ms.review.decidedNote
+      : !pastWeek
+        ? "Maklum balas boleh dihantar sekarang; pengesahan hanya selepas minggu tamat."
         : item.status === "draft"
           ? ms.review.draftNote
           : undefined
@@ -328,7 +338,12 @@ export default function SemakanPage() {
       // A decided plan (browse mode, or graded earlier this sitting) is
       // view-only: re-deciding it would fork what the audit trail already
       // recorded.
-      if (!isActionable(item) || !isPastReviewWeek(item.planDate) || item.id in graded) return;
+      if (!isActionable(item) || item.id in graded) return;
+      // Feedback is allowed during the week; approval is not.
+      if (decision === "sahkan" && !isPastReviewWeek(item.planDate)) {
+        toast.info("Pengesahan hanya boleh dibuat selepas minggu tersebut tamat.");
+        return;
+      }
       if (decision === "hantar_balik" && !comment.trim()) {
         toast.info(ms.review.returnReasonRequired);
         return;
@@ -589,8 +604,8 @@ export default function SemakanPage() {
                         </Tabs>
                       </div>
                       <p className="border-b border-border px-4 py-2 text-[11px] leading-[1.4] text-ink-4">
-                        Minggu semasa masuk senarai selepas minggu tamat; RPH sesi terdahulu
-                        kekal di sini.
+                        RPH minggu semasa boleh dimaklum balas; pengesahan hanya selepas minggu
+                        tamat. RPH sesi terdahulu kekal di sini.
                       </p>
                       {pendingVisible.map((q) => {
                         const g = graded[q.id];
@@ -865,6 +880,7 @@ export default function SemakanPage() {
                   comment={comment}
                   onComment={setComment}
                   canReturn={canReturn}
+                  approvable={approvable}
                   deciding={deciding}
                   onDecide={decide}
                   readOnly={readOnly}
@@ -909,6 +925,7 @@ export default function SemakanPage() {
                 comment={comment}
                 onComment={setComment}
                 canReturn={canReturn}
+                approvable={approvable}
                 deciding={deciding}
                 onDecide={decide}
                 readOnly={readOnly}
@@ -922,7 +939,12 @@ export default function SemakanPage() {
               ) : (
                 <>
                   {itemNote && <ViewOnlyNote text={itemNote} tone="info" className="mb-2.5" />}
-                  <DecisionBar canReturn={canReturn} deciding={deciding} onDecide={decide} />
+                  <DecisionBar
+                    canReturn={canReturn}
+                    approvable={approvable}
+                    deciding={deciding}
+                    onDecide={decide}
+                  />
                 </>
               )}
             </div>
@@ -949,6 +971,7 @@ function ReviewWorkspace({
   comment,
   onComment,
   canReturn,
+  approvable,
   deciding,
   onDecide,
   readOnly = false,
@@ -961,6 +984,7 @@ function ReviewWorkspace({
   comment: string;
   onComment: (value: string) => void;
   canReturn: boolean;
+  approvable: boolean;
   deciding: boolean;
   onDecide: (decision: ReviewDecision) => void;
   /** Browse mode: a decided plan renders without the decision controls. */
@@ -971,7 +995,15 @@ function ReviewWorkspace({
   const desktop = mode === "desktop";
 
   return (
-    <div className={cn("grid gap-4", desktop ? "p-4.5 xl:grid-cols-[1fr_300px]" : "p-4")}>
+    <div
+      className={cn(
+        "grid items-start gap-4",
+        // From `lg`, the comment box and both decisions sit beside the plan.
+        // They used to wait until `xl`, so on an ordinary laptop they were
+        // below the whole printed plan and easy to miss.
+        desktop ? "p-4.5 lg:grid-cols-[1fr_300px]" : "p-4",
+      )}
+    >
       <RphPaper
         payload={item.payload}
         className={desktop ? undefined : "p-4"}
@@ -985,8 +1017,8 @@ function ReviewWorkspace({
         slotTime={item.slotTime}
       />
 
-      <div>
-        <ReviewHistory item={item} />
+      <div className={desktop ? "lg:sticky lg:top-4 lg:self-start" : undefined}>
+        <ReviewHistory reviews={item.reviews} />
         <AutoCheck item={item} />
         {readOnly ? (
           // A decided plan: no comment box (there is nothing to comment into),
@@ -1001,6 +1033,7 @@ function ReviewWorkspace({
               <>
                 <DecisionButtons
                   canReturn={canReturn}
+                  approvable={approvable}
                   deciding={deciding}
                   onDecide={onDecide}
                 />
@@ -1010,52 +1043,6 @@ function ReviewWorkspace({
             )}
           </>
         )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * What happened to this plan before the current submission.
- *
- * A returned plan can come back weeks later with changes; the reviewer needs
- * the reason they sent it back, not only the plan's present content. The queue
- * embeds `rph_review`, so this costs no extra request for a pending row.
- */
-function ReviewHistory({ item }: { item: QueueItem }) {
-  const notes = item.reviews ?? [];
-  if (notes.length === 0) return null;
-
-  return (
-    <div className="mb-3 rounded-[11px] border border-border bg-surface-2 p-3.5">
-      <p className="mb-2.5 text-[11px] font-bold tracking-[0.7px] text-ink-4 uppercase">
-        Sejarah semakan
-      </p>
-      <div className="max-h-56 space-y-2.5 overflow-y-auto pr-1">
-        {notes.map((note) => (
-          <div
-            key={`${note.createdAt}-${note.reviewerName ?? "penyemak"}-${note.grade}`}
-            className="border-b border-dashed border-border pb-2.5 last:border-b-0 last:pb-0"
-          >
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-[12.5px] font-semibold text-ink">
-                {note.reviewerName ?? "Penyemak"}
-              </span>
-              <span className="text-[11px] text-ink-4">{longDateOf(note.createdAt)}</span>
-              <Badge
-                variant={note.grade === 1 ? "success" : "danger"}
-                className="ml-auto shrink-0"
-              >
-                {note.grade === 1 ? "Lengkap" : "Dikembalikan"}
-              </Badge>
-            </div>
-            {note.comment?.trim() && (
-              <p className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.5] text-ink-3">
-                {note.comment}
-              </p>
-            )}
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -1152,10 +1139,12 @@ function CommentBox({
 
 function DecisionButtons({
   canReturn,
+  approvable,
   deciding,
   onDecide,
 }: {
   canReturn: boolean;
+  approvable: boolean;
   deciding: boolean;
   onDecide: (decision: ReviewDecision) => void;
 }) {
@@ -1167,7 +1156,8 @@ function DecisionButtons({
         <Button
           size="lg"
           variant="success"
-          disabled={deciding}
+          disabled={deciding || !approvable}
+          title={!approvable ? "Pengesahan hanya selepas minggu tersebut tamat" : undefined}
           onClick={() => onDecide("sahkan")}
         >
           <Check className="h-4 w-4" strokeWidth={2.4} aria-hidden />
@@ -1207,10 +1197,12 @@ function DecisionButtons({
 /** The phone's decision bar: outside the scroll, so both choices stay visible. */
 function DecisionBar({
   canReturn,
+  approvable,
   deciding,
   onDecide,
 }: {
   canReturn: boolean;
+  approvable: boolean;
   deciding: boolean;
   onDecide: (decision: ReviewDecision) => void;
 }) {
@@ -1222,7 +1214,8 @@ function DecisionBar({
         <Button
           size="lg"
           variant="success"
-          disabled={deciding}
+          disabled={deciding || !approvable}
+          title={!approvable ? "Pengesahan hanya selepas minggu tersebut tamat" : undefined}
           onClick={() => onDecide("sahkan")}
           className="min-w-0"
         >

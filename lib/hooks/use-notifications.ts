@@ -65,8 +65,9 @@ export function useNotifications(): {
     retry: false,
     staleTime: 30_000,
     // Decisions are written by another session; a teacher watching the page
-    // should not have to reload to see one.
-    refetchInterval: supabaseConfigured ? 60_000 : false,
+    // should not have to reload to see one. Fifteen seconds keeps feedback
+    // timely without turning the feed into a busy loop.
+    refetchInterval: supabaseConfigured ? 15_000 : false,
   });
 
   const items = React.useMemo(() => {

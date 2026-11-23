@@ -254,12 +254,12 @@ def main() -> int:
     n_tables = r.one(
         "select count(*) from information_schema.tables where table_schema='erph' and table_type='BASE TABLE'"
     )[0]
-    check("19 tables in erph", n_tables == 19, f"found {n_tables}")
+    check("20 tables in erph", n_tables == 20, f"found {n_tables}")
 
     # policies live in TWO schemas: erph.* (tables) and storage.objects (buckets)
     n_policies = r.one("select count(*) from pg_policies where schemaname='erph'")[0]
     n_storage = r.one("select count(*) from pg_policies where schemaname='storage'")[0]
-    check("27 policies on erph tables", n_policies == 27, f"found {n_policies}")
+    check("28 policies on erph tables", n_policies == 28, f"found {n_policies}")
     check(
         "3 policies on storage.objects",
         n_storage == 3,
@@ -276,7 +276,7 @@ def main() -> int:
     # 015 added `admin_set_profile` and `admin_edit_subject`; 019 added
     # `admin_set_calendar_week` and `admin_clear_calendar_week`; 020 added
     # `classes_in_school` and `teaches_classes`.
-    check("49 functions in erph", n_funcs == 49, f"found {n_funcs}")
+    check("50 functions in erph", n_funcs == 50, f"found {n_funcs}")
 
     # NOTE: group into lists - a dict keyed by type name would keep only the
     # last label of each enum, which silently "passed" one value as three.
@@ -763,8 +763,6 @@ def main() -> int:
             ("a submitted plan cannot be submitted again", "sudah dihantar" in msg, msg)
         )
         act_as("gpk.uji")
-        msg = refused(f"select erph.hantar_balik_rph('{current_doc}', 'Ujian')")
-        stage.append(("a reviewer cannot return a current-week plan", "minggu tersebut tamat" in msg, msg))
         r.q(f"""
             insert into erph.rph_signature (document_id, document_version, signer_id,
                                             signer_name, signer_title,
@@ -783,11 +781,28 @@ def main() -> int:
         msg = refused(f"select erph.sahkan_rph('{current_doc}')")
         stage.append(("a reviewer cannot approve a current-week plan", "minggu tersebut tamat" in msg, msg))
 
+        # Feedback, unlike approval, is allowed during the week so the teacher
+        # can still correct it before the week closes.
+        r.q(f"select erph.hantar_balik_rph('{current_doc}', 'Ujian')")
+        conn.commit()
+        current_status = r.one(
+            f"select status::text from erph.rph_document where id = '{current_doc}'"
+        )[0]
+        stage.append(
+            (
+                "a reviewer can return a current-week plan",
+                current_status == "returned",
+                current_status,
+            )
+        )
+
         first_submitted = r.one(
             f"select submitted_at from erph.rph_document where id = {DOC}"
         )[0]
         msg = refused(f"select erph.hantar_balik_rph({DOC}, null)")
         stage.append(("hantar balik without a reason is refused", "Sebab" in msg, msg))
+        msg = refused(f"select erph.hantar_balik_rph({DOC}, repeat('x', 2001))")
+        stage.append(("hantar balik caps feedback at 2000 characters", "panjang" in msg, msg))
         r.q(f"select erph.hantar_balik_rph({DOC}, 'Objektif belum jelas')")
         conn.commit()
         status = r.one(f"select status::text from erph.rph_document where id = {DOC}")[0]
@@ -895,6 +910,30 @@ def main() -> int:
                 and "5 Ujian" in approved_notification[1]
                 and "05/10/2026" in approved_notification[1],
                 str(approved_notification[1]),
+            )
+        )
+
+        act_as("gpk.uji")
+        r.q(f"select erph.comment_rph({DOC}, 'Sila semak semula objektif.')")
+        conn.commit()
+        feedback_row = r.one(
+            f"select count(*) from erph.rph_feedback where document_id = {DOC}"
+        )[0]
+        feedback_status = r.one(
+            f"select status::text from erph.rph_document where id = {DOC}"
+        )[0]
+        feedback_notice = r.one(
+            f"""
+            select count(*) from erph.notification
+             where user_id = (select owner_id from erph.rph_document where id = {DOC})
+               and type = 'comment'
+            """
+        )[0]
+        stage.append(
+            (
+                "a comment-only feedback is stored without changing status",
+                feedback_row == 1 and feedback_status == "approved" and feedback_notice == 1,
+                f"rows={feedback_row} status={feedback_status} notices={feedback_notice}",
             )
         )
 

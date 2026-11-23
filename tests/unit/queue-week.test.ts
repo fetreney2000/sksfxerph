@@ -210,9 +210,9 @@ describe("GET /api/queue - default mode", () => {
     expect(filters).toContain('is(["deleted_at",null])');
     expect(filters).toContain('order(["submitted_at",{"ascending":true}])');
     expect(filters).toContain("range([0,49])");
-    // Current-week plans are not decidable yet; they must not inflate the
-    // badge or the work list.
-    expect(filters.some((c) => c.startsWith('lt(["plan_date"'))).toBe(true);
+    // Current-week plans stay in the work list: feedback is allowed during the
+    // week even though approval is not.
+    expect(filters.some((c) => c.startsWith('lt(["plan_date"'))).toBe(false);
     // Nor is the queue limited to the current school year: prior-session
     // pending work is still work.
     expect(filters.some((c) => c.startsWith('eq(["session"'))).toBe(false);

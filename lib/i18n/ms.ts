@@ -166,8 +166,8 @@ export const ms = {
     return: "Kembalikan · Tidak lengkap (0)",
     returnShort: "Kembalikan",
     tapHint: "Ketik RPH untuk membuka paparan penuh.",
-    comment: "Maklum balas sulit",
-    commentHint: "wajib sebelum mengembalikan - hanya guru boleh melihat",
+    comment: "Maklum balas untuk guru",
+    commentHint: "wajib sebelum mengembalikan - guru dan penyelia sekolah boleh melihat",
     returnReasonRequired:
       "Tulis sebab atau pilih daripada senarai semak sebelum mengembalikan.",
     approvedThisSession: "Disahkan sesi ini",

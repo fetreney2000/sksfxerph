@@ -151,7 +151,7 @@ values ('nurul.aisyah', '<hash from scripts/hash-password.js>', 'Nurul Aisyah bi
 |---|---|---|
 | Minggu Ini | `/minggu` | Deadline countdown, weekly PdP table, stats, activity feed |
 | Editor RPH | `/editor/[id]` | 4-step wizard, DSKP picker, live A4 preview, completeness meter - save only |
-| Senarai RPH | `/arkib` | Tree archive by session and week; submit one plan or a whole week; weekly copy/print/ZIP |
+| Senarai RPH | `/arkib` | Tree archive by session and week; submit a whole week, resubmit a returned plan; weekly copy/print/ZIP |
 | Semakan RPH | `/semakan` | Review queue, keyboard grading (`J/K`, `1`, `0`) |
 | Paparan Sekolah | `/sekolah` | School compliance, per-panel progress, teacher table |
 
@@ -184,16 +184,23 @@ are still filed.
 
 ### Submitting
 
-The editor saves and never submits. In Arkib, **Hantar** sends one draft or
-returned plan, and **Hantar minggu** sends every eligible plan in that week.
-A week is all-or-nothing: if any selected plan is below 100% completeness,
-nothing is sent and the dialog names each plan and the sections it still lacks.
-The same rule is applied again before writing, and the synced deployment
-submits the whole week in one database transaction, so a stale dialog or a
-server refusal cannot leave half a week filed. A submitted RPH is read-only
-until the reviewer returns it;
-approved plans stay sealed. The API also rejects a `week_no`/`plan_date` pair
-that disagree, and refuses a second submission of the same plan.
+The editor saves and never submits. In Arkib, **Hantar minggu** sends every
+eligible draft in that week. A week is all-or-nothing: if any selected plan is
+below 100% completeness, nothing is sent and the dialog names each plan and the
+sections it still lacks. The same rule is applied again before writing, and the
+synced deployment submits the whole week in one database transaction, so a
+stale dialog or a server refusal cannot leave half a week filed.
+
+A plan the reviewer returned has its own **Hantar semula** action, because the
+correction loop must not wait for an unrelated incomplete draft in the same
+week. A submitted RPH is read-only until the reviewer returns it; approved
+plans stay sealed. The API also rejects a `week_no`/`plan_date` pair that
+disagree, and refuses a second submission of the same plan.
+
+Reviewers can return a plan with feedback during the current week; approval
+still waits until that week has ended. Direktori RPH also offers **Kembalikan**
+for one week's submitted plans with one shared feedback message, and the
+full-plan view can leave a comment without changing the plan's status.
 
 ---
 

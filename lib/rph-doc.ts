@@ -2,7 +2,7 @@ import type { DocumentRow } from "@/app/api/rph/route";
 import { schoolCode } from "@/lib/config";
 import { normalisePayload } from "@/lib/schemas/rph";
 import { currentSession } from "@/lib/session";
-import type { RphDocument } from "@/lib/types";
+import type { ReviewNote, RphDocument } from "@/lib/types";
 
 /**
  * Server row → the plan shape the UI works with.
@@ -40,6 +40,17 @@ export function toLocalPlan(row: DocumentRow): RphDocument {
     // Narrowed explicitly: the column is `smallint`, the document type is
     // `0 | 1`, and nothing in between should be guessed at.
     ...(row.grade === 1 ? { grade: 1 as const } : row.grade === 0 ? { grade: 0 as const } : {}),
+    ...(row.rph_feedback?.length
+      ? {
+          feedbackNotes: [...row.rph_feedback]
+            .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+            .map((note) => ({
+              authorName: note.author?.full_name ?? null,
+              comment: note.comment,
+              createdAt: note.created_at,
+            })),
+        }
+      : {}),
     // The newest review's catatan and the reviewer's name. Ordered here rather
     // than trusted from the wire: PostgREST's default order for an embedded
     // collection is not a promise, and printing an older comment than the one
@@ -56,20 +67,32 @@ function reviewFields(row: {
         reviewer?: { full_name: string } | null;
         comment: string | null;
         created_at: string;
+        grade: 0 | 1;
       }[]
     | null;
-}): { reviewComment?: string; reviewerName?: string } {
-  const newest = [...(row.rph_review ?? [])].sort(
+}): { reviewComment?: string; reviewerName?: string; reviewHistory?: ReviewNote[] } {
+  const sorted = [...(row.rph_review ?? [])].sort(
     (a, b) =>
       // Newest first; a missing or invalid timestamp sorts last rather than
       // throwing, because a bad row must not take the screen down with it.
       Date.parse(b.created_at) - Date.parse(a.created_at),
-  )[0];
+  );
+  const newest = sorted[0];
 
   const comment = newest?.comment?.trim();
   const reviewer = newest?.reviewer?.full_name?.trim();
   return {
     ...(comment ? { reviewComment: comment } : {}),
     ...(reviewer ? { reviewerName: reviewer } : {}),
+    ...(sorted.length > 0
+      ? {
+          reviewHistory: sorted.map((review) => ({
+            reviewerName: review.reviewer?.full_name ?? null,
+            comment: review.comment,
+            createdAt: review.created_at,
+            grade: review.grade,
+          })),
+        }
+      : {}),
   };
 }

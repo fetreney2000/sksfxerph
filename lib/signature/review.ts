@@ -43,6 +43,7 @@ export async function decide(input: {
     return reviewRph({
       documentId: input.documentId,
       decision: input.decision,
+      expectedVersion: input.version,
       comment: input.comment,
       envelope,
       signature,
@@ -52,6 +53,7 @@ export async function decide(input: {
   return reviewRph({
     documentId: input.documentId,
     decision: input.decision,
+    expectedVersion: input.version,
     comment: input.comment,
   });
 }
