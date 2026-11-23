@@ -370,7 +370,6 @@ export default function DirektoriRphPage() {
               onChange={(event) => setReturnFeedback(event.target.value)}
               rows={5}
               maxLength={2000}
-              placeholder="Contoh: Sila lengkapkan refleksi dan tambah soalan KBAT dalam aktiviti penutup."
             />
           </DialogBody>
           <DialogFooter>

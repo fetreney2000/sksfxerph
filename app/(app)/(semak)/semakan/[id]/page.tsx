@@ -496,7 +496,6 @@ export default function SemakanDetailPage() {
               onChange={(e) => setReason(e.target.value)}
               rows={4}
               maxLength={2000}
-              placeholder="Contoh: kandungan yang disahkan bukan versi terakhir."
             />
           </DialogBody>
           <DialogFooter>
@@ -543,7 +542,6 @@ export default function SemakanDetailPage() {
               onChange={(e) => setFeedback(e.target.value)}
               rows={5}
               maxLength={2000}
-              placeholder="Contoh: Sila lengkapkan refleksi dan tambah soalan KBAT dalam aktiviti penutup."
             />
           </DialogBody>
           <DialogFooter>
@@ -589,7 +587,6 @@ export default function SemakanDetailPage() {
               onChange={(event) => setComment(event.target.value)}
               rows={5}
               maxLength={2000}
-              placeholder="Contoh: Sila semak semula objektif untuk kelas ini."
             />
           </DialogBody>
           <DialogFooter>
