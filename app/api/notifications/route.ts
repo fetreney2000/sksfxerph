@@ -32,7 +32,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .from("notification")
       // `read_at` and `link_view` were missing. Without read_at the client had
       // no way to tell a seen row from a new one - the bell's badge counted
-      // every server notification forever, and "Tanda semua dibaca" touched
+      // every server notification forever, and "Tandakan semua sebagai dibaca" touched
       // only the local mirror, leaving the badge exactly where it was.
       .select("id, type, title, body, link_view, read_at, created_at")
       .eq("user_id", gate.user.id)

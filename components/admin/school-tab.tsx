@@ -235,7 +235,7 @@ export function SchoolTab() {
                 onChange={(e) => setForm({ ...active, motto: e.target.value })}
               />
               <p className="mt-1.5 text-[11.5px] text-ink-4">
-                Dipaparkan pada skrin log masuk. Kosongkan untuk memulangkan moto lalai.
+                Dipaparkan pada skrin log masuk. Kosongkan untuk menggunakan moto lalai.
               </p>
             </div>
             <div className="sm:col-span-2">

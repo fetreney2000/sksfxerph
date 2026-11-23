@@ -257,9 +257,9 @@ export default function DirektoriRphPage() {
                                   Kembalikan ({returnable.length})
                                 </Button>
                                 <p className="basis-full text-xs text-ink-3">
-                                  Draf dan RPH dihantar bagi minggu lepas boleh disahkan. RPH
-                                  yang sudah dihantar boleh dikembalikan dengan maklum balas,
-                                  termasuk minggu semasa.
+                                  Draf dan RPH yang dihantar bagi minggu lepas boleh disahkan.
+                                  RPH yang sudah dihantar boleh dikembalikan dengan maklum
+                                  balas, termasuk minggu semasa.
                                 </p>
                               </div>
                             );

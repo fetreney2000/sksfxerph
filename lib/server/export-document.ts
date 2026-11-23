@@ -204,7 +204,7 @@ export async function loadExportDocument(
     return {
       ok: false,
       status: 422,
-      error: "RPH disahkan tidak mempunyai tandatangan yang boleh disahkan.",
+      error: "RPH yang disahkan tidak mempunyai tandatangan yang boleh disahkan.",
     };
   }
 

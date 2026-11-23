@@ -51,7 +51,7 @@ const completePayload = () => ({
   kriteria_kejayaan:
     "Murid menulis semula nombor hingga 100,000 dengan ketepatan 80% dalam lembaran kerja.",
   refleksi:
-    "7 daripada 28 murid keliru dengan nilai \u201cpuluhan\u201d; kebanyakan boleh diperbaiki melalui penerangan berulang.",
+    "7 daripada 28 murid keliru tentang nilai \u201cpuluhan\u201d; kebanyakan boleh diperbaiki melalui penerangan berulang.",
 });
 
 /**

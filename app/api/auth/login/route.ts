@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: EMAIL_RE.test(identifier)
-          ? "Emel atau kata laluan salah."
+          ? "E-mel atau kata laluan salah."
           : "Nama pengguna atau kata laluan salah.",
       },
       { status: 401 },
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: byEmail
-            ? "Emel atau kata laluan salah."
+            ? "E-mel atau kata laluan salah."
             : "Nama pengguna atau kata laluan salah.",
         },
         { status: 401 },
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     NextResponse.json(
       {
         error: byEmail
-          ? "Emel atau kata laluan salah."
+          ? "E-mel atau kata laluan salah."
           : "Nama pengguna atau kata laluan salah.",
       },
       { status: 401 },

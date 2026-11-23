@@ -99,7 +99,7 @@ async function exportDocx(doc: RphDocument): Promise<void> {
     const seal = await loadSeal(doc.id, doc.payload);
     if (doc.status === "approved" && !seal) {
       toast.error(
-        "RPH ini telah disahkan tetapi tandatangannya tidak dapat disahkan. Eksport dibatalkan.",
+        "RPH ini telah disahkan tetapi tandatangannya tidak dapat disemak. Eksport dibatalkan.",
       );
       return;
     }
@@ -1770,7 +1770,8 @@ function StepProfil({
             </div>
           </fieldset>
           <p className="mt-1.5 text-[11.5px] text-ink-4">
-            Tick semua kelas yang rancangan ini dilaksanakan - satu RPH untuk beberapa kelas.
+            Tandakan semua kelas yang terlibat dalam rancangan ini - satu RPH untuk beberapa
+            kelas.
           </p>
         </div>
         <div>

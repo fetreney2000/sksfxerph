@@ -109,7 +109,7 @@ export async function buildRphPdf(input: {
   text("RANCANGAN PENGAJARAN HARIAN", 16);
   text(`${schoolName} - Sesi ${plan.session}`);
   field("Nama", teacherName);
-  field("Subjek / Kelas", `${plan.subjectName} / ${plan.classNames.join(", ")}`);
+  field("Mata Pelajaran / Kelas", `${plan.subjectName} / ${plan.classNames.join(", ")}`);
   field("Tarikh / Masa", `${plan.planDate} / ${plan.slotTime} - ${plan.slotTimeEnd}`);
   field(
     "Tema / Bidang / Tajuk",

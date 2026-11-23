@@ -176,7 +176,7 @@ function SubjectDialog({
   const submit = () => {
     const trimmed = code.trim().toUpperCase();
     if (!/^[A-Z0-9]{2,12}$/.test(trimmed)) {
-      setError("Kod subjek: 2-12 aksara huruf besar atau nombor.");
+      setError("Kod mata pelajaran: 2-12 aksara huruf besar atau nombor.");
       return;
     }
     if (!nama.trim()) {

@@ -111,7 +111,7 @@ export function MobileNav() {
           <DialogContent className="top-auto bottom-0 left-0 flex max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col rounded-t-[18px] rounded-b-none p-0">
             <DialogHeader className="shrink-0 border-b border-border pr-12 pb-3">
               <DialogTitle>Lagi</DialogTitle>
-              <DialogDescription>Destinasi lain untuk peranan anda.</DialogDescription>
+              <DialogDescription>Halaman lain untuk peranan anda.</DialogDescription>
             </DialogHeader>
             <DialogBody className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {secondary.map((group) => (

@@ -143,7 +143,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (file !== null && typeof file !== "string") {
     if (!ACCEPTED.has(file.type)) {
       return NextResponse.json(
-        { error: "Logo mesti fail PNG, JPG atau WebP" },
+        { error: "Logo mesti dalam format PNG, JPG atau WebP" },
         { status: 422 },
       );
     }

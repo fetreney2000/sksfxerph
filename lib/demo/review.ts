@@ -65,7 +65,7 @@ const ramlan = base({
   kriteria_kejayaan:
     "Murid menulis semula nombor hingga 100,000 dengan nilai tempat yang betul tanpa bimbingan.",
   refleksi:
-    "7 daripada 28 murid keliru dengan nilai “puluhan”; intervensi kumpulan kecil Khamis.",
+    "7 daripada 28 murid keliru tentang nilai “puluhan”; intervensi kumpulan kecil Khamis.",
 });
 
 const suhaila = base({
@@ -81,7 +81,7 @@ const suhaila = base({
     { nama: "Rumusan kumpulan", sub: true },
   ],
   kriteria_kejayaan: "Murid melengkapkan petak maklumat dengan lima jawapan yang betul.",
-  refleksi: "Tiga murid tercicir menyiapkan petak; ulang set induksi sebelum tajuk seterusnya.",
+  refleksi: "Tiga murid gagal menyiapkan petak; ulang set induksi sebelum tajuk seterusnya.",
 });
 
 const aizuddin = base({

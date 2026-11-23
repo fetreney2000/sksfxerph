@@ -38,7 +38,7 @@ export default function RouteError({
         <div className="flex justify-center gap-2.5">
           <Button onClick={reset}>Cuba lagi</Button>
           <Button variant="secondary" asChild>
-            <Link href="/minggu">Ke Minggu Ini</Link>
+            <Link href="/minggu">Kembali ke Minggu Ini</Link>
           </Button>
         </div>
       </div>

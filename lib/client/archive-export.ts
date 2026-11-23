@@ -44,7 +44,7 @@ async function signatureFor(doc: RphDocument): Promise<SignaturePayload | null> 
   const response = await fetch(`/api/rph/${encodeURIComponent(doc.id)}/signature`);
   if (!response.ok) throw new Error("Tandatangan tidak dapat dimuatkan.");
   const { signature } = (await response.json()) as { signature: SignaturePayload | null };
-  if (!signature) throw new Error("RPH disahkan tidak mempunyai tandatangan.");
+  if (!signature) throw new Error("RPH yang disahkan tidak mempunyai tandatangan.");
   const envelope = signature.envelope as { hash?: unknown; doc?: unknown; decision?: unknown };
   if (
     envelope.doc !== doc.id ||

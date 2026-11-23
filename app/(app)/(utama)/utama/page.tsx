@@ -123,7 +123,7 @@ export default function UtamaPage() {
     {
       label: "Guru berdaftar",
       value: o?.members.teachers ?? "-",
-      hint: `${o?.members.total ?? 0} akaun keseluruhan`,
+      hint: `${o?.members.total ?? 0} jumlah akaun`,
       icon: <UserCheck className="h-4 w-4" strokeWidth={1.9} aria-hidden />,
     },
     {
@@ -175,7 +175,7 @@ export default function UtamaPage() {
       // A GPK only ever sees assigned teachers, so a Guru Biasa with no
       // penyelia is reviewable by the Guru Besar alone. The accounts tab is
       // where supervisors are set, so that is where this item opens.
-      label: "Penyelia guru",
+      label: "Penyeliaan guru",
       detail: o
         ? o.unassignedTeachers === 0
           ? "Semua guru mempunyai penyelia"
@@ -192,7 +192,7 @@ export default function UtamaPage() {
     {
       key: "subjek",
       label: "Mata pelajaran",
-      detail: o ? `${o.subjects} subjek aktif` : "Memuatkan…",
+      detail: o ? `${o.subjects} mata pelajaran aktif` : "Memuatkan…",
       done: o ? o.subjects > 0 : null,
     },
     {
@@ -217,7 +217,7 @@ export default function UtamaPage() {
       detail: settingsError
         ? "Tidak dapat dibaca"
         : setting
-          ? `${setting.current_session} · serah ${setting.submit_time}`
+          ? `${setting.current_session} · had serahan ${setting.submit_time}`
           : settingsLoading
             ? "Memuatkan…"
             : "Belum ditetapkan",
@@ -353,8 +353,8 @@ export default function UtamaPage() {
           <div>
             <CardTitle>Matriks peranan</CardTitle>
             <p className="text-xs text-ink-3">
-              Apa yang setiap peranan boleh lakukan. Inilah yang menentukan paparan apabila anda
-              mengubah peranan seseorang.
+              Perkara yang setiap peranan boleh lakukan. Inilah yang menentukan paparan apabila
+              anda mengubah peranan seseorang.
             </p>
           </div>
         </CardHeader>
@@ -417,7 +417,7 @@ export default function UtamaPage() {
           <div>
             <CardTitle>Ringkasan kebenaran</CardTitle>
             <p className="text-xs text-ink-3">
-              Senarai tepat yang digunakan oleh aplikasi - sama seperti matriks di atas.
+              Senarai sebenar yang digunakan oleh aplikasi - sama seperti matriks di atas.
             </p>
           </div>
         </CardHeader>

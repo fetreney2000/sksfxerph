@@ -106,7 +106,7 @@ export function NotificationBell() {
                 onClick={() => markAllRead()}
                 className="text-[12px] font-semibold text-primary-ink hover:underline"
               >
-                Tanda semua dibaca
+                Tandakan semua sebagai dibaca
               </button>
             )}
           </div>

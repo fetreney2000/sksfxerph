@@ -39,7 +39,7 @@ describe("RphPaper - the school's form", () => {
     for (const heading of [
       "RANCANGAN PENGAJARAN HARIAN",
       "NAMA",
-      "Subjek",
+      "Mata Pelajaran",
       "Nama Kelas",
       "Hari",
       "Tarikh",

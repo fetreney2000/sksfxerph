@@ -168,7 +168,7 @@ export default function SekolahPage() {
                 icon={<BarChart3 className="h-4 w-4" />}
                 label="RPH bukan draf"
                 value={String(stats.submitted)}
-                description={`${stats.approved} telah disahkan · termasuk RPH dikembalikan`}
+                description={`${stats.approved} telah disahkan · termasuk RPH yang dikembalikan`}
               />
               <Metric
                 icon={<CheckCircle2 className="h-4 w-4" />}
@@ -193,7 +193,7 @@ export default function SekolahPage() {
                 description={
                   range.first === range.last
                     ? "Dari penghantaran hingga keputusan"
-                    : "Purata tidak berwajaran bagi minggu yang ada keputusan"
+                    : "Purata tidak berwajaran bagi minggu yang mempunyai keputusan"
                 }
               />
             </div>
@@ -266,8 +266,8 @@ export default function SekolahPage() {
                     <SummaryRow label="Belum ada yang disahkan" value={awaitingApproval} />
                     <SummaryRow label="Tiada RPH direkodkan" value={noPlans} />
                     <p className="border-t border-border pt-3 text-xs leading-relaxed text-ink-4">
-                      Status membandingkan RPH disahkan dengan RPH yang direkodkan, bukan jumlah
-                      yang sepatutnya disediakan.
+                      Status membandingkan RPH yang disahkan dengan RPH yang direkodkan, bukan
+                      jumlah yang sepatutnya disediakan.
                     </p>
                   </div>
                 )}
@@ -316,7 +316,7 @@ export default function SekolahPage() {
                     <TH>Status · {scope}</TH>
                     <TH>
                       Disahkan · sesi{" "}
-                      <HelpHint label="RPH disahkan dalam sesi">
+                      <HelpHint label="RPH yang disahkan dalam sesi">
                         Peratus RPH yang disahkan daripada semua RPH guru yang direkodkan dalam
                         sesi ini, termasuk draf. Bukan peratus sasaran sekolah.
                       </HelpHint>
@@ -325,7 +325,8 @@ export default function SekolahPage() {
                       Pernah dikembalikan → disahkan{" "}
                       <HelpHint label="Sejarah pengembalian">
                         Bilangan RPH yang pernah dikembalikan dan, daripadanya, bilangan yang
-                        pernah menerima keputusan sahkan. Keputusan terkini mungkin berbeza.
+                        pernah menerima keputusan untuk mengesahkan. Keputusan terkini mungkin
+                        berbeza.
                       </HelpHint>
                     </TH>
                     <TH>Semakan terakhir · sesi</TH>

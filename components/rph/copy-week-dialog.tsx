@@ -157,7 +157,7 @@ export function CopyWeekDialog({
           <DialogTitle>Salin RPH minggu {sourceWeek} ke minggu lain</DialogTitle>
           <DialogDescription>
             Sesi {sourceSession}. Setiap RPH disalin sebagai draf, tarikhnya mengikut hari yang
-            sama, dan Refleksi dikosongkan - refleksi minggu asal bukan refleksi pelajaran
+            sama, dan refleksi dikosongkan - refleksi minggu asal bukan refleksi pelajaran
             baharu.
           </DialogDescription>
         </DialogHeader>
@@ -165,7 +165,7 @@ export function CopyWeekDialog({
         <DialogBody className="grid max-h-[68vh] gap-4 overflow-y-auto">
           <div className="max-w-sm">
             <Label htmlFor="copy-week-destination" required>
-              Minggu destinasi
+              Minggu sasaran
             </Label>
             <Select
               id="copy-week-destination"
@@ -191,7 +191,7 @@ export function CopyWeekDialog({
 
           {destinations.length === 0 ? (
             <p className="rounded-lg border border-border bg-surface-2 px-3 py-4 text-sm text-ink-3">
-              Tiada minggu destinasi tersedia.
+              Tiada minggu sasaran tersedia.
             </p>
           ) : (
             <fieldset className="grid gap-2">

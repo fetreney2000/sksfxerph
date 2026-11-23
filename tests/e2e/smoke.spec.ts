@@ -54,7 +54,7 @@ function collectErrors(page: Page): string[] {
 
 async function login(page: Page, identifier = DEMO_EMAIL, password = DEMO_PASS): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("Emel").fill(identifier);
+  await page.getByLabel("E-mel").fill(identifier);
   await page.getByLabel(/Kata laluan/).fill(password);
   await page.getByRole("button", { name: "Log masuk" }).click();
   // Either home, per `homeFor`: every teaching role lands on /minggu, the
@@ -75,12 +75,12 @@ test.describe("authentication", () => {
   test("rejects a wrong password without revealing which field was wrong", async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto("/login");
-    await page.getByLabel("Emel").fill(DEMO_EMAIL);
+    await page.getByLabel("E-mel").fill(DEMO_EMAIL);
     await page.getByLabel(/Kata laluan/).fill("salah-sangat");
     await page.getByRole("button", { name: "Log masuk" }).click();
 
     // Generic message for unknown-account, wrong-password and inactive alike.
-    await expect(page.getByText("Emel atau kata laluan salah.")).toBeVisible({
+    await expect(page.getByText("E-mel atau kata laluan salah.")).toBeVisible({
       timeout: 10_000,
     });
     await expect(page).toHaveURL(/\/login/);
@@ -619,7 +619,7 @@ test.describe("eRPH smoke", () => {
       .first()
       .click();
     const copyDialog = page.getByRole("dialog", { name: /Salin RPH minggu/ });
-    const destination = copyDialog.getByLabel("Minggu destinasi");
+    const destination = copyDialog.getByLabel("Minggu sasaran");
     const week = Number(await destination.inputValue());
     await copyDialog.getByRole("button", { name: /^Salin \d+ RPH$/ }).click();
     await expect(copyDialog.getByText(/\d+ disalin/)).toBeVisible({ timeout: 30_000 });

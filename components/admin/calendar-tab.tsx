@@ -367,9 +367,9 @@ export function CalendarTab() {
           <div>
             <CardTitle>Tetapkan minggu</CardTitle>
             <CardDescription>
-              Pilih minggu pertama yang berubah: hanya tarikh mula diperlukan, dan ia mesti hari
-              Isnin. Minggu berakhir pada Jumaat yang sama, dan semua minggu selepasnya dikira
-              automatik.
+              Pilih minggu pertama yang berubah: hanya tarikh mula diperlukan, dan tarikh itu
+              mesti hari Isnin. Minggu berakhir pada Jumaat yang sama, dan semua minggu
+              selepasnya dikira secara automatik.
             </CardDescription>
           </div>
         </CardHeader>

@@ -71,7 +71,7 @@ export function dbFailureMessage(error: unknown): string | null {
     case "42501":
       return "Akaun ini tiada kebenaran menulis (kod 42501).";
     case "23503":
-      return "Rujukan kelas atau subjek tidak sah (kod 23503).";
+      return "Rujukan kelas atau mata pelajaran tidak sah (kod 23503).";
     case "23514":
       return "Nilai di luar julat yang dibenarkan (kod 23514).";
     case "23502":

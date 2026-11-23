@@ -346,7 +346,7 @@ export default function RptPage() {
           </DialogHeader>
           <DialogBody>
             <p className="text-[13px] text-ink-2">
-              Fail dalam Google Drive anda tidak terjejas - yang dipadam hanya pautan di sini.
+              Fail dalam Google Drive anda tidak terjejas - hanya pautan di sini yang dipadam.
             </p>
           </DialogBody>
           <DialogFooter>

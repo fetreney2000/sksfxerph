@@ -224,7 +224,7 @@ describe("the login lockout", () => {
   it("gives the email-flavoured message when the address matches nobody", async () => {
     const res = await POST(post("tiada@sktamanharmoni.local", "salah"));
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: "Emel atau kata laluan salah." });
+    expect(await res.json()).toEqual({ error: "E-mel atau kata laluan salah." });
   });
 
   it("counts lockout failures against the email path too", async () => {

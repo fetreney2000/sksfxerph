@@ -333,7 +333,7 @@ export default function MingguPage() {
             <Table>
               <THead>
                 <tr>
-                  <TH>Kelas &amp; Subjek</TH>
+                  <TH>Kelas dan Mata Pelajaran</TH>
                   <TH>Tarikh / Masa</TH>
                   <TH>Standard Kandungan</TH>
                   <TH>Status</TH>
@@ -403,7 +403,7 @@ export default function MingguPage() {
                           : d.status === "returned"
                             ? "dikembalikan untuk dibaiki"
                             : d.status === "forwarded"
-                              ? "diteruskan kepada Guru Besar"
+                              ? "diteruskan kepada guru besar"
                               : "dihantar untuk semakan"}
                       </p>
                       <p className="mt-0.5 text-[11px] text-ink-4">

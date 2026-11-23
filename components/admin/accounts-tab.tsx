@@ -175,9 +175,9 @@ export function AccountsTab() {
         <div className="min-w-0">
           <h2 className="text-[15.5px] font-bold tracking-[-0.3px]">Akaun dan peranan</h2>
           <p className="text-[12.5px] text-ink-3">
-            Peranan menentukan apa yang boleh dilihat dan dilakukan; jawatan ialah gelaran yang
-            tertera pada baris JAWATAN dalam cetakan mingguan. Kesemua lima peranan mempunyai
-            akses kepada RPH sendiri.
+            Peranan menentukan perkara yang boleh dilihat dan dilakukan; jawatan ialah gelaran
+            yang tertera pada baris JAWATAN dalam cetakan mingguan. Kesemua lima peranan
+            mempunyai akses kepada RPH sendiri.
           </p>
         </div>
         <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -554,7 +554,7 @@ function CreateAccountDialog({ open, onOpenChange, busy, save }: DialogProps) {
               </Select>
             </div>
             <div>
-              <Label htmlFor="acc-email">Emel</Label>
+              <Label htmlFor="acc-email">E-mel</Label>
               <Input
                 id="acc-email"
                 type="email"
@@ -743,7 +743,7 @@ function EditAccountDialog({
     // The same shape the route and the database check, so a bad address is
     // caught where the administrator can still see which field they meant.
     if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      setError("Emel tidak sah.");
+      setError("E-mel tidak sah.");
       return;
     }
     setError(null);
@@ -761,7 +761,7 @@ function EditAccountDialog({
           <DialogTitle>Sunting akaun</DialogTitle>
           <DialogDescription>
             {member
-              ? `${member.username} · nama pada setiap RPH, dan emel untuk log masuk Google.`
+              ? `${member.username} · nama pada setiap RPH, dan e-mel untuk log masuk Google.`
               : ""}
           </DialogDescription>
         </DialogHeader>
@@ -778,7 +778,7 @@ function EditAccountDialog({
             />
           </div>
           <div>
-            <Label htmlFor="edit-account-email">Emel</Label>
+            <Label htmlFor="edit-account-email">E-mel</Label>
             <Input
               id="edit-account-email"
               type="email"
@@ -787,9 +787,9 @@ function EditAccountDialog({
               onChange={(e) => setEmail(e.target.value)}
             />
             <p className="mt-1.5 text-[11.5px] text-ink-4">
-              Alamat yang guru taip pada skrin log masuk, dan yang dipautkan pada log masuk
-              Google pertama kali. Nama pengguna tidak ditukar di sini - ia yang peranti sudah
-              log masuk dengannya.
+              Alamat yang guru taip pada skrin log masuk, dan yang dipautkan semasa log masuk
+              Google pertama kali. Nama pengguna tidak ditukar di sini - peranti yang sudah log
+              masuk masih menggunakan nama itu.
             </p>
           </div>
           {error && <FieldError>{error}</FieldError>}

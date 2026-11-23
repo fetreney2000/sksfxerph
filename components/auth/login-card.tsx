@@ -77,7 +77,7 @@ export function LoginCard() {
       <CardHeader className="flex-col items-start gap-1 pb-0">
         <CardTitle className="text-base">Log masuk</CardTitle>
         <CardDescription className="pt-0">
-          Gunakan emel sekolah anda dan kata laluan. Pentadbir log masuk dengan nama pengguna.
+          Gunakan e-mel sekolah anda dan kata laluan. Pentadbir log masuk dengan nama pengguna.
         </CardDescription>
       </CardHeader>
 
@@ -85,7 +85,7 @@ export function LoginCard() {
         <form onSubmit={signIn} noValidate>
           <div className="mb-3.5">
             <Label htmlFor="f-login-username" required>
-              Emel
+              E-mel
             </Label>
             <Input
               id="f-login-username"
@@ -127,7 +127,7 @@ export function LoginCard() {
           <p className="mt-3.5 flex gap-2.5 rounded-[10px] border border-info-line bg-info-soft p-3 text-[12.5px] leading-[1.55] text-info-ink">
             <User className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
             <span>
-              <b>Mod setempat.</b> Tiada pangkalan data ditetapkan. Gunakan demo: emel{" "}
+              <b>Mod setempat.</b> Tiada pangkalan data ditetapkan. Gunakan demo: e-mel{" "}
               <b>{LOCAL_ACCOUNT.email}</b>, kata laluan <b>{LOCAL_DEMO_PASSWORD}</b>. Semua ciri
               berfungsi; penyegerakan aktif sebaik kunci API ditambah.
             </span>
@@ -143,12 +143,11 @@ export function LoginCard() {
       <CardFooter className="flex-col items-start gap-1.5 text-[11.5px] text-ink-4">
         <span className="flex items-center gap-1.5">
           <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
-          Kata laluan disimpan dalam bentuk scrypt - ia tidak pernah disimpan dalam bentuk teks
-          biasa.
+          Kata laluan dilindungi dengan scrypt - ia tidak pernah disimpan sebagai teks biasa.
         </span>
         <span>
-          Dengan menggunakan sistem ini, anda memahami dan bersetuju dengan penyataan data rasmi
-          KPM.
+          Dengan menggunakan sistem ini, anda memahami dan bersetuju dengan pernyataan data
+          rasmi KPM.
         </span>
         <span>Hak Cipta Terpelihara · Kementerian Pendidikan Malaysia</span>
       </CardFooter>

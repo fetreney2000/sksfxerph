@@ -8,10 +8,10 @@ export default function NotFound() {
         <p className="mb-2 text-4xl font-extrabold tracking-tight text-ink-4">404</p>
         <h1 className="mb-2 text-lg font-bold">Halaman tidak dijumpai</h1>
         <p className="mb-5 text-[13px] text-ink-3">
-          Pautan mungkin lama atau RPH telah dipindahkan.
+          Pautan mungkin sudah lama atau RPH telah dipindahkan.
         </p>
         <Button asChild>
-          <Link href="/minggu">Ke Minggu Ini</Link>
+          <Link href="/minggu">Kembali ke Minggu Ini</Link>
         </Button>
       </div>
     </main>

@@ -139,7 +139,7 @@ export const ms = {
     tabForm: "Kandungan",
     tabPreview: "Pratonton",
     showPreview: "Tunjuk pratonton",
-    hidePreview: "Sembunyi pratonton",
+    hidePreview: "Sembunyikan pratonton",
     backToForm: "Kembali ke kandungan",
     attentionLabel: "Perkara perlu diberi perhatian",
     incompleteHeading: (n: number) => `${n} perkara perlu diberi perhatian`,
@@ -167,7 +167,7 @@ export const ms = {
     returnShort: "Kembalikan",
     tapHint: "Ketik RPH untuk membuka paparan penuh.",
     comment: "Maklum balas untuk guru",
-    commentHint: "wajib sebelum mengembalikan - guru dan penyelia sekolah boleh melihat",
+    commentHint: "Wajib diisi sebelum mengembalikan - guru dan penyelia sekolah boleh melihat",
     returnReasonRequired:
       "Tulis sebab atau pilih daripada senarai semak sebelum mengembalikan.",
     approvedThisSession: "Disahkan sesi ini",
@@ -189,7 +189,7 @@ export const ms = {
     noSupervised:
       "Tiada guru di bawah penyeliaan anda - pentadbir perlu menetapkan penyeliaan di /pentadbiran.",
     draftNote:
-      "Draf belum dihantar guru. Sahkan di sini untuk menghantarnya bagi pihak guru terlebih dahulu, kemudian buat keputusan.",
+      "Draf belum dihantar oleh guru. Sahkan di sini untuk menghantarnya bagi pihak guru terlebih dahulu, kemudian buat keputusan.",
     decidedNote: "RPH ini sudah diputuskan - paparan sahaja.",
     submitFirst: "Dihantar bagi pihak guru",
   },

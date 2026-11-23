@@ -364,7 +364,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
     }
     if (!subject) {
-      return NextResponse.json({ error: "Subjek tidak sah." }, { status: 422 });
+      return NextResponse.json({ error: "Mata pelajaran tidak sah." }, { status: 422 });
     }
   }
 

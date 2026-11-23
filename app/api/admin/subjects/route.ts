@@ -45,9 +45,9 @@ const patchSchema = z
 const createSchema = z.object({
   code: z
     .string()
-    .min(2, "Kod subjek: sekurang-kurangnya 2 aksara")
-    .max(12, "Kod subjek: maksimum 12 aksara")
-    .regex(/^[A-Za-z0-9]{2,12}$/, "Kod subjek: huruf besar atau nombor sahaja"),
+    .min(2, "Kod mata pelajaran: sekurang-kurangnya 2 aksara")
+    .max(12, "Kod mata pelajaran: maksimum 12 aksara")
+    .regex(/^[A-Za-z0-9]{2,12}$/, "Kod mata pelajaran: huruf besar atau nombor sahaja"),
   nama: z.string().min(1, "Nama mata pelajaran diperlukan").max(80),
   curriculum: z.enum(["KSSR", "KSSM", "PRASEKOLAH"]),
 });

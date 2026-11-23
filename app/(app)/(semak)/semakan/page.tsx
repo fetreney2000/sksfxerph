@@ -439,7 +439,7 @@ export default function SemakanPage() {
             const message = err instanceof Error ? err.message : "ralat rangkaian";
             if (/versi/i.test(message)) {
               toast.error(
-                "RPH telah dikemas kini guru. Data disegar semula - cuba sekali lagi.",
+                "RPH telah dikemas kini oleh guru. Data dimuat semula - cuba sekali lagi.",
               );
             } else {
               toast.error(`Gagal menyemak: ${message}`);
@@ -604,8 +604,8 @@ export default function SemakanPage() {
                         </Tabs>
                       </div>
                       <p className="border-b border-border px-4 py-2 text-[11px] leading-[1.4] text-ink-4">
-                        RPH minggu semasa boleh dimaklum balas; pengesahan hanya selepas minggu
-                        tamat. RPH sesi terdahulu kekal di sini.
+                        RPH minggu semasa boleh menerima maklum balas; pengesahan hanya selepas
+                        minggu tamat. RPH sesi terdahulu kekal di sini.
                       </p>
                       {pendingVisible.map((q) => {
                         const g = graded[q.id];

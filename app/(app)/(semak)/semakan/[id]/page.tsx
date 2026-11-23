@@ -531,7 +531,7 @@ export default function SemakanDetailPage() {
           <DialogHeader>
             <DialogTitle>Kembalikan RPH kepada guru?</DialogTitle>
             <DialogDescription>
-              Maklum balas ini akan dihantar kepada guru sebagai sebab RPH dikembalikan. RPH
+              Maklum balas ini akan dihantar kepada guru sebagai sebab RPH ini dikembalikan. RPH
               akan menjadi boleh disunting semula.
             </DialogDescription>
           </DialogHeader>
@@ -576,7 +576,7 @@ export default function SemakanDetailPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Tinggalkan maklum balas</DialogTitle>
+            <DialogTitle>Berikan maklum balas</DialogTitle>
             <DialogDescription>
               Maklum balas ini akan sampai kepada guru tanpa mengubah status RPH.
             </DialogDescription>

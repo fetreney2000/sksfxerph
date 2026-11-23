@@ -241,7 +241,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Ralat pelayan." }, { status: 500 });
   }
   if (!subject) {
-    return NextResponse.json({ error: "Subjek tidak sah." }, { status: 422 });
+    return NextResponse.json({ error: "Mata pelajaran tidak sah." }, { status: 422 });
   }
 
   // The natural-key clash check, before the insert rather than after it: a

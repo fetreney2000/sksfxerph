@@ -138,7 +138,7 @@ export async function buildRphDocx(plan: DocxPlan): Promise<Buffer> {
               }),
               new TableRow({
                 children: [
-                  cell("Subjek", { bold: true, width: 22, label: true }),
+                  cell("Mata Pelajaran", { bold: true, width: 22, label: true }),
                   cell(subjectName || "-", { width: 28 }),
                   cell("Nama Kelas", { bold: true, width: 22, label: true }),
                   cell(className || "-", { width: 28 }),

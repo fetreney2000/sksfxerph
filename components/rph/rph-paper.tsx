@@ -151,7 +151,7 @@ export function RphPaper({
             <Value span={3}>{or(teacherName)}</Value>
           </tr>
           <tr>
-            <Label>Subjek</Label>
+            <Label>Mata Pelajaran</Label>
             <Value>{or(subjectName ?? "")}</Value>
             <Label>Nama Kelas</Label>
             <Value>{or(planClassName ?? "")}</Value>

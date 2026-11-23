@@ -248,7 +248,7 @@ function ClassDialog({
               onChange={(e) => setTahun(e.target.value)}
             />
             <p className="mt-1.5 text-[11.5px] text-ink-4">
-              Kosongkan untuk sekolah menengah (gunakan tingkatan).
+              Kosongkan untuk sekolah menengah; gunakan Tingkatan dalam nama kelas.
             </p>
           </div>
           {error && <FieldError>{error}</FieldError>}
