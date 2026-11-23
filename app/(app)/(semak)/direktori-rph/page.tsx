@@ -34,19 +34,25 @@ export default function DirektoriRphPage() {
     teacher: string;
     week: number;
   } | null>(null);
+  const [approveTarget, setApproveTarget] = React.useState<{
+    plans: ReviewPlanLight[];
+    teacher: string;
+    week: number;
+  } | null>(null);
   const [returnFeedback, setReturnFeedback] = React.useState("");
   const sessions = [...new Set(items.map((item) => item.session))].sort().reverse();
-  async function approveWeek(plans: ReviewPlanLight[], teacher: string, week: number) {
+  const approveCount = approveTarget
+    ? approveTarget.plans.filter(
+        (plan) =>
+          (plan.status === "draft" || plan.status === "submitted") &&
+          isPastReviewWeek(plan.planDate),
+      ).length
+    : 0;
+  async function approveWeek(plans: ReviewPlanLight[], week: number) {
     const eligible = plans.filter(
       (p) => (p.status === "draft" || p.status === "submitted") && isPastReviewWeek(p.planDate),
     );
     if (!eligible.length || busy) return;
-    if (
-      !window.confirm(
-        `Sahkan ${eligible.length} RPH bagi ${teacher}, minggu ${week}? Setiap RPH akan ditandatangani. Pastikan anda telah menyemak kandungannya.`,
-      )
-    )
-      return;
     setBusy(true);
     const messages: string[] = [];
     let approved = 0;
@@ -237,7 +243,13 @@ export default function DirektoriRphPage() {
                                   disabled={
                                     busy || !supabaseConfigured || eligible.length === 0
                                   }
-                                  onClick={() => void approveWeek(weekPlans, name, week)}
+                                  onClick={() =>
+                                    setApproveTarget({
+                                      plans: weekPlans,
+                                      teacher: name,
+                                      week,
+                                    })
+                                  }
                                 >
                                   {busy
                                     ? "Memproses…"
@@ -291,6 +303,46 @@ export default function DirektoriRphPage() {
           ))}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={approveTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setApproveTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sahkan RPH minggu {approveTarget?.week}?</DialogTitle>
+            <DialogDescription>
+              {approveTarget
+                ? `${approveCount} RPH bagi ${approveTarget.teacher} akan disahkan dan ditandatangani.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <p className="text-[13px] leading-[1.6] text-ink-3">
+              Pastikan anda telah menyemak kandungan setiap RPH. Tindakan ini akan direkodkan
+              dalam log audit.
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setApproveTarget(null)}>
+              Batal
+            </Button>
+            <Button
+              disabled={busy || approveCount === 0}
+              onClick={() => {
+                const target = approveTarget;
+                if (!target) return;
+                setApproveTarget(null);
+                void approveWeek(target.plans, target.week);
+              }}
+            >
+              Sahkan RPH
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={returnTarget !== null}
